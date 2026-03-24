@@ -635,6 +635,23 @@ function TwilioIntegrationModal({
   const isConnected = currentSettings?.twilioConfigured ?? false;
   const canSave = accountSid.trim().length > 0 && authToken.trim().length > 0;
 
+  const apiBase = (() => {
+    const domain = process.env.EXPO_PUBLIC_DOMAIN;
+    return domain ? `https://${domain}/api` : `http://localhost:8080/api`;
+  })();
+  const webhookUrls = [
+    { label: "Incoming SMS", url: `${apiBase}/webhooks/twilio/sms` },
+    { label: "Incoming Voice", url: `${apiBase}/webhooks/twilio/voice` },
+  ];
+  const [copiedLabel, setCopiedLabel] = useState<string | null>(null);
+
+  function handleCopy(label: string, url: string) {
+    Clipboard.setStringAsync(url).then(() => {
+      setCopiedLabel(label);
+      setTimeout(() => setCopiedLabel(null), 1800);
+    });
+  }
+
   return (
     <Modal
       visible={visible}
@@ -740,6 +757,39 @@ function TwilioIntegrationModal({
                 <Text style={integrationStyles.disconnectText}>Disconnect Twilio</Text>
               </Pressable>
             )}
+
+            <View style={integrationStyles.webhookSection}>
+              <Text style={integrationStyles.webhookSectionTitle}>Webhook URLs</Text>
+              <Text style={integrationStyles.webhookSectionHint}>
+                Paste these into your Twilio phone number settings under "A call comes in" and "A message comes in".
+              </Text>
+              {webhookUrls.map(({ label, url }) => (
+                <View key={label} style={integrationStyles.webhookRow}>
+                  <View style={integrationStyles.webhookRowLeft}>
+                    <Text style={integrationStyles.webhookRowLabel}>{label}</Text>
+                    <Text style={integrationStyles.webhookRowUrl} numberOfLines={1} ellipsizeMode="middle">
+                      {url}
+                    </Text>
+                  </View>
+                  <Pressable
+                    style={integrationStyles.webhookCopyBtn}
+                    onPress={() => handleCopy(label, url)}
+                  >
+                    <Feather
+                      name={copiedLabel === label ? "check" : "copy"}
+                      size={14}
+                      color={copiedLabel === label ? Colors.brand.tealLight : Colors.dark.textSecondary}
+                    />
+                    <Text style={[
+                      integrationStyles.webhookCopyText,
+                      copiedLabel === label && integrationStyles.webhookCopiedText,
+                    ]}>
+                      {copiedLabel === label ? "Copied!" : "Copy"}
+                    </Text>
+                  </Pressable>
+                </View>
+              ))}
+            </View>
           </ScrollView>
 
           <View style={modalStyles.footer}>
@@ -1755,6 +1805,72 @@ const integrationStyles = StyleSheet.create({
     borderColor: Colors.brand.teal + "44",
   },
   successText: {
+    color: Colors.brand.tealLight,
+  },
+  webhookSection: {
+    marginTop: 24,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: Colors.dark.border,
+  },
+  webhookSectionTitle: {
+    fontSize: 13,
+    fontFamily: "Inter_600SemiBold",
+    color: Colors.dark.textSecondary,
+    textTransform: "uppercase",
+    letterSpacing: 0.6,
+    marginBottom: 4,
+  },
+  webhookSectionHint: {
+    fontSize: 12,
+    fontFamily: "Inter_400Regular",
+    color: Colors.dark.textMuted,
+    lineHeight: 17,
+    marginBottom: 12,
+  },
+  webhookRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    backgroundColor: Colors.dark.bgElevated,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Colors.dark.border,
+    marginBottom: 8,
+  },
+  webhookRowLeft: {
+    flex: 1,
+    gap: 2,
+  },
+  webhookRowLabel: {
+    fontSize: 12,
+    fontFamily: "Inter_600SemiBold",
+    color: Colors.dark.textSecondary,
+  },
+  webhookRowUrl: {
+    fontSize: 11,
+    fontFamily: "Inter_400Regular",
+    color: Colors.dark.textMuted,
+  },
+  webhookCopyBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: Colors.dark.bg,
+    borderWidth: 1,
+    borderColor: Colors.dark.border,
+  },
+  webhookCopyText: {
+    fontSize: 12,
+    fontFamily: "Inter_500Medium",
+    color: Colors.dark.textSecondary,
+  },
+  webhookCopiedText: {
     color: Colors.brand.tealLight,
   },
 });
