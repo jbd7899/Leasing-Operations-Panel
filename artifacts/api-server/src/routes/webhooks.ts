@@ -1,22 +1,15 @@
 import { Router, type IRouter, type Request, type Response } from "express";
-import { db, interactionsTable, twilioNumbersTable, prospectsTable } from "@workspace/db";
-import { eq, and } from "drizzle-orm";
+import { db, interactionsTable, twilioNumbersTable } from "@workspace/db";
+import { eq } from "drizzle-orm";
 import { processInteraction } from "../lib/processInteraction";
 import { logger } from "../lib/logger";
 import { validateTwilioSignature } from "../middlewares/twilioSignature";
+import { normalizePhoneE164, findOrCreateProspectShell } from "../lib/prospectShell";
 
 const router: IRouter = Router();
 
 function twimlResponse(twiml = ""): string {
   return `<?xml version="1.0" encoding="UTF-8"?><Response>${twiml}</Response>`;
-}
-
-function normalizeE164(phone: string): string {
-  const digits = phone.replace(/\D/g, "");
-  if (digits.length === 10) return `+1${digits}`;
-  if (digits.length === 11 && digits[0] === "1") return `+${digits}`;
-  if (phone.startsWith("+")) return phone;
-  return phone;
 }
 
 async function findTwilioNumber(toNumber: string) {
@@ -28,43 +21,6 @@ async function findTwilioNumber(toNumber: string) {
   return record ?? null;
 }
 
-type MatchConfidence = "exact" | "new";
-
-async function findOrCreateProspectShell(
-  accountId: string,
-  fromNumber: string,
-  propertyId: string | null,
-): Promise<{ id: string; confidence: MatchConfidence }> {
-  const [existing] = await db
-    .select({ id: prospectsTable.id })
-    .from(prospectsTable)
-    .where(and(eq(prospectsTable.accountId, accountId), eq(prospectsTable.phonePrimary, fromNumber)))
-    .limit(1);
-
-  if (existing) return { id: existing.id, confidence: "exact" };
-
-  const [created] = await db
-    .insert(prospectsTable)
-    .values({
-      accountId,
-      phonePrimary: fromNumber,
-      assignedPropertyId: propertyId ?? undefined,
-      status: "new",
-      exportStatus: "pending",
-    })
-    .onConflictDoNothing()
-    .returning({ id: prospectsTable.id });
-
-  if (created) return { id: created.id, confidence: "new" };
-
-  const [raceWinner] = await db
-    .select({ id: prospectsTable.id })
-    .from(prospectsTable)
-    .where(and(eq(prospectsTable.accountId, accountId), eq(prospectsTable.phonePrimary, fromNumber)))
-    .limit(1);
-
-  return { id: raceWinner!.id, confidence: "exact" };
-}
 
 router.post(
   "/webhooks/twilio/sms",
@@ -83,8 +39,8 @@ router.post(
 
     setImmediate(async () => {
       try {
-        const fromNorm = normalizeE164(From);
-        const toNorm = normalizeE164(To);
+        const fromNorm = normalizePhoneE164(From);
+        const toNorm = normalizePhoneE164(To);
 
         const twilioNumber = await findTwilioNumber(toNorm);
         if (!twilioNumber) {
@@ -148,8 +104,8 @@ router.post(
       try {
         if (!CallSid || !From || !To) return;
 
-        const fromNorm = normalizeE164(From);
-        const toNorm = normalizeE164(To);
+        const fromNorm = normalizePhoneE164(From);
+        const toNorm = normalizePhoneE164(To);
 
         const twilioNumber = await findTwilioNumber(toNorm);
         if (!twilioNumber) {

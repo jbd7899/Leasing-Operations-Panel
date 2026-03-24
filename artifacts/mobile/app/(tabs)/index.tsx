@@ -9,16 +9,22 @@ import {
   Pressable,
   Modal,
   ScrollView,
+  TextInput,
+  KeyboardAvoidingView,
+  ActivityIndicator,
+  Alert,
 } from "react-native";
-import { useGetInbox, useListProperties } from "@workspace/api-client-react";
+import { useGetInbox, useListProperties, useListTwilioNumbers, useInitiateNewSms, getListProspectsQueryKey, getGetInboxQueryKey } from "@workspace/api-client-react";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
+import { useQueryClient } from "@tanstack/react-query";
 import Colors from "@/constants/colors";
 import { InboxItem } from "@/components/ui/InboxItem";
 import { SkeletonLoader } from "@/components/ui/SkeletonLoader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SearchBar } from "@/components/ui/SearchBar";
+import type { TwilioNumber } from "@workspace/api-client-react";
 
 const SOURCE_FILTERS = [
   { label: "All", value: "" },
@@ -125,6 +131,156 @@ function PropertyBottomSheet({
   );
 }
 
+function NewMessageModal({
+  visible,
+  onClose,
+  twilioNumbers,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  twilioNumbers: TwilioNumber[];
+}) {
+  const queryClient = useQueryClient();
+  const [toPhone, setToPhone] = useState("");
+  const [messageBody, setMessageBody] = useState("");
+  const [selectedNumberId, setSelectedNumberId] = useState<string | null>(null);
+
+  const multipleNumbers = twilioNumbers.length > 1;
+  const effectiveSelectedId = selectedNumberId ?? twilioNumbers[0]?.id ?? null;
+  const selectedNumber = twilioNumbers.find((n) => n.id === effectiveSelectedId) ?? twilioNumbers[0];
+
+  const initiateMutation = useInitiateNewSms({
+    mutation: {
+      onSuccess: (data) => {
+        queryClient.invalidateQueries({ queryKey: getListProspectsQueryKey() });
+        queryClient.invalidateQueries({ queryKey: getGetInboxQueryKey() });
+        handleClose();
+        router.push({
+          pathname: "/prospect/[id]",
+          params: { id: data.prospect.id },
+        });
+      },
+      onError: (err) => {
+        const msg = err instanceof Error ? err.message : String(err);
+        Alert.alert("Failed to Send", msg);
+      },
+    },
+  });
+
+  const handleClose = () => {
+    setToPhone("");
+    setMessageBody("");
+    setSelectedNumberId(null);
+    initiateMutation.reset();
+    onClose();
+  };
+
+  const canSend = toPhone.trim().length >= 10 && messageBody.trim().length > 0 && !!selectedNumber && !initiateMutation.isPending;
+
+  const handleSend = () => {
+    if (!canSend) return;
+    initiateMutation.mutate({
+      toPhone: toPhone.trim(),
+      body: messageBody.trim(),
+      ...(effectiveSelectedId ? { fromTwilioNumberId: effectiveSelectedId } : {}),
+    });
+  };
+
+  return (
+    <Modal
+      visible={visible}
+      animationType="slide"
+      presentationStyle="pageSheet"
+      onRequestClose={handleClose}
+    >
+      <KeyboardAvoidingView
+        style={newMsgStyles.container}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
+        <View style={newMsgStyles.header}>
+          <Pressable onPress={handleClose} style={newMsgStyles.cancelBtn}>
+            <Text style={newMsgStyles.cancelText}>Cancel</Text>
+          </Pressable>
+          <Text style={newMsgStyles.title}>New Message</Text>
+          <Pressable
+            onPress={handleSend}
+            style={[newMsgStyles.sendBtn, !canSend && newMsgStyles.sendBtnDisabled]}
+            disabled={!canSend}
+          >
+            {initiateMutation.isPending ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Text style={newMsgStyles.sendText}>Send</Text>
+            )}
+          </Pressable>
+        </View>
+
+        <View style={newMsgStyles.toRow}>
+          <Feather name="user" size={15} color={Colors.dark.textMuted} />
+          <Text style={newMsgStyles.toLabel}>To:</Text>
+          <TextInput
+            value={toPhone}
+            onChangeText={setToPhone}
+            placeholder="Phone number (e.g. 5551234567)"
+            placeholderTextColor={Colors.dark.textMuted}
+            style={newMsgStyles.toInput}
+            keyboardType="phone-pad"
+            autoFocus
+            maxLength={16}
+          />
+        </View>
+
+        {twilioNumbers.length === 0 ? (
+          <View style={newMsgStyles.noNumberWarn}>
+            <Feather name="alert-triangle" size={16} color="#FCA84A" />
+            <Text style={newMsgStyles.noNumberWarnText}>
+              No Twilio numbers configured. Add one in Settings.
+            </Text>
+          </View>
+        ) : multipleNumbers ? (
+          <View style={newMsgStyles.fromRow}>
+            <Feather name="phone-outgoing" size={15} color={Colors.dark.textMuted} />
+            <Text style={newMsgStyles.fromLabel}>From:</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={newMsgStyles.numberChips}>
+              {twilioNumbers.map((n) => (
+                <Pressable
+                  key={n.id}
+                  style={[newMsgStyles.numberChip, effectiveSelectedId === n.id && newMsgStyles.numberChipActive]}
+                  onPress={() => setSelectedNumberId(n.id)}
+                >
+                  <Text style={[newMsgStyles.numberChipText, effectiveSelectedId === n.id && newMsgStyles.numberChipTextActive]}>
+                    {n.friendlyName ?? n.phoneNumber}
+                  </Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
+        ) : selectedNumber ? (
+          <View style={newMsgStyles.fromRowSingle}>
+            <Feather name="phone-outgoing" size={15} color={Colors.dark.textMuted} />
+            <Text style={newMsgStyles.fromLabel}>From:</Text>
+            <Text style={newMsgStyles.fromValue}>{selectedNumber.friendlyName ?? selectedNumber.phoneNumber}</Text>
+          </View>
+        ) : null}
+
+        <View style={newMsgStyles.divider} />
+
+        <TextInput
+          value={messageBody}
+          onChangeText={setMessageBody}
+          placeholder="Type your message..."
+          placeholderTextColor={Colors.dark.textMuted}
+          style={newMsgStyles.bodyInput}
+          multiline
+          maxLength={1600}
+        />
+
+        <Text style={newMsgStyles.charCount}>{messageBody.length}/1600</Text>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
 export default function InboxScreen() {
   const insets = useSafeAreaInsets();
   const [search, setSearch] = useState("");
@@ -132,9 +288,20 @@ export default function InboxScreen() {
   const [statusFilter, setStatusFilter] = useState("");
   const [propertyFilter, setPropertyFilter] = useState("");
   const [propertySheetOpen, setPropertySheetOpen] = useState(false);
+  const [newMessageOpen, setNewMessageOpen] = useState(false);
 
   const { data: propertiesData } = useListProperties();
   const properties = propertiesData?.properties ?? [];
+
+  const { data: twilioNumbersData } = useListTwilioNumbers({
+    query: {
+      select: (d) => ({
+        ...d,
+        twilioNumbers: d.twilioNumbers.filter((n) => n.isActive),
+      }),
+    },
+  });
+  const activeTwilioNumbers = twilioNumbersData?.twilioNumbers ?? [];
 
   const inboxParams = {
     ...(sourceFilter ? { sourceType: sourceFilter } : {}),
@@ -189,6 +356,12 @@ export default function InboxScreen() {
         onSelectProperty={setPropertyFilter}
       />
 
+      <NewMessageModal
+        visible={newMessageOpen}
+        onClose={() => setNewMessageOpen(false)}
+        twilioNumbers={activeTwilioNumbers}
+      />
+
       <View style={styles.stickyHeader}>
         <View style={styles.titleRow}>
           <View>
@@ -203,6 +376,12 @@ export default function InboxScreen() {
                 <Text style={styles.clearBtnText}>Clear</Text>
               </Pressable>
             )}
+            <Pressable
+              style={styles.composeBtn}
+              onPress={() => setNewMessageOpen(true)}
+            >
+              <Feather name="edit" size={16} color={Colors.brand.tealLight} />
+            </Pressable>
             <Pressable style={styles.refreshBtn} onPress={() => refetch()} disabled={isFetching}>
               <Feather
                 name="refresh-cw"
@@ -366,6 +545,16 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: "Inter_500Medium",
     color: "#FCA84A",
+  },
+  composeBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: Colors.dark.bgCard,
+    borderWidth: 1,
+    borderColor: Colors.brand.teal,
+    alignItems: "center",
+    justifyContent: "center",
   },
   refreshBtn: {
     width: 40,
@@ -544,5 +733,164 @@ const sheetStyles = StyleSheet.create({
   propertyNameActive: {
     color: Colors.brand.tealLight,
     fontFamily: "Inter_600SemiBold",
+  },
+});
+
+const newMsgStyles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: Colors.dark.bg,
+  },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.dark.border,
+  },
+  cancelBtn: {
+    paddingHorizontal: 4,
+    paddingVertical: 6,
+  },
+  cancelText: {
+    fontSize: 16,
+    fontFamily: "Inter_400Regular",
+    color: Colors.dark.textSecondary,
+  },
+  title: {
+    fontSize: 17,
+    fontFamily: "Inter_600SemiBold",
+    color: Colors.dark.text,
+  },
+  sendBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: Colors.brand.teal,
+    minWidth: 60,
+    alignItems: "center",
+  },
+  sendBtnDisabled: {
+    backgroundColor: Colors.dark.bgCard,
+    borderWidth: 1,
+    borderColor: Colors.dark.border,
+  },
+  sendText: {
+    fontSize: 15,
+    fontFamily: "Inter_600SemiBold",
+    color: "#fff",
+  },
+  toRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.dark.border,
+    gap: 8,
+  },
+  toLabel: {
+    fontSize: 15,
+    fontFamily: "Inter_500Medium",
+    color: Colors.dark.textMuted,
+    width: 28,
+  },
+  toInput: {
+    flex: 1,
+    fontSize: 16,
+    fontFamily: "Inter_400Regular",
+    color: Colors.dark.text,
+  },
+  fromRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingLeft: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.dark.border,
+    gap: 8,
+  },
+  fromRowSingle: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.dark.border,
+    gap: 8,
+  },
+  fromLabel: {
+    fontSize: 14,
+    fontFamily: "Inter_500Medium",
+    color: Colors.dark.textMuted,
+    width: 36,
+  },
+  fromValue: {
+    fontSize: 14,
+    fontFamily: "Inter_400Regular",
+    color: Colors.dark.textSecondary,
+  },
+  numberChips: {
+    flexDirection: "row",
+    gap: 8,
+    paddingRight: 16,
+  },
+  numberChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: Colors.dark.bgCard,
+    borderWidth: 1,
+    borderColor: Colors.dark.border,
+  },
+  numberChipActive: {
+    backgroundColor: Colors.brand.teal,
+    borderColor: Colors.brand.teal,
+  },
+  numberChipText: {
+    fontSize: 13,
+    fontFamily: "Inter_500Medium",
+    color: Colors.dark.textSecondary,
+  },
+  numberChipTextActive: {
+    color: "#fff",
+  },
+  noNumberWarn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.dark.border,
+  },
+  noNumberWarnText: {
+    fontSize: 14,
+    fontFamily: "Inter_400Regular",
+    color: "#FCA84A",
+    flex: 1,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: Colors.dark.border,
+  },
+  bodyInput: {
+    flex: 1,
+    padding: 16,
+    fontSize: 16,
+    fontFamily: "Inter_400Regular",
+    color: Colors.dark.text,
+    textAlignVertical: "top",
+  },
+  charCount: {
+    fontSize: 12,
+    fontFamily: "Inter_400Regular",
+    color: Colors.dark.textMuted,
+    textAlign: "right",
+    paddingHorizontal: 16,
+    paddingBottom: 16,
   },
 });

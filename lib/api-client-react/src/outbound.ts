@@ -2,7 +2,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import type { UseMutationOptions, UseMutationResult, UseQueryOptions, UseQueryResult } from "@tanstack/react-query";
 import { customFetch } from "./custom-fetch";
 import type { ErrorType } from "./custom-fetch";
-import type { Interaction } from "./generated/api.schemas";
+import type { Interaction, Prospect } from "./generated/api.schemas";
 
 export interface SendSmsBody {
   prospectId: string;
@@ -24,6 +24,35 @@ export const useSendSms = <TError = ErrorType<unknown>, TContext = unknown>(opti
   const { mutation: mutationOptions } = options ?? {};
   return useMutation<Awaited<ReturnType<typeof sendSms>>, TError, SendSmsBody, TContext>({
     mutationFn: (vars: SendSmsBody) => sendSms(vars),
+    ...mutationOptions,
+  });
+};
+
+export interface InitiateSmsBody {
+  toPhone: string;
+  body: string;
+  fromTwilioNumberId?: string;
+}
+
+export interface InitiateSmsResponse {
+  interaction: Interaction;
+  prospect: Prospect;
+}
+
+export const initiateNewSms = async (initiateBody: InitiateSmsBody): Promise<InitiateSmsResponse> => {
+  return customFetch<InitiateSmsResponse>("/api/interactions/initiate-sms", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(initiateBody),
+  });
+};
+
+export const useInitiateNewSms = <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<Awaited<ReturnType<typeof initiateNewSms>>, TError, InitiateSmsBody, TContext>;
+}): UseMutationResult<Awaited<ReturnType<typeof initiateNewSms>>, TError, InitiateSmsBody, TContext> => {
+  const { mutation: mutationOptions } = options ?? {};
+  return useMutation<Awaited<ReturnType<typeof initiateNewSms>>, TError, InitiateSmsBody, TContext>({
+    mutationFn: (vars: InitiateSmsBody) => initiateNewSms(vars),
     ...mutationOptions,
   });
 };
