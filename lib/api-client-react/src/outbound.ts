@@ -108,3 +108,62 @@ export const useResolveProspectConflict = <TError = ErrorType<unknown>, TContext
     ...mutationOptions,
   });
 };
+
+export interface WeeklyTrendEntry {
+  week: string;
+  count: number;
+}
+
+export interface PropertyLeadCount {
+  propertyId: string;
+  propertyName: string;
+  count: number;
+}
+
+export interface AnalyticsOverview {
+  period: string;
+  leadVolume: {
+    total: number;
+    periodCount: number;
+    last7d: number;
+    last30d: number;
+    weeklyTrend: WeeklyTrendEntry[];
+  };
+  sourceMix: {
+    sms: number;
+    voice: number;
+    voicemail: number;
+  };
+  statusFunnel: {
+    new: number;
+    contacted: number;
+    qualified: number;
+    disqualified: number;
+  };
+  qualificationRate: number;
+  propertiesRanked: PropertyLeadCount[];
+  exportPipeline: {
+    pending: number;
+    exported: number;
+  };
+}
+
+export const getAnalyticsOverview = async (period: string): Promise<AnalyticsOverview> => {
+  return customFetch<AnalyticsOverview>(`/api/analytics/overview?period=${encodeURIComponent(period)}`);
+};
+
+export const getAnalyticsOverviewQueryKey = (period: string) =>
+  ["analytics", "overview", period] as const;
+
+export const useGetAnalyticsOverview = <TData = AnalyticsOverview, TError = ErrorType<unknown>>(
+  period: string,
+  options?: { query?: UseQueryOptions<AnalyticsOverview, TError, TData> },
+): UseQueryResult<TData, TError> => {
+  const { query: queryOptions } = options ?? {};
+  return useQuery<AnalyticsOverview, TError, TData>({
+    queryKey: getAnalyticsOverviewQueryKey(period),
+    queryFn: () => getAnalyticsOverview(period),
+    staleTime: 60_000,
+    ...queryOptions,
+  });
+};

@@ -11,6 +11,7 @@ import tagsRouter from "./tags";
 import exportsRouter from "./exports";
 import webhooksRouter from "./webhooks";
 import internalRouter from "./internal";
+import analyticsRouter from "./analytics";
 
 const router: IRouter = Router();
 
@@ -26,5 +27,6 @@ router.use(interactionsRouter);
 router.use(inboxRouter);
 router.use(tagsRouter);
 router.use(exportsRouter);
+router.use(analyticsRouter);
 
 export default router;

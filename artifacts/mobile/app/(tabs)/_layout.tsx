@@ -24,6 +24,10 @@ function NativeTabLayout() {
         <Icon sf={{ default: "arrow.up.doc", selected: "arrow.up.doc.fill" }} />
         <Label>Exports</Label>
       </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="analytics">
+        <Icon sf={{ default: "chart.bar", selected: "chart.bar.fill" }} />
+        <Label>Analytics</Label>
+      </NativeTabs.Trigger>
       <NativeTabs.Trigger name="settings">
         <Icon sf={{ default: "gearshape", selected: "gearshape.fill" }} />
         <Label>Settings</Label>
@@ -97,6 +101,18 @@ function ClassicTabLayout() {
               <SymbolView name="arrow.up.doc" tintColor={color} size={22} />
             ) : (
               <Feather name="upload" size={22} color={color} />
+            ),
+        }}
+      />
+      <Tabs.Screen
+        name="analytics"
+        options={{
+          title: "Analytics",
+          tabBarIcon: ({ color }) =>
+            isIOS ? (
+              <SymbolView name="chart.bar" tintColor={color} size={22} />
+            ) : (
+              <Feather name="bar-chart-2" size={22} color={color} />
             ),
         }}
       />
