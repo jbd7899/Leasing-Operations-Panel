@@ -38,7 +38,6 @@ import type { Property } from "@workspace/api-client-react";
 import { Badge } from "@/components/ui/Badge";
 
 const STATUS_OPTIONS = ["new", "contacted", "qualified", "disqualified", "archived"];
-const CATEGORY_OPTIONS = ["leasing_inquiry", "maintenance", "payment", "complaint", "general", "other"];
 
 function SectionHeader({ title }: { title: string }) {
   return <Text style={styles.sectionHeader}>{title}</Text>;

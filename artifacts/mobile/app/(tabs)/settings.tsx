@@ -257,7 +257,7 @@ export default function SettingsScreen() {
     query: { enabled: twilioExpanded, queryKey: getListTwilioNumbersQueryKey() },
   });
 
-  const { data: usersData, isLoading: usersLoading } = useListUsers({
+  const { data: usersData, isLoading: usersLoading, isError: usersError } = useListUsers({
     query: { enabled: usersExpanded, queryKey: getListUsersQueryKey() },
   });
 
@@ -389,6 +389,8 @@ export default function SettingsScreen() {
             <>
               {usersLoading ? (
                 <ActivityIndicator size="small" color={Colors.brand.tealLight} />
+              ) : usersError ? (
+                <Text style={styles.emptyText}>Unable to load team members</Text>
               ) : users.length === 0 ? (
                 <Text style={styles.emptyText}>No team members found</Text>
               ) : (
