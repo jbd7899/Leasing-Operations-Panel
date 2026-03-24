@@ -1,6 +1,6 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { db, prospectsTable, interactionsTable, propertiesTable } from "@workspace/db";
-import { eq, and, gte, lt, sql, count } from "drizzle-orm";
+import { eq, and, gte, lt, sql, count, inArray } from "drizzle-orm";
 
 const router: IRouter = Router();
 
@@ -197,7 +197,7 @@ router.get("/analytics/overview", async (req: Request, res: Response) => {
     propertiesData = await db
       .select({ id: propertiesTable.id, name: propertiesTable.name })
       .from(propertiesTable)
-      .where(eq(propertiesTable.accountId, accountId));
+      .where(and(eq(propertiesTable.accountId, accountId), inArray(propertiesTable.id, propertyIds)));
   }
 
   const propertyMap = new Map(propertiesData.map((p) => [p.id, p.name]));
