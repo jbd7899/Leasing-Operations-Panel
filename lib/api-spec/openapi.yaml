@@ -1,15 +1,37 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Leasing Operations Panel API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: Auth
+    description: Browser and mobile authentication endpoints.
+  - name: Properties
+    description: Property management
+  - name: TwilioNumbers
+    description: Twilio phone number management
+  - name: Users
+    description: User management
+  - name: Prospects
+    description: Prospect records
+  - name: Interactions
+    description: Interaction records
+  - name: Inbox
+    description: Leasing inbox
+  - name: Tags
+    description: Tag management
+  - name: Exports
+    description: Export batches
+  - name: Webhooks
+    description: Twilio webhook endpoints
+  - name: Internal
+    description: Internal processing endpoints
+
 paths:
   /healthz:
     get:
@@ -24,7 +46,665 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  # Auth endpoints
+  /auth/user:
+    get:
+      tags: [Auth]
+      operationId: getCurrentAuthUser
+      summary: Get the currently authenticated user
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationSessionHeader'
+        - $ref: '#/components/parameters/SessionCookie'
+      responses:
+        '200':
+          description: Auth status resolved successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthUserEnvelope'
+  /login:
+    get:
+      tags: [Auth]
+      operationId: beginBrowserLogin
+      summary: Start the browser OIDC login flow
+      parameters:
+        - name: returnTo
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '302':
+          description: Redirect to the OIDC authorization endpoint.
+  /callback:
+    get:
+      tags: [Auth]
+      operationId: handleBrowserLoginCallback
+      summary: Complete the browser OIDC login flow
+      parameters:
+        - name: code
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: state
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: iss
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uri
+      responses:
+        '302':
+          description: Redirect to the returnTo path on success or /api/login on failure.
+  /logout:
+    get:
+      tags: [Auth]
+      operationId: logoutBrowserSession
+      summary: Clear the session and begin OIDC logout
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationSessionHeader'
+        - $ref: '#/components/parameters/SessionCookie'
+      responses:
+        '302':
+          description: Redirect to the OIDC provider logout URL.
+  /mobile-auth/token-exchange:
+    post:
+      tags: [Auth]
+      operationId: exchangeMobileAuthorizationCode
+      summary: Exchange a mobile OIDC code for a session token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MobileTokenExchangeRequest'
+      responses:
+        '200':
+          description: Session created successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MobileTokenExchangeSuccess'
+        '400':
+          description: Missing or invalid required fields.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '401':
+          description: Token did not contain usable claims.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '500':
+          description: Token exchange failed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /mobile-auth/logout:
+    post:
+      tags: [Auth]
+      operationId: logoutMobileSession
+      summary: Delete a mobile session token
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationSessionHeader'
+      responses:
+        '200':
+          description: Logout processed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LogoutSuccess'
+
+  # Properties
+  /properties:
+    get:
+      tags: [Properties]
+      operationId: listProperties
+      summary: List properties for the account
+      responses:
+        '200':
+          description: List of properties
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PropertyList'
+        '401':
+          description: Unauthorized
+    post:
+      tags: [Properties]
+      operationId: createProperty
+      summary: Create a new property
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePropertyBody'
+      responses:
+        '201':
+          description: Property created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Property'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden (admin only)
+  /properties/{id}:
+    patch:
+      tags: [Properties]
+      operationId: updateProperty
+      summary: Update a property
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePropertyBody'
+      responses:
+        '200':
+          description: Property updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Property'
+        '404':
+          description: Not found
+
+  # Twilio Numbers
+  /twilio-numbers:
+    get:
+      tags: [TwilioNumbers]
+      operationId: listTwilioNumbers
+      summary: List Twilio numbers for the account
+      responses:
+        '200':
+          description: List of Twilio numbers
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TwilioNumberList'
+    post:
+      tags: [TwilioNumbers]
+      operationId: createTwilioNumber
+      summary: Add a Twilio number
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTwilioNumberBody'
+      responses:
+        '201':
+          description: Number added
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TwilioNumber'
+  /twilio-numbers/{id}:
+    patch:
+      tags: [TwilioNumbers]
+      operationId: updateTwilioNumber
+      summary: Update a Twilio number
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateTwilioNumberBody'
+      responses:
+        '200':
+          description: Number updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TwilioNumber'
+
+  # Users
+  /users:
+    get:
+      tags: [Users]
+      operationId: listUsers
+      summary: List users in the account
+      responses:
+        '200':
+          description: List of users
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserList'
+    post:
+      tags: [Users]
+      operationId: createUser
+      summary: Invite / create a user in the account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUserBody'
+      responses:
+        '201':
+          description: User created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountUser'
+
+  # Prospects
+  /prospects:
+    get:
+      tags: [Prospects]
+      operationId: listProspects
+      summary: List prospects
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: exportStatus
+          in: query
+          schema:
+            type: string
+        - name: propertyId
+          in: query
+          schema:
+            type: string
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+        - name: offset
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Prospect list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProspectList'
+    post:
+      tags: [Prospects]
+      operationId: createProspect
+      summary: Create a new prospect
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProspectBody'
+      responses:
+        '201':
+          description: Prospect created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Prospect'
+  /prospects/{id}:
+    get:
+      tags: [Prospects]
+      operationId: getProspect
+      summary: Get a single prospect with interactions and notes
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Prospect detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProspectDetail'
+        '404':
+          description: Not found
+    patch:
+      tags: [Prospects]
+      operationId: updateProspect
+      summary: Update a prospect
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProspectBody'
+      responses:
+        '200':
+          description: Prospect updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Prospect'
+  /prospects/{id}/notes:
+    post:
+      tags: [Prospects]
+      operationId: addProspectNote
+      summary: Add a note to a prospect
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddNoteBody'
+      responses:
+        '201':
+          description: Note added
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Note'
+  /prospects/{id}/tags:
+    post:
+      tags: [Prospects]
+      operationId: setProspectTags
+      summary: Set tags on a prospect (replaces existing)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetTagsBody'
+      responses:
+        '200':
+          description: Tags updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TagList'
+
+  # Tags
+  /tags:
+    get:
+      tags: [Tags]
+      operationId: listTags
+      summary: List tags for the account
+      responses:
+        '200':
+          description: Tag list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TagList'
+    post:
+      tags: [Tags]
+      operationId: createTag
+      summary: Create a tag
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTagBody'
+      responses:
+        '201':
+          description: Tag created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tag'
+
+  # Interactions
+  /interactions/{id}:
+    get:
+      tags: [Interactions]
+      operationId: getInteraction
+      summary: Get a single interaction
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Interaction detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Interaction'
+        '404':
+          description: Not found
+  /interactions/{id}/review:
+    patch:
+      tags: [Interactions]
+      operationId: reviewInteraction
+      summary: Confirm and update an interaction after review
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReviewInteractionBody'
+      responses:
+        '200':
+          description: Interaction reviewed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Interaction'
+
+  # Inbox
+  /inbox:
+    get:
+      tags: [Inbox]
+      operationId: getInbox
+      summary: Get inbox items with filters
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: propertyId
+          in: query
+          schema:
+            type: string
+        - name: sourceType
+          in: query
+          schema:
+            type: string
+        - name: exportStatus
+          in: query
+          schema:
+            type: string
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+        - name: offset
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Inbox items
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InboxResponse'
+
+  # Exports
+  /exports:
+    get:
+      tags: [Exports]
+      operationId: listExports
+      summary: List export batches
+      responses:
+        '200':
+          description: Export batch list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExportBatchList'
+    post:
+      tags: [Exports]
+      operationId: createExport
+      summary: Create an export batch
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateExportBody'
+      responses:
+        '201':
+          description: Export batch created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExportBatch'
+  /exports/{id}/download:
+    get:
+      tags: [Exports]
+      operationId: downloadExport
+      summary: Download an export file
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: File download
+          content:
+            text/csv:
+              schema:
+                type: string
+            application/json:
+              schema:
+                type: object
+
+  # Webhooks
+  /webhooks/twilio/sms:
+    post:
+      tags: [Webhooks]
+      operationId: twilioSmsWebhook
+      summary: Twilio inbound SMS webhook
+      responses:
+        '200':
+          description: Accepted
+  /webhooks/twilio/voice:
+    post:
+      tags: [Webhooks]
+      operationId: twilioVoiceWebhook
+      summary: Twilio inbound voice webhook
+      responses:
+        '200':
+          description: Accepted
+  /webhooks/twilio/voicemail-transcript:
+    post:
+      tags: [Webhooks]
+      operationId: twilioVoicemailTranscriptWebhook
+      summary: Twilio voicemail transcript webhook
+      responses:
+        '200':
+          description: Accepted
+
+  # Internal
+  /internal/process-interaction/{id}:
+    post:
+      tags: [Internal]
+      operationId: processInteraction
+      summary: Trigger AI extraction for an interaction
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Processing started
+  /internal/retry-extraction/{id}:
+    post:
+      tags: [Internal]
+      operationId: retryExtraction
+      summary: Retry AI extraction for an interaction
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Retry started
+
 components:
+  parameters:
+    AuthorizationSessionHeader:
+      name: Authorization
+      in: header
+      required: false
+      description: Opaque session token — Bearer <sid>.
+      schema:
+        type: string
+    SessionCookie:
+      name: sid
+      in: cookie
+      required: false
+      description: Browser session cookie.
+      schema:
+        type: string
+
   schemas:
     HealthStatus:
       type: object
@@ -34,3 +714,587 @@ components:
       required:
         - status
 
+    # Auth schemas
+    AuthUser:
+      type: object
+      required: [id, email, firstName, lastName, profileImageUrl]
+      properties:
+        id:
+          type: string
+        email:
+          type: [string, 'null']
+          format: email
+        firstName:
+          type: [string, 'null']
+        lastName:
+          type: [string, 'null']
+        profileImageUrl:
+          type: [string, 'null']
+    AuthUserEnvelope:
+      type: object
+      required: [user]
+      properties:
+        user:
+          oneOf:
+            - $ref: '#/components/schemas/AuthUser'
+            - type: 'null'
+    MobileTokenExchangeRequest:
+      type: object
+      required: [code, code_verifier, redirect_uri, state]
+      properties:
+        code:
+          type: string
+          minLength: 1
+        code_verifier:
+          type: string
+          minLength: 1
+        redirect_uri:
+          type: string
+          minLength: 1
+          format: uri
+        state:
+          type: string
+          minLength: 1
+        nonce:
+          type: string
+          minLength: 1
+    MobileTokenExchangeSuccess:
+      type: object
+      required: [token]
+      properties:
+        token:
+          type: string
+    LogoutSuccess:
+      type: object
+      required: [success]
+      properties:
+        success:
+          type: boolean
+          const: true
+    ErrorEnvelope:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+
+    # Property schemas
+    Property:
+      type: object
+      required: [id, accountId, name, status, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        accountId:
+          type: string
+        name:
+          type: string
+        address1:
+          type: [string, 'null']
+        address2:
+          type: [string, 'null']
+        city:
+          type: [string, 'null']
+        state:
+          type: [string, 'null']
+        zip:
+          type: [string, 'null']
+        status:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    PropertyList:
+      type: object
+      required: [properties]
+      properties:
+        properties:
+          type: array
+          items:
+            $ref: '#/components/schemas/Property'
+    CreatePropertyBody:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        address1:
+          type: string
+        address2:
+          type: string
+        city:
+          type: string
+        state:
+          type: string
+        zip:
+          type: string
+        status:
+          type: string
+    UpdatePropertyBody:
+      type: object
+      properties:
+        name:
+          type: string
+        address1:
+          type: string
+        address2:
+          type: string
+        city:
+          type: string
+        state:
+          type: string
+        zip:
+          type: string
+        status:
+          type: string
+
+    # TwilioNumber schemas
+    TwilioNumber:
+      type: object
+      required: [id, accountId, phoneNumber, isActive, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        accountId:
+          type: string
+        propertyId:
+          type: [string, 'null']
+        phoneNumber:
+          type: string
+        friendlyName:
+          type: [string, 'null']
+        purpose:
+          type: [string, 'null']
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    TwilioNumberList:
+      type: object
+      required: [twilioNumbers]
+      properties:
+        twilioNumbers:
+          type: array
+          items:
+            $ref: '#/components/schemas/TwilioNumber'
+    CreateTwilioNumberBody:
+      type: object
+      required: [phoneNumber]
+      properties:
+        phoneNumber:
+          type: string
+        friendlyName:
+          type: string
+        propertyId:
+          type: string
+        purpose:
+          type: string
+    UpdateTwilioNumberBody:
+      type: object
+      properties:
+        friendlyName:
+          type: string
+        propertyId:
+          type: string
+        purpose:
+          type: string
+        isActive:
+          type: boolean
+
+    # User schemas
+    AccountUser:
+      type: object
+      required: [id, accountId, role, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        accountId:
+          type: string
+        userId:
+          type: [string, 'null']
+        name:
+          type: [string, 'null']
+        email:
+          type: [string, 'null']
+        role:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    UserList:
+      type: object
+      required: [users]
+      properties:
+        users:
+          type: array
+          items:
+            $ref: '#/components/schemas/AccountUser'
+    CreateUserBody:
+      type: object
+      required: [email, role]
+      properties:
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        role:
+          type: string
+
+    # Prospect schemas
+    Prospect:
+      type: object
+      required: [id, accountId, phonePrimary, status, exportStatus, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        accountId:
+          type: string
+        assignedPropertyId:
+          type: [string, 'null']
+        firstName:
+          type: [string, 'null']
+        lastName:
+          type: [string, 'null']
+        fullName:
+          type: [string, 'null']
+        phonePrimary:
+          type: string
+        phoneSecondary:
+          type: [string, 'null']
+        email:
+          type: [string, 'null']
+        desiredMoveInDate:
+          type: [string, 'null']
+        desiredBedrooms:
+          type: [string, 'null']
+        budgetMin:
+          type: [number, 'null']
+        budgetMax:
+          type: [number, 'null']
+        pets:
+          type: [string, 'null']
+        voucherType:
+          type: [string, 'null']
+        employmentStatus:
+          type: [string, 'null']
+        monthlyIncome:
+          type: [number, 'null']
+        languagePreference:
+          type: [string, 'null']
+        latestSummary:
+          type: [string, 'null']
+        latestSentiment:
+          type: [string, 'null']
+        qualificationScore:
+          type: [number, 'null']
+        status:
+          type: string
+        exportStatus:
+          type: string
+        crmExternalId:
+          type: [string, 'null']
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    ProspectList:
+      type: object
+      required: [prospects, total]
+      properties:
+        prospects:
+          type: array
+          items:
+            $ref: '#/components/schemas/Prospect'
+        total:
+          type: integer
+    ProspectDetail:
+      type: object
+      required: [prospect]
+      properties:
+        prospect:
+          $ref: '#/components/schemas/Prospect'
+        interactions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Interaction'
+        notes:
+          type: array
+          items:
+            $ref: '#/components/schemas/Note'
+        tags:
+          type: array
+          items:
+            $ref: '#/components/schemas/Tag'
+    CreateProspectBody:
+      type: object
+      required: [phonePrimary]
+      properties:
+        phonePrimary:
+          type: string
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+        assignedPropertyId:
+          type: string
+        status:
+          type: string
+    UpdateProspectBody:
+      type: object
+      properties:
+        firstName:
+          type: string
+        lastName:
+          type: string
+        fullName:
+          type: string
+        email:
+          type: string
+        phoneSecondary:
+          type: string
+        assignedPropertyId:
+          type: string
+        desiredMoveInDate:
+          type: string
+        desiredBedrooms:
+          type: string
+        budgetMin:
+          type: number
+        budgetMax:
+          type: number
+        pets:
+          type: string
+        voucherType:
+          type: string
+        employmentStatus:
+          type: string
+        monthlyIncome:
+          type: number
+        languagePreference:
+          type: string
+        status:
+          type: string
+        exportStatus:
+          type: string
+        crmExternalId:
+          type: string
+
+    # Note schemas
+    Note:
+      type: object
+      required: [id, accountId, prospectId, userId, body, createdAt]
+      properties:
+        id:
+          type: string
+        accountId:
+          type: string
+        prospectId:
+          type: string
+        userId:
+          type: string
+        body:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    AddNoteBody:
+      type: object
+      required: [body]
+      properties:
+        body:
+          type: string
+
+    # Tag schemas
+    Tag:
+      type: object
+      required: [id, accountId, name]
+      properties:
+        id:
+          type: string
+        accountId:
+          type: string
+        name:
+          type: string
+        color:
+          type: [string, 'null']
+    TagList:
+      type: object
+      required: [tags]
+      properties:
+        tags:
+          type: array
+          items:
+            $ref: '#/components/schemas/Tag'
+    CreateTagBody:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        color:
+          type: string
+    SetTagsBody:
+      type: object
+      required: [tagIds]
+      properties:
+        tagIds:
+          type: array
+          items:
+            type: string
+
+    # Interaction schemas
+    Interaction:
+      type: object
+      required: [id, accountId, sourceType, direction, fromNumber, toNumber, occurredAt, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        accountId:
+          type: string
+        prospectId:
+          type: [string, 'null']
+        propertyId:
+          type: [string, 'null']
+        sourceType:
+          type: string
+        direction:
+          type: string
+        twilioMessageSid:
+          type: [string, 'null']
+        twilioCallSid:
+          type: [string, 'null']
+        parentThreadKey:
+          type: [string, 'null']
+        fromNumber:
+          type: string
+        toNumber:
+          type: string
+        rawText:
+          type: [string, 'null']
+        transcript:
+          type: [string, 'null']
+        summary:
+          type: [string, 'null']
+        category:
+          type: [string, 'null']
+        urgency:
+          type: [string, 'null']
+        sentiment:
+          type: [string, 'null']
+        extractionConfidence:
+          type: [number, 'null']
+        structuredExtractionJson:
+          type: [object, 'null']
+          additionalProperties: true
+        extractionStatus:
+          type: [string, 'null']
+        occurredAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    ReviewInteractionBody:
+      type: object
+      properties:
+        summary:
+          type: string
+        category:
+          type: string
+        propertyId:
+          type: string
+        prospectId:
+          type: string
+        structuredExtractionJson:
+          type: object
+          additionalProperties: true
+
+    # Inbox schemas
+    InboxItem:
+      type: object
+      required: [interaction]
+      properties:
+        interaction:
+          $ref: '#/components/schemas/Interaction'
+        prospect:
+          oneOf:
+            - $ref: '#/components/schemas/Prospect'
+            - type: 'null'
+        property:
+          oneOf:
+            - $ref: '#/components/schemas/Property'
+            - type: 'null'
+    InboxResponse:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/InboxItem'
+        total:
+          type: integer
+
+    # Export schemas
+    ExportBatch:
+      type: object
+      required: [id, accountId, format, status, recordCount, createdAt]
+      properties:
+        id:
+          type: string
+        accountId:
+          type: string
+        createdByUserId:
+          type: [string, 'null']
+        format:
+          type: string
+        targetSystem:
+          type: [string, 'null']
+        recordCount:
+          type: integer
+        status:
+          type: string
+        fileUrl:
+          type: [string, 'null']
+        createdAt:
+          type: string
+          format: date-time
+    ExportBatchList:
+      type: object
+      required: [exports]
+      properties:
+        exports:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExportBatch'
+    CreateExportBody:
+      type: object
+      required: [prospectIds, format]
+      properties:
+        prospectIds:
+          type: array
+          items:
+            type: string
+        format:
+          type: string
+          enum: [csv, json]
+        targetSystem:
+          type: string
