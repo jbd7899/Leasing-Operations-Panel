@@ -1,6 +1,16 @@
 import { Router, type IRouter, type Request, type Response } from "express";
-import { db, exportBatchesTable, exportBatchItemsTable, prospectsTable } from "@workspace/db";
-import { eq, and, inArray } from "drizzle-orm";
+import {
+  db,
+  exportBatchesTable,
+  exportBatchItemsTable,
+  prospectsTable,
+  propertiesTable,
+  notesTable,
+  tagsTable,
+  prospectTagsTable,
+  interactionsTable,
+} from "@workspace/db";
+import { eq, and, inArray, max, sql } from "drizzle-orm";
 
 const router: IRouter = Router();
 
@@ -12,6 +22,12 @@ function requireAuth(req: Request, res: Response): boolean {
   return true;
 }
 
+function downloadUrl(req: Request, batchId: string): string {
+  const proto = req.headers["x-forwarded-proto"] ?? "https";
+  const host = req.headers.host ?? req.hostname;
+  return `${proto}://${host}/api/exports/${batchId}/download`;
+}
+
 router.get("/exports", async (req: Request, res: Response) => {
   if (!requireAuth(req, res)) return;
   const { accountId } = req.user!;
@@ -20,7 +36,7 @@ router.get("/exports", async (req: Request, res: Response) => {
     .select()
     .from(exportBatchesTable)
     .where(eq(exportBatchesTable.accountId, accountId))
-    .orderBy(exportBatchesTable.createdAt);
+    .orderBy(sql`${exportBatchesTable.createdAt} desc`);
 
   res.json({ exports });
 });
@@ -29,12 +45,17 @@ router.post("/exports", async (req: Request, res: Response) => {
   if (!requireAuth(req, res)) return;
   const { accountId, id: userId } = req.user!;
 
-  const { prospectIds, format, targetSystem } = req.body;
+  const { prospectIds, format, targetSystem } = req.body as {
+    prospectIds?: unknown;
+    format?: unknown;
+    targetSystem?: unknown;
+  };
+
   if (!prospectIds || !Array.isArray(prospectIds) || prospectIds.length === 0) {
     res.status(400).json({ error: "prospectIds must be a non-empty array" });
     return;
   }
-  if (!format || !["csv", "json"].includes(format)) {
+  if (!format || !["csv", "json"].includes(format as string)) {
     res.status(400).json({ error: "format must be 'csv' or 'json'" });
     return;
   }
@@ -42,33 +63,48 @@ router.post("/exports", async (req: Request, res: Response) => {
   const ownedProspects = await db
     .select({ id: prospectsTable.id })
     .from(prospectsTable)
-    .where(and(inArray(prospectsTable.id, prospectIds), eq(prospectsTable.accountId, accountId)));
+    .where(
+      and(
+        inArray(prospectsTable.id, prospectIds as string[]),
+        eq(prospectsTable.accountId, accountId),
+      ),
+    );
 
-  if (ownedProspects.length !== prospectIds.length) {
+  if (ownedProspects.length !== (prospectIds as string[]).length) {
     res.status(400).json({ error: "One or more prospectIds do not belong to this account" });
     return;
   }
 
   const validatedProspectIds = ownedProspects.map((p) => p.id);
 
-  const [batch] = await db.insert(exportBatchesTable).values({
-    accountId,
-    createdByUserId: userId,
-    format,
-    targetSystem,
-    recordCount: validatedProspectIds.length,
-    status: "completed",
-  }).returning();
+  const [batch] = await db
+    .insert(exportBatchesTable)
+    .values({
+      accountId,
+      createdByUserId: userId,
+      format: format as string,
+      targetSystem: targetSystem as string | undefined,
+      recordCount: validatedProspectIds.length,
+      status: "completed",
+    })
+    .returning();
 
-  await db.insert(exportBatchItemsTable).values(
-    validatedProspectIds.map((pid) => ({ exportBatchId: batch.id, prospectId: pid })),
-  );
+  await db
+    .insert(exportBatchItemsTable)
+    .values(validatedProspectIds.map((pid) => ({ exportBatchId: batch.id, prospectId: pid })));
 
-  await db.update(prospectsTable)
+  await db
+    .update(prospectsTable)
     .set({ exportStatus: "exported", updatedAt: new Date() })
-    .where(and(inArray(prospectsTable.id, validatedProspectIds), eq(prospectsTable.accountId, accountId)));
+    .where(
+      and(
+        inArray(prospectsTable.id, validatedProspectIds),
+        eq(prospectsTable.accountId, accountId),
+      ),
+    );
 
-  res.status(201).json(batch);
+  const url = downloadUrl(req, batch.id);
+  res.status(201).json({ ...batch, downloadUrl: url });
 });
 
 router.get("/exports/:id/download", async (req: Request, res: Response) => {
@@ -76,46 +112,292 @@ router.get("/exports/:id/download", async (req: Request, res: Response) => {
   const { accountId } = req.user!;
 
   const { id } = req.params;
-  const [batch] = await db.select().from(exportBatchesTable)
+
+  const [batch] = await db
+    .select()
+    .from(exportBatchesTable)
     .where(and(eq(exportBatchesTable.id, id), eq(exportBatchesTable.accountId, accountId)));
 
-  if (!batch) { res.status(404).json({ error: "Not found" }); return; }
+  if (!batch) {
+    res.status(404).json({ error: "Export batch not found" });
+    return;
+  }
 
-  const items = await db.select().from(exportBatchItemsTable)
+  const items = await db
+    .select()
+    .from(exportBatchItemsTable)
     .where(eq(exportBatchItemsTable.exportBatchId, id));
 
   const prospectIds = items.map((i) => i.prospectId);
-  const prospects = prospectIds.length > 0
-    ? await db.select().from(prospectsTable).where(
-        and(inArray(prospectsTable.id, prospectIds), eq(prospectsTable.accountId, accountId)),
-      )
-    : [];
+
+  if (prospectIds.length === 0) {
+    const empty = batch.format === "csv" ? buildCsvHeaders() : JSON.stringify({ exportBatchId: id, prospects: [] }, null, 2);
+    const mime = batch.format === "csv" ? "text/csv" : "application/json";
+    res.setHeader("Content-Type", mime);
+    res.setHeader("Content-Disposition", `attachment; filename="export-${id}.${batch.format}"`);
+    res.send(empty);
+    return;
+  }
+
+  const prospectsWithProperty = await db
+    .select({
+      prospect: prospectsTable,
+      propertyName: propertiesTable.name,
+    })
+    .from(prospectsTable)
+    .leftJoin(propertiesTable, eq(prospectsTable.assignedPropertyId, propertiesTable.id))
+    .where(
+      and(inArray(prospectsTable.id, prospectIds), eq(prospectsTable.accountId, accountId)),
+    );
+
+  const noteRows = await db
+    .select({ prospectId: notesTable.prospectId, body: notesTable.body, createdAt: notesTable.createdAt })
+    .from(notesTable)
+    .where(and(inArray(notesTable.prospectId, prospectIds), eq(notesTable.accountId, accountId)))
+    .orderBy(notesTable.createdAt);
+
+  const tagRows = await db
+    .select({
+      prospectId: prospectTagsTable.prospectId,
+      tagName: tagsTable.name,
+    })
+    .from(prospectTagsTable)
+    .innerJoin(tagsTable, eq(prospectTagsTable.tagId, tagsTable.id))
+    .where(inArray(prospectTagsTable.prospectId, prospectIds));
+
+  const latestInteractionRows = await db
+    .select({
+      prospectId: interactionsTable.prospectId,
+      latestAt: max(interactionsTable.occurredAt),
+      category: interactionsTable.category,
+    })
+    .from(interactionsTable)
+    .where(
+      and(
+        inArray(interactionsTable.prospectId, prospectIds),
+        eq(interactionsTable.accountId, accountId),
+      ),
+    )
+    .groupBy(interactionsTable.prospectId, interactionsTable.category);
+
+  const notesByProspect = new Map<string, string[]>();
+  for (const n of noteRows) {
+    const list = notesByProspect.get(n.prospectId) ?? [];
+    list.push(n.body);
+    notesByProspect.set(n.prospectId, list);
+  }
+
+  const tagsByProspect = new Map<string, string[]>();
+  for (const t of tagRows) {
+    const list = tagsByProspect.get(t.prospectId) ?? [];
+    list.push(t.tagName);
+    tagsByProspect.set(t.prospectId, list);
+  }
+
+  const latestByProspect = new Map<string, { latestAt: Date | null; category: string | null }>();
+  for (const r of latestInteractionRows) {
+    if (!r.prospectId) continue;
+    const existing = latestByProspect.get(r.prospectId);
+    const rowDate = r.latestAt ? new Date(r.latestAt) : null;
+    if (!existing || (rowDate && (!existing.latestAt || rowDate > existing.latestAt))) {
+      latestByProspect.set(r.prospectId, { latestAt: rowDate, category: r.category ?? null });
+    }
+  }
 
   if (batch.format === "csv") {
-    const headers = [
-      "prospect_id", "first_name", "last_name", "full_name", "phone", "email",
-      "desired_bedrooms", "desired_move_in_date", "budget_min", "budget_max",
-      "pets", "voucher_type", "employment_status", "monthly_income",
-      "lead_status", "export_status",
-    ];
-    const rows = prospects.map((p) => [
-      p.id, p.firstName ?? "", p.lastName ?? "", p.fullName ?? "",
-      p.phonePrimary, p.email ?? "",
-      p.desiredBedrooms ?? "", p.desiredMoveInDate ?? "",
-      p.budgetMin ?? "", p.budgetMax ?? "",
-      p.pets ?? "", p.voucherType ?? "", p.employmentStatus ?? "", p.monthlyIncome ?? "",
-      p.status, p.exportStatus,
-    ].map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","));
-
-    const csv = [headers.join(","), ...rows].join("\n");
-    res.setHeader("Content-Type", "text/csv");
+    const csv = buildCsv(prospectsWithProperty, notesByProspect, tagsByProspect, latestByProspect);
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
     res.setHeader("Content-Disposition", `attachment; filename="export-${id}.csv"`);
     res.send(csv);
-  } else {
-    res.setHeader("Content-Type", "application/json");
-    res.setHeader("Content-Disposition", `attachment; filename="export-${id}.json"`);
-    res.json({ exportBatchId: id, prospects });
+    return;
   }
+
+  const interactionRows = await db
+    .select()
+    .from(interactionsTable)
+    .where(
+      and(
+        inArray(interactionsTable.prospectId, prospectIds),
+        eq(interactionsTable.accountId, accountId),
+      ),
+    )
+    .orderBy(interactionsTable.occurredAt);
+
+  const interactionsByProspect = new Map<string, typeof interactionRows>();
+  for (const i of interactionRows) {
+    if (!i.prospectId) continue;
+    const list = interactionsByProspect.get(i.prospectId) ?? [];
+    list.push(i);
+    interactionsByProspect.set(i.prospectId, list);
+  }
+
+  const fullNotesByProspect = new Map<string, typeof noteRows>();
+  for (const n of noteRows) {
+    const list = fullNotesByProspect.get(n.prospectId) ?? [];
+    list.push(n);
+    fullNotesByProspect.set(n.prospectId, list);
+  }
+
+  const json = buildJson(
+    id,
+    batch,
+    prospectsWithProperty,
+    notesByProspect,
+    tagsByProspect,
+    latestByProspect,
+    interactionsByProspect,
+    fullNotesByProspect,
+  );
+
+  res.setHeader("Content-Type", "application/json; charset=utf-8");
+  res.setHeader("Content-Disposition", `attachment; filename="export-${id}.json"`);
+  res.send(JSON.stringify(json, null, 2));
 });
+
+const CSV_HEADERS = [
+  "prospect_id",
+  "first_name",
+  "last_name",
+  "full_name",
+  "phone",
+  "email",
+  "property",
+  "desired_bedrooms",
+  "desired_move_in_date",
+  "budget_min",
+  "budget_max",
+  "pets",
+  "voucher_type",
+  "employment_status",
+  "monthly_income",
+  "lead_status",
+  "category",
+  "latest_summary",
+  "notes",
+  "tags",
+  "latest_interaction_at",
+];
+
+function buildCsvHeaders(): string {
+  return CSV_HEADERS.join(",") + "\n";
+}
+
+function csvEscape(v: unknown): string {
+  const s = v == null ? "" : String(v);
+  return `"${s.replace(/"/g, '""')}"`;
+}
+
+type ProspectWithProperty = { prospect: typeof prospectsTable.$inferSelect; propertyName: string | null };
+
+function buildCsv(
+  rows: ProspectWithProperty[],
+  notesByProspect: Map<string, string[]>,
+  tagsByProspect: Map<string, string[]>,
+  latestByProspect: Map<string, { latestAt: Date | null; category: string | null }>,
+): string {
+  const lines: string[] = [CSV_HEADERS.join(",")];
+
+  for (const { prospect: p, propertyName } of rows) {
+    const notes = (notesByProspect.get(p.id) ?? []).join(" | ");
+    const tags = (tagsByProspect.get(p.id) ?? []).join(", ");
+    const latest = latestByProspect.get(p.id);
+    const latestAt = latest?.latestAt ? latest.latestAt.toISOString() : "";
+    const category = latest?.category ?? "";
+
+    const values = [
+      p.id,
+      p.firstName ?? "",
+      p.lastName ?? "",
+      p.fullName ?? [p.firstName, p.lastName].filter(Boolean).join(" "),
+      p.phonePrimary,
+      p.email ?? "",
+      propertyName ?? "",
+      p.desiredBedrooms ?? "",
+      p.desiredMoveInDate ?? "",
+      p.budgetMin ?? "",
+      p.budgetMax ?? "",
+      p.pets ?? "",
+      p.voucherType ?? "",
+      p.employmentStatus ?? "",
+      p.monthlyIncome ?? "",
+      p.status,
+      category,
+      p.latestSummary ?? "",
+      notes,
+      tags,
+      latestAt,
+    ];
+
+    lines.push(values.map(csvEscape).join(","));
+  }
+
+  return lines.join("\n");
+}
+
+function buildJson(
+  batchId: string,
+  batch: typeof exportBatchesTable.$inferSelect,
+  rows: ProspectWithProperty[],
+  notesByProspect: Map<string, string[]>,
+  tagsByProspect: Map<string, string[]>,
+  latestByProspect: Map<string, { latestAt: Date | null; category: string | null }>,
+  interactionsByProspect: Map<string, (typeof interactionsTable.$inferSelect)[]>,
+  fullNotesByProspect: Map<string, { prospectId: string; body: string; createdAt: Date }[]>,
+) {
+  const prospects = rows.map(({ prospect: p, propertyName }) => {
+    const latest = latestByProspect.get(p.id);
+    return {
+      prospect_id: p.id,
+      first_name: p.firstName ?? null,
+      last_name: p.lastName ?? null,
+      full_name: p.fullName ?? ([p.firstName, p.lastName].filter(Boolean).join(" ") || null),
+      phone: p.phonePrimary,
+      email: p.email ?? null,
+      property: propertyName ?? null,
+      desired_bedrooms: p.desiredBedrooms ?? null,
+      desired_move_in_date: p.desiredMoveInDate ?? null,
+      budget_min: p.budgetMin != null ? Number(p.budgetMin) : null,
+      budget_max: p.budgetMax != null ? Number(p.budgetMax) : null,
+      pets: p.pets ?? null,
+      voucher_type: p.voucherType ?? null,
+      employment_status: p.employmentStatus ?? null,
+      monthly_income: p.monthlyIncome != null ? Number(p.monthlyIncome) : null,
+      lead_status: p.status,
+      category: latest?.category ?? null,
+      latest_summary: p.latestSummary ?? null,
+      latest_sentiment: p.latestSentiment ?? null,
+      tags: tagsByProspect.get(p.id) ?? [],
+      latest_interaction_at: latest?.latestAt ? latest.latestAt.toISOString() : null,
+      notes: (fullNotesByProspect.get(p.id) ?? []).map((n) => ({
+        body: n.body,
+        created_at: n.createdAt.toISOString(),
+      })),
+      interactions: (interactionsByProspect.get(p.id) ?? []).map((i) => ({
+        id: i.id,
+        source_type: i.sourceType,
+        direction: i.direction,
+        occurred_at: i.occurredAt.toISOString(),
+        raw_text: i.rawText ?? null,
+        transcript: i.transcript ?? null,
+        summary: i.summary ?? null,
+        category: i.category ?? null,
+        sentiment: i.sentiment ?? null,
+        urgency: i.urgency ?? null,
+        extraction_status: i.extractionStatus ?? null,
+        extraction_confidence: i.extractionConfidence != null ? Number(i.extractionConfidence) : null,
+        structured_extraction: i.structuredExtractionJson ?? null,
+      })),
+    };
+  });
+
+  return {
+    export_batch_id: batchId,
+    format: batch.format,
+    target_system: batch.targetSystem ?? null,
+    generated_at: new Date().toISOString(),
+    record_count: prospects.length,
+    prospects,
+  };
+}
 
 export default router;
