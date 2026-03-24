@@ -1,0 +1,870 @@
+# Replit Build Brief — Leasing Operations Panel for MyRentCard
+
+## Product Objective
+
+Build a **mobile-first leasing operations panel** for landlords and leasing agents that captures inbound **Twilio SMS and voice activity**, converts unstructured leasing conversations into structured prospect data, and prepares that data for later export into a CRM such as AppFolio.
+
+This should be built as a **paid add-on to MyRentCard**, so architecture, naming, tenancy, and permissions should support future commercialization from the beginning.
+
+---
+
+## What Success Looks Like
+
+A leasing agent on an iPhone or Android device can:
+
+* open a mobile inbox of inbound leasing communications
+* review an inbound text or call event
+* see an AI-generated summary and structured extraction
+* correct any fields quickly
+* assign the lead to a property
+* set a status/tag/next action
+* mark the lead as export-ready
+
+The app is **not** a full CRM in v1.
+The app is an **intake, triage, structuring, and export layer**.
+
+---
+
+## Core Product Positioning
+
+**Working product name:** Leasing Operations Panel
+
+**MyRentCard relationship:**
+
+* MyRentCard handles renter identity / reusable application profile
+* Leasing Operations Panel handles inbound lead capture and triage
+* future versions can connect the two so inbound leads can be invited to complete a RentCard
+
+---
+
+# 1. MVP Product Requirements
+
+## Required MVP capabilities
+
+1. User authentication
+2. Multi-tenant account structure
+3. Properties and Twilio number management
+4. Inbound Twilio SMS webhook ingestion
+5. Inbound Twilio call event ingestion
+6. Optional voicemail / transcript ingestion when available
+7. Prospect record creation and matching
+8. AI summary + structured extraction
+9. Mobile inbox and interaction review workflow
+10. Statuses, tags, notes, and property assignment
+11. Export selected records to CSV and JSON
+12. Admin settings for account, users, properties, and phone numbers
+
+## Explicitly not required in MVP
+
+* full AppFolio write-back integration
+* outbound dialer replacement
+* maintenance workflows
+* resident portal
+* accounting features
+* full marketing automation
+* advanced permissions matrix beyond core roles
+
+---
+
+# 2. Build Priorities
+
+## Priority order
+
+### Priority 1
+
+Reliable ingestion and storage of inbound Twilio events
+
+### Priority 2
+
+Fast mobile review UX for leasing staff
+
+### Priority 3
+
+AI extraction into structured fields
+
+### Priority 4
+
+Clean exportable schema for CRM import
+
+### Priority 5
+
+Foundational multi-tenant architecture for MyRentCard packaging
+
+---
+
+# 3. Recommended Tech Stack
+
+## Frontend
+
+* React
+* TypeScript
+* Tailwind CSS
+* TanStack Query
+* React Hook Form
+* Zod validation
+* Wouter or React Router
+* PWA support for iPhone and Android home-screen use
+
+## Backend
+
+* Node.js
+* TypeScript
+* Express or Fastify
+* webhook endpoints for Twilio
+* background job processing for AI extraction
+
+## Database
+
+* PostgreSQL
+* Prisma or Drizzle ORM
+
+## Auth
+
+* secure session auth or JWT with refresh flow
+* support multi-user accounts
+
+## Infrastructure considerations
+
+* designed to run on Replit initially
+* secrets stored securely
+* environment-based config
+* webhook signature validation for Twilio
+
+## AI layer
+
+* structured extraction with JSON schema output
+* separate prompts for SMS vs voicemail transcript vs generic call note
+* confidence score returned with extraction
+
+---
+
+# 4. Product Epics and User Stories
+
+## Epic A — Account and Admin Setup
+
+### User stories
+
+* As an account owner, I can create an account for my company.
+* As an admin, I can add users to my account.
+* As an admin, I can create and edit properties.
+* As an admin, I can assign Twilio numbers to properties or routing pools.
+* As an admin, I can configure default tags, statuses, and export behavior.
+
+### Acceptance criteria
+
+* Admin can create/edit/delete properties.
+* Admin can see assigned Twilio numbers.
+* Users are scoped to their account only.
+
+## Epic B — Inbound Communication Ingestion
+
+### User stories
+
+* As a leasing agent, I want inbound SMS to appear automatically in the system.
+* As a leasing agent, I want inbound calls to create communication events.
+* As a leasing agent, I want voicemail or transcript data attached when available.
+
+### Acceptance criteria
+
+* Incoming SMS creates an interaction record within seconds.
+* Inbound call events are stored with Twilio metadata.
+* If transcript text arrives, it is attached to the interaction.
+* Duplicate webhook delivery does not create duplicate records.
+
+## Epic C — Prospect Matching and Record Creation
+
+### User stories
+
+* As a user, I want the system to match a message to an existing prospect by phone number.
+* As a user, I want a new prospect record created if no match exists.
+* As a user, I want ambiguous matches flagged for review.
+
+### Acceptance criteria
+
+* Exact phone match attaches to an existing prospect.
+* Unmatched phone numbers create a new prospect shell record.
+* The UI shows when a match confidence is low.
+
+## Epic D — AI Structuring
+
+### User stories
+
+* As a leasing agent, I want an AI summary of each communication.
+* As a leasing agent, I want key fields extracted automatically.
+* As a leasing agent, I want to edit AI-generated data before saving.
+
+### Acceptance criteria
+
+* Each eligible interaction has a summary.
+* Each eligible interaction returns structured extraction JSON.
+* User can edit fields before confirmation.
+* Extraction failures do not block inbox usage.
+
+## Epic E — Mobile Inbox and Review Workflow
+
+### User stories
+
+* As a mobile user, I want to quickly triage new leads.
+* As a mobile user, I want to assign status/property/tags in just a few taps.
+* As a mobile user, I want to view a full communication timeline for a prospect.
+
+### Acceptance criteria
+
+* Inbox loads in a mobile-friendly format.
+* Review screen shows raw message/transcript, summary, fields, and actions.
+* Prospect record shows timeline and latest status.
+
+## Epic F — Export for CRM Import
+
+### User stories
+
+* As an office user, I want to export a batch of structured leads.
+* As an office user, I want the export to be AppFolio-friendly.
+* As an admin, I want to track what has already been exported.
+
+### Acceptance criteria
+
+* User can filter records by Export Ready.
+* CSV and JSON exports can be generated.
+* Records can be marked Exported after batch generation.
+
+---
+
+# 5. Primary User Roles
+
+## Owner / Admin
+
+* full access
+* manage account, users, properties, numbers, exports
+
+## Leasing Agent
+
+* review interactions
+* edit prospect data
+* change statuses/tags
+* add notes
+
+## Assistant / Read-only
+
+* can view records and add notes
+* cannot change settings
+* export permission optional
+
+---
+
+# 6. Core Data Model
+
+## accounts
+
+* id
+* name
+* myrentcard_account_id
+* plan
+* created_at
+* updated_at
+
+## users
+
+* id
+* account_id
+* name
+* email
+* phone
+* role
+* password_hash or auth_provider_id
+* created_at
+* updated_at
+
+## properties
+
+* id
+* account_id
+* name
+* address1
+* address2
+* city
+* state
+* zip
+* status
+* created_at
+* updated_at
+
+## twilio_numbers
+
+* id
+* account_id
+* property_id nullable
+* phone_number
+* friendly_name
+* purpose
+* is_active
+* created_at
+* updated_at
+
+## prospects
+
+* id
+* account_id
+* assigned_property_id nullable
+* first_name nullable
+* last_name nullable
+* full_name nullable
+* phone_primary
+* phone_secondary nullable
+* email nullable
+* desired_move_in_date nullable
+* desired_bedrooms nullable
+* budget_min nullable
+* budget_max nullable
+* pets nullable
+* voucher_type nullable
+* employment_status nullable
+* monthly_income nullable
+* language_preference nullable
+* latest_summary nullable
+* latest_sentiment nullable
+* qualification_score nullable
+* status
+* export_status
+* crm_external_id nullable
+* created_at
+* updated_at
+
+## interactions
+
+* id
+* account_id
+* prospect_id nullable
+* property_id nullable
+* source_type
+* direction
+* twilio_message_sid nullable unique
+* twilio_call_sid nullable
+* parent_thread_key nullable
+* from_number
+* to_number
+* raw_text nullable
+* transcript nullable
+* summary nullable
+* category nullable
+* urgency nullable
+* sentiment nullable
+* extraction_confidence nullable
+* structured_extraction_json nullable
+* occurred_at
+* created_at
+* updated_at
+
+## notes
+
+* id
+* account_id
+* prospect_id
+* user_id
+* body
+* created_at
+
+## tags
+
+* id
+* account_id
+* name
+* color
+
+## prospect_tags
+
+* prospect_id
+* tag_id
+
+## export_batches
+
+* id
+* account_id
+* created_by_user_id
+* format
+* target_system
+* record_count
+* status
+* file_url nullable
+* created_at
+
+## export_batch_items
+
+* export_batch_id
+* prospect_id
+
+## audit_logs
+
+* id
+* account_id
+* user_id nullable
+* entity_type
+* entity_id
+* action
+* metadata_json
+* created_at
+
+---
+
+# 7. API Design
+
+## Auth
+
+### POST /api/auth/login
+
+### POST /api/auth/logout
+
+### GET /api/auth/me
+
+## Admin / setup
+
+### GET /api/properties
+
+### POST /api/properties
+
+### PATCH /api/properties/:id
+
+### GET /api/twilio-numbers
+
+### POST /api/twilio-numbers
+
+### PATCH /api/twilio-numbers/:id
+
+### GET /api/users
+
+### POST /api/users
+
+## Inbox / prospects / interactions
+
+### GET /api/inbox
+
+Query params:
+
+* status
+* propertyId
+* sourceType
+* assignedUserId
+* exportStatus
+* search
+
+### GET /api/interactions/:id
+
+### PATCH /api/interactions/:id/review
+
+Used to confirm summary/category/property/status/notes
+
+### GET /api/prospects
+
+### GET /api/prospects/:id
+
+### POST /api/prospects
+
+### PATCH /api/prospects/:id
+
+### POST /api/prospects/:id/notes
+
+### POST /api/prospects/:id/tags
+
+## Export
+
+### GET /api/exports
+
+### POST /api/exports
+
+Body:
+
+* prospectIds[]
+* format
+* targetSystem
+
+### GET /api/exports/:id/download
+
+## Twilio webhooks
+
+### POST /api/webhooks/twilio/sms
+
+### POST /api/webhooks/twilio/voice
+
+### POST /api/webhooks/twilio/voicemail-transcript
+
+## Internal processing
+
+### POST /api/internal/process-interaction/:id
+
+### POST /api/internal/retry-extraction/:id
+
+---
+
+# 8. Twilio Webhook Handling Requirements
+
+## SMS webhook
+
+When inbound SMS is received:
+
+1. validate Twilio signature
+2. normalize phone numbers
+3. look up account and property by receiving number
+4. create interaction record
+5. upsert or match prospect by from_number
+6. queue AI extraction job
+7. return success quickly
+
+## Voice webhook
+
+When inbound call occurs:
+
+1. validate signature
+2. store call event metadata
+3. create interaction record of type call
+4. if voicemail/transcript becomes available later, attach it to the same interaction or related child interaction
+5. queue extraction if transcript text exists
+
+## Idempotency
+
+* use Twilio message SID and call SID to prevent duplicates
+* repeated webhook delivery must be safe
+
+---
+
+# 9. AI Extraction Requirements
+
+## Structured extraction target fields
+
+* first_name
+* last_name
+* full_name
+* phone
+* email
+* property_of_interest
+* desired_bedrooms
+* desired_move_in_date
+* budget_min
+* budget_max
+* pets
+* voucher_type
+* employment_status
+* monthly_income
+* showing_interest
+* language_preference
+* concerns_or_objections
+* lead_intent
+* suggested_status
+* suggested_category
+* suggested_next_action
+
+## AI response contract
+
+Every extraction should attempt to return:
+
+* summary
+* structured_fields
+* category
+* urgency
+* sentiment
+* confidence score
+* next action recommendation
+
+## Product rule
+
+No AI output should overwrite confirmed human-entered data without explicit user action.
+
+## Failure handling
+
+If extraction fails:
+
+* leave interaction visible in inbox
+* mark extraction_status = failed
+* allow manual review
+* allow retry
+
+---
+
+# 10. Mobile UX Requirements
+
+## General requirements
+
+* optimized for iPhone and Android browser sizes
+* thumb-friendly controls
+* minimal typing where possible
+* very fast load and save actions
+
+## Main screens
+
+### A. Inbox
+
+Cards should show:
+
+* prospect name or Unknown Prospect
+* property or Unassigned Property
+* source icon (SMS or call)
+* short summary
+* current status
+* time
+* quick actions
+
+### B. Interaction Review
+
+Should show:
+
+* raw message thread or transcript
+* AI summary
+* editable extracted fields
+* property selector
+* status selector
+* tags
+* notes
+* save button
+* mark export-ready button
+
+### C. Prospect Detail
+
+Should show:
+
+* header with name, phone, email, status
+* qualification snapshot
+* timeline of interactions
+* notes
+* tags
+* export state
+
+### D. Export Queue
+
+Should show:
+
+* export-ready prospects
+* filters
+* select all / batch select
+* export as CSV / JSON
+
+---
+
+# 11. Suggested Default Statuses
+
+* New
+* Needs Review
+* Contacted
+* Qualified
+* Not Qualified
+* Tour Requested
+* Tour Scheduled
+* Application Likely
+* Dormant
+* Closed Lost
+* Export Ready
+* Exported
+
+# 12. Suggested Default Categories
+
+* Availability Inquiry
+* Pricing Inquiry
+* Qualification Screening
+* Tour Request
+* Application Support
+* Follow-up Needed
+* Spam Wrong Number
+* High Priority Prospect
+* Voucher Prospect
+* Language Support Needed
+
+---
+
+# 13. Export Schema for AppFolio-Oriented Workflow
+
+Create a clean export format with the following columns:
+
+* prospect_id
+* first_name
+* last_name
+* full_name
+* phone
+* email
+* property
+* desired_bedrooms
+* desired_move_in_date
+* budget_min
+* budget_max
+* pets
+* voucher_type
+* employment_status
+* monthly_income
+* lead_status
+* category
+* latest_summary
+* notes
+* tags
+* latest_interaction_at
+
+Also provide JSON export with the same fields plus:
+
+* full interaction history
+* structured extraction details
+* source metadata
+
+---
+
+# 14. Security and Compliance Requirements
+
+* validate all Twilio webhook signatures
+* encrypt secrets at rest
+* role-based data access by account
+* audit log for edits and export generation
+* configurable retention policy for transcripts/recordings
+* no cross-account data access
+* sanitize and validate all inbound payloads
+
+---
+
+# 15. Suggested Folder Structure
+
+```text
+/client
+  /src
+    /components
+    /pages
+    /hooks
+    /lib
+    /types
+    /features
+      /auth
+      /inbox
+      /prospects
+      /exports
+      /admin
+/server
+  /src
+    /api
+    /middlewares
+    /services
+      /twilio
+      /ai
+      /prospects
+      /exports
+    /jobs
+    /db
+    /utils
+/shared
+  /schemas
+  /constants
+  /types
+```
+
+---
+
+# 16. Implementation Sequence
+
+## Phase 1 — Foundation
+
+Build:
+
+* auth
+* account/user/property models
+* Twilio number config model
+* SMS webhook endpoint
+* voice webhook endpoint
+* base inbox UI
+* prospect and interaction tables
+
+## Phase 2 — AI and Review Workflow
+
+Build:
+
+* extraction job pipeline
+* AI summary + structured output
+* interaction review screen
+* prospect matching service
+* status/tag/property editing
+
+## Phase 3 — Export and Admin
+
+Build:
+
+* export queue
+* CSV/JSON export
+* export batch tracking
+* admin setup pages
+
+## Phase 4 — Hardening and UX Polish
+
+Build:
+
+* idempotency safeguards
+* notifications
+* audit logs
+* saved filters
+* performance improvements
+
+---
+
+# 17. Definition of Done for MVP
+
+The MVP is done when:
+
+1. inbound Twilio SMS creates inbox items correctly
+2. inbound Twilio call events are stored correctly
+3. voicemail or transcript text can be attached when available
+4. AI generates usable summaries and structured extraction for eligible interactions
+5. a mobile user can review, edit, and save a lead in a few taps
+6. prospects can be filtered by property/status/export readiness
+7. export-ready records can be downloaded in CSV and JSON formats
+8. the app supports multiple accounts and multiple users securely
+
+---
+
+# 18. UI / UX Direction for Replit
+
+Use a clean, low-friction, mobile-first interface.
+The experience should feel closer to an **operations inbox** than a traditional CRM.
+
+Design preferences:
+
+* simple card-based layout
+* large tap targets
+* minimal clutter
+* status badges
+* sticky action bar on review screens
+* fast switching between inbox and prospect detail
+* neutral, professional visual language aligned with MyRentCard
+
+---
+
+# 19. Key Product Decisions to Preserve
+
+* This is an intake layer, not a full CRM.
+* AI suggestions must remain editable.
+* Every interaction should preserve original context.
+* Architecture should support eventual direct AppFolio integration.
+* The product should be built as a future paid MyRentCard add-on.
+
+---
+
+# 20. Replit Agent Prompt
+
+Use the following as the implementation prompt:
+
+> Build a mobile-first web application called Leasing Operations Panel for MyRentCard. The app is a multi-tenant landlord leasing intake tool. It must ingest inbound Twilio SMS and call events through secure webhooks, create prospect and interaction records, use AI to summarize and extract structured leasing data, and provide a fast mobile review workflow where a user can confirm/edit fields, assign a property, set statuses/tags, and mark prospects export-ready. It must support CSV and JSON export for later CRM import, including AppFolio-oriented exports. Do not build a full CRM. Focus on intake, structuring, triage, and export. Use React + TypeScript + Tailwind on the frontend, Node + TypeScript + PostgreSQL on the backend, and organize the code for future commercialization as a paid MyRentCard add-on.
+
+---
+
+# 21. Additional Nice-to-Have Items If Time Allows
+
+* duplicate lead merge suggestions
+* bilingual extraction support
+* push notifications
+* invite prospect to complete RentCard
+* source attribution by phone number / campaign
+* activity SLA reminders for unreviewed leads
+
+---
+
+# 22. Notes for Future Versions
+
+Potential v2 features:
+
+* direct AppFolio integration
+* outbound texting
+* call disposition workflow after live calls
+* showing scheduler integration
+* lead scoring
+* conversion analytics
+* tighter MyRentCard profile linking
+* template replies and AI reply drafting
