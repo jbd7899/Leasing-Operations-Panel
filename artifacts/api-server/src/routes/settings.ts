@@ -59,13 +59,26 @@ router.put("/settings/account", async (req: Request, res: Response) => {
     twilioAuthToken?: string | null;
   };
 
+  const incomingSid = twilioAccountSid !== undefined ? (twilioAccountSid?.trim() || null) : undefined;
+  const incomingToken = twilioAuthToken !== undefined ? (twilioAuthToken?.trim() || null) : undefined;
+
+  const settingEither = incomingSid !== undefined || incomingToken !== undefined;
+  if (settingEither) {
+    const bothPresent = (incomingSid !== null && incomingToken !== null);
+    const bothAbsent = (incomingSid === null && incomingToken === null);
+    if (!bothPresent && !bothAbsent) {
+      res.status(400).json({ error: "twilioAccountSid and twilioAuthToken must be provided together, or both cleared together" });
+      return;
+    }
+  }
+
   const updates: Record<string, unknown> = { updatedAt: new Date() };
 
-  if (twilioAccountSid !== undefined) {
-    updates.twilioAccountSid = twilioAccountSid?.trim() || null;
+  if (incomingSid !== undefined) {
+    updates.twilioAccountSid = incomingSid;
   }
-  if (twilioAuthToken !== undefined) {
-    updates.twilioAuthToken = twilioAuthToken?.trim() || null;
+  if (incomingToken !== undefined) {
+    updates.twilioAuthToken = incomingToken;
   }
 
   const [account] = await db
@@ -137,8 +150,19 @@ export async function getTwilioClientForAccount(accountId: string): Promise<Retu
     .from(accountsTable)
     .where(eq(accountsTable.id, accountId));
 
-  const sid = account?.twilioAccountSid || process.env.TWILIO_ACCOUNT_SID;
-  const token = account?.twilioAuthToken || process.env.TWILIO_AUTH_TOKEN;
+  const dbSid = account?.twilioAccountSid ?? null;
+  const dbToken = account?.twilioAuthToken ?? null;
+
+  let sid: string | null;
+  let token: string | null;
+
+  if (dbSid || dbToken) {
+    sid = dbSid;
+    token = dbToken;
+  } else {
+    sid = process.env.TWILIO_ACCOUNT_SID ?? null;
+    token = process.env.TWILIO_AUTH_TOKEN ?? null;
+  }
 
   if (!sid || !token) return null;
   return twilio(sid, token);
