@@ -141,10 +141,11 @@ export interface AnalyticsOverview {
     disqualified: number;
   };
   qualificationRate: number;
+  qualificationRateDelta: number | null;
   propertiesRanked: PropertyLeadCount[];
   exportPipeline: {
     pending: number;
-    exported: number;
+    exportedLast30d: number;
   };
 }
 

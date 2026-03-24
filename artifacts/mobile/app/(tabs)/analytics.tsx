@@ -300,7 +300,22 @@ export default function AnalyticsScreen() {
           <SectionHeader title="Qualification Rate" />
           <View style={styles.card}>
             <View style={styles.qualRow}>
-              <Text style={styles.qualRate}>{data.qualificationRate}%</Text>
+              <View style={styles.qualRateRow}>
+                <Text style={styles.qualRate}>{data.qualificationRate}%</Text>
+                {data.qualificationRateDelta !== null && (
+                  <View style={[
+                    styles.deltaBadge,
+                    data.qualificationRateDelta >= 0 ? styles.deltaBadgePositive : styles.deltaBadgeNegative,
+                  ]}>
+                    <Text style={[
+                      styles.deltaText,
+                      data.qualificationRateDelta >= 0 ? styles.deltaTextPositive : styles.deltaTextNegative,
+                    ]}>
+                      {data.qualificationRateDelta >= 0 ? "+" : ""}{data.qualificationRateDelta}% vs prev
+                    </Text>
+                  </View>
+                )}
+              </View>
               <Text style={styles.qualLabel}>of leads reached Qualified status</Text>
             </View>
           </View>
@@ -337,8 +352,8 @@ export default function AnalyticsScreen() {
               sub="queued"
             />
             <KpiCard
-              label="Exported (30d)"
-              value={data.exportPipeline.exported}
+              label="Exported (Last 30d)"
+              value={data.exportPipeline.exportedLast30d}
               sub="sent to AppFolio"
             />
           </View>
@@ -601,6 +616,11 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
     gap: 4,
   },
+  qualRateRow: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    gap: 10,
+  },
   qualRate: {
     fontSize: 42,
     fontWeight: "800",
@@ -611,6 +631,28 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Colors.dark.textSecondary,
     fontWeight: "500",
+  },
+  deltaBadge: {
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    marginBottom: 6,
+  },
+  deltaBadgePositive: {
+    backgroundColor: "rgba(16,185,129,0.15)",
+  },
+  deltaBadgeNegative: {
+    backgroundColor: "rgba(239,68,68,0.15)",
+  },
+  deltaText: {
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  deltaTextPositive: {
+    color: Colors.brand.accent,
+  },
+  deltaTextNegative: {
+    color: Colors.brand.danger,
   },
   propRow: {
     flexDirection: "row",

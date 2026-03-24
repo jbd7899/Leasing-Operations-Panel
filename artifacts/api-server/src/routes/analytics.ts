@@ -1,6 +1,6 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { db, prospectsTable, interactionsTable, propertiesTable } from "@workspace/db";
-import { eq, and, gte, sql, count } from "drizzle-orm";
+import { eq, and, gte, lt, sql, count } from "drizzle-orm";
 
 const router: IRouter = Router();
 
@@ -35,12 +35,22 @@ function periodToDate(period: string): Date | null {
   }
 }
 
+function periodDays(period: string): number | null {
+  switch (period) {
+    case "7d": return 7;
+    case "30d": return 30;
+    case "90d": return 90;
+    default: return null;
+  }
+}
+
 router.get("/analytics/overview", async (req: Request, res: Response) => {
   if (!requireAuth(req, res)) return;
   const { accountId } = req.user!;
 
   const period = (req.query.period as string) || "30d";
   const since = periodToDate(period);
+  const days = periodDays(period);
 
   const baseCondition = eq(prospectsTable.accountId, accountId);
   const periodCondition = since
@@ -53,43 +63,24 @@ router.get("/analytics/overview", async (req: Request, res: Response) => {
   const since30d = new Date(now);
   since30d.setDate(since30d.getDate() - 30);
 
-  const [
-    totalLeads,
-    periodLeads,
-    last7dLeads,
-    last30dLeads,
-    statusCounts,
-    sourceCounts,
-    exportQueueCounts,
-    propertyLeadCounts,
-    weeklyTrend,
-  ] = await Promise.all([
-    db
-      .select({ count: count() })
-      .from(prospectsTable)
-      .where(baseCondition),
+  let prevWindowStart: Date | null = null;
+  let prevWindowEnd: Date | null = null;
+  if (since && days !== null) {
+    prevWindowEnd = new Date(since);
+    prevWindowStart = new Date(since);
+    prevWindowStart.setDate(prevWindowStart.getDate() - days);
+  }
 
-    db
-      .select({ count: count() })
-      .from(prospectsTable)
-      .where(periodCondition ?? baseCondition),
-
-    db
-      .select({ count: count() })
-      .from(prospectsTable)
-      .where(and(baseCondition, gte(prospectsTable.createdAt, since7d))),
-
-    db
-      .select({ count: count() })
-      .from(prospectsTable)
-      .where(and(baseCondition, gte(prospectsTable.createdAt, since30d))),
-
+  const queries: Promise<unknown>[] = [
+    db.select({ count: count() }).from(prospectsTable).where(baseCondition),
+    db.select({ count: count() }).from(prospectsTable).where(periodCondition ?? baseCondition),
+    db.select({ count: count() }).from(prospectsTable).where(and(baseCondition, gte(prospectsTable.createdAt, since7d))),
+    db.select({ count: count() }).from(prospectsTable).where(and(baseCondition, gte(prospectsTable.createdAt, since30d))),
     db
       .select({ status: prospectsTable.status, count: count() })
       .from(prospectsTable)
       .where(periodCondition ?? baseCondition)
       .groupBy(prospectsTable.status),
-
     db
       .select({ sourceType: interactionsTable.sourceType, count: count() })
       .from(interactionsTable)
@@ -106,22 +97,19 @@ router.get("/analytics/overview", async (req: Request, res: Response) => {
             ),
       )
       .groupBy(interactionsTable.sourceType),
-
     db
       .select({ exportStatus: prospectsTable.exportStatus, count: count() })
       .from(prospectsTable)
-      .where(baseCondition)
-      .groupBy(prospectsTable.exportStatus),
-
+      .where(and(baseCondition, eq(prospectsTable.exportStatus, "pending"))),
     db
-      .select({
-        propertyId: prospectsTable.assignedPropertyId,
-        count: count(),
-      })
+      .select({ count: count() })
+      .from(prospectsTable)
+      .where(and(baseCondition, eq(prospectsTable.exportStatus, "exported"), gte(prospectsTable.updatedAt, since30d))),
+    db
+      .select({ propertyId: prospectsTable.assignedPropertyId, count: count() })
       .from(prospectsTable)
       .where(periodCondition ?? baseCondition)
       .groupBy(prospectsTable.assignedPropertyId),
-
     db.execute(sql`
       SELECT
         to_char(date_trunc('week', created_at), 'YYYY-MM-DD') AS week,
@@ -132,7 +120,42 @@ router.get("/analytics/overview", async (req: Request, res: Response) => {
       GROUP BY date_trunc('week', created_at)
       ORDER BY week ASC
     `),
-  ]);
+    prevWindowStart && prevWindowEnd
+      ? db
+          .select({ status: prospectsTable.status, count: count() })
+          .from(prospectsTable)
+          .where(and(baseCondition, gte(prospectsTable.createdAt, prevWindowStart), lt(prospectsTable.createdAt, prevWindowEnd)))
+          .groupBy(prospectsTable.status)
+      : Promise.resolve([]),
+  ];
+
+  const results = await Promise.all(queries);
+
+  const [
+    totalLeads,
+    periodLeads,
+    last7dLeads,
+    last30dLeads,
+    statusCounts,
+    sourceCounts,
+    pendingExportCounts,
+    exportedLast30dCounts,
+    propertyLeadCounts,
+    weeklyTrend,
+    prevStatusCounts,
+  ] = results as [
+    { count: number }[],
+    { count: number }[],
+    { count: number }[],
+    { count: number }[],
+    { status: string; count: number }[],
+    { sourceType: string | null; count: number }[],
+    { exportStatus: string; count: number }[],
+    { count: number }[],
+    { propertyId: string | null; count: number }[],
+    { rows: { week: string; count: number }[] },
+    { status: string; count: number }[],
+  ];
 
   const totalCount = Number(totalLeads[0]?.count ?? 0);
   const periodCount = Number(periodLeads[0]?.count ?? 0);
@@ -149,18 +172,26 @@ router.get("/analytics/overview", async (req: Request, res: Response) => {
     if (row.sourceType) sourceMap[row.sourceType] = Number(row.count);
   }
 
-  const exportMap: Record<string, number> = {};
-  for (const row of exportQueueCounts) {
-    exportMap[row.exportStatus] = Number(row.count);
-  }
+  const pendingCount = Number(pendingExportCounts[0]?.count ?? 0);
+  const exportedLast30d = Number(exportedLast30dCounts[0]?.count ?? 0);
 
   const qualifiedCount = statusMap["qualified"] ?? 0;
   const qualificationRate = periodCount > 0 ? (qualifiedCount / periodCount) * 100 : 0;
 
-  const propertyIds = propertyLeadCounts
-    .filter((r) => r.propertyId)
-    .map((r) => r.propertyId as string);
+  const prevStatusMap: Record<string, number> = {};
+  for (const row of prevStatusCounts) {
+    prevStatusMap[row.status] = Number(row.count);
+  }
 
+  let qualificationRateDelta: number | null = null;
+  if (prevWindowStart) {
+    const prevPeriodTotal = Object.values(prevStatusMap).reduce((a, b) => a + b, 0);
+    const prevQualified = prevStatusMap["qualified"] ?? 0;
+    const prevRate = prevPeriodTotal > 0 ? (prevQualified / prevPeriodTotal) * 100 : 0;
+    qualificationRateDelta = Math.round((qualificationRate - prevRate) * 10) / 10;
+  }
+
+  const propertyIds = propertyLeadCounts.filter((r) => r.propertyId).map((r) => r.propertyId as string);
   let propertiesData: { id: string; name: string }[] = [];
   if (propertyIds.length > 0) {
     propertiesData = await db
@@ -179,12 +210,12 @@ router.get("/analytics/overview", async (req: Request, res: Response) => {
     }))
     .sort((a, b) => b.count - a.count);
 
-  const unassignedCount = propertyLeadCounts.find((r) => !r.propertyId);
-  if (unassignedCount && Number(unassignedCount.count) > 0) {
+  const unassignedRow = propertyLeadCounts.find((r) => !r.propertyId);
+  if (unassignedRow && Number(unassignedRow.count) > 0) {
     propertiesRanked.push({
       propertyId: "",
       propertyName: "Unassigned",
-      count: Number(unassignedCount.count),
+      count: Number(unassignedRow.count),
     });
   }
 
@@ -211,10 +242,11 @@ router.get("/analytics/overview", async (req: Request, res: Response) => {
       disqualified: statusMap["disqualified"] ?? 0,
     },
     qualificationRate: Math.round(qualificationRate * 10) / 10,
+    qualificationRateDelta,
     propertiesRanked,
     exportPipeline: {
-      pending: exportMap["pending"] ?? 0,
-      exported: exportMap["exported"] ?? 0,
+      pending: pendingCount,
+      exportedLast30d,
     },
   });
 });
