@@ -196,19 +196,11 @@ function AddTwilioNumberModal({
   const [selectedPropertyId, setSelectedPropertyId] = useState<string | null>(null);
   const [error, setError] = useState("");
 
-  const smsUrl = `${getWebhookBaseUrl()}/api/webhooks/twilio/sms`;
-  const voiceUrl = `${getWebhookBaseUrl()}/api/webhooks/twilio/voice`;
-
   const createMutation = useCreateTwilioNumber({
     mutation: {
       onSuccess: () => {
         onCreated();
         handleClose();
-        Alert.alert(
-          "Number Added!",
-          `Configure Twilio webhooks:\n\nSMS: ${smsUrl}\n\nVoice: ${voiceUrl}\n\nPaste these into your Twilio phone number settings (HTTP POST).`,
-          [{ text: "OK" }],
-        );
       },
       onError: (err: unknown) => {
         const msg = err instanceof Error ? err.message : String(err);
@@ -672,14 +664,56 @@ export default function SettingsScreen() {
               ) : (
                 twilioNumbers.map((n) => <TwilioNumberCard key={n.id} number={n} />)
               )}
+
               {isAdminOrOwner && (
-                <Pressable
-                  style={[styles.addBtn, { marginTop: 8 }]}
-                  onPress={() => setShowAddTwilioNumber(true)}
-                >
-                  <Feather name="plus" size={14} color={Colors.brand.tealLight} />
-                  <Text style={styles.addBtnText}>Add Number</Text>
-                </Pressable>
+                <>
+                  <Pressable
+                    style={[styles.addBtn, { marginTop: 8 }]}
+                    onPress={() => setShowAddTwilioNumber(true)}
+                  >
+                    <Feather name="plus" size={14} color={Colors.brand.tealLight} />
+                    <Text style={styles.addBtnText}>Add Number</Text>
+                  </Pressable>
+
+                  <View style={webhookStyles.hintSection}>
+                    <Text style={webhookStyles.hintLabel}>WEBHOOK URLS</Text>
+                    <Text style={webhookStyles.hintSubtitle}>
+                      Paste these into each Twilio number's settings (HTTP POST):
+                    </Text>
+                    <Pressable
+                      style={webhookStyles.urlBox}
+                      onPress={() => {
+                        const url = `${getWebhookBaseUrl()}/api/webhooks/twilio/sms`;
+                        Clipboard.setString(url);
+                        Alert.alert("Copied", "SMS webhook URL copied.");
+                      }}
+                    >
+                      <View style={{ flex: 1 }}>
+                        <Text style={webhookStyles.urlLabel}>SMS</Text>
+                        <Text style={webhookStyles.urlText} numberOfLines={1}>
+                          {`${getWebhookBaseUrl()}/api/webhooks/twilio/sms`}
+                        </Text>
+                      </View>
+                      <Feather name="copy" size={14} color={Colors.brand.tealLight} />
+                    </Pressable>
+                    <Pressable
+                      style={[webhookStyles.urlBox, { marginTop: 8 }]}
+                      onPress={() => {
+                        const url = `${getWebhookBaseUrl()}/api/webhooks/twilio/voice`;
+                        Clipboard.setString(url);
+                        Alert.alert("Copied", "Voice webhook URL copied.");
+                      }}
+                    >
+                      <View style={{ flex: 1 }}>
+                        <Text style={webhookStyles.urlLabel}>Voice</Text>
+                        <Text style={webhookStyles.urlText} numberOfLines={1}>
+                          {`${getWebhookBaseUrl()}/api/webhooks/twilio/voice`}
+                        </Text>
+                      </View>
+                      <Feather name="copy" size={14} color={Colors.brand.tealLight} />
+                    </Pressable>
+                  </View>
+                </>
               )}
             </>
           )}
@@ -1130,23 +1164,35 @@ const modalStyles = StyleSheet.create({
 });
 
 const webhookStyles = StyleSheet.create({
-  successBanner: {
-    flexDirection: "row",
-    gap: 10,
-    alignItems: "flex-start",
-    backgroundColor: "#0D2A2A",
-    borderRadius: 12,
+  hintSection: {
+    marginTop: 14,
     padding: 14,
-    marginTop: 4,
+    backgroundColor: Colors.dark.bgCard,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: Colors.brand.teal + "44",
+    borderColor: Colors.dark.border,
+    gap: 8,
   },
-  successText: {
-    flex: 1,
-    fontSize: 14,
+  hintLabel: {
+    fontSize: 10,
+    fontFamily: "Inter_600SemiBold",
+    color: Colors.dark.textMuted,
+    letterSpacing: 0.8,
+  },
+  hintSubtitle: {
+    fontSize: 12,
     fontFamily: "Inter_400Regular",
-    color: Colors.dark.text,
-    lineHeight: 20,
+    color: Colors.dark.textSecondary,
+    lineHeight: 17,
+    marginBottom: 2,
+  },
+  urlLabel: {
+    fontSize: 10,
+    fontFamily: "Inter_600SemiBold",
+    color: Colors.dark.textMuted,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    marginBottom: 2,
   },
   errorBanner: {
     flexDirection: "row",
