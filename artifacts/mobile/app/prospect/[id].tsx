@@ -20,11 +20,8 @@ import {
   useGetProspect,
   useUpdateProspect,
   useAddProspectNote,
-  useCreateExport,
   getGetProspectQueryKey,
   getListProspectsQueryKey,
-  getListExportsQueryKey,
-  CreateExportBodyFormat,
 } from "@workspace/api-client-react";
 import { Badge } from "@/components/ui/Badge";
 
@@ -105,17 +102,6 @@ export default function ProspectDetailScreen() {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         setNoteText("");
         queryClient.invalidateQueries({ queryKey: getGetProspectQueryKey(id) });
-      },
-      onError: (err) => Alert.alert("Error", String(err)),
-    },
-  });
-
-  const exportMutation = useCreateExport({
-    mutation: {
-      onSuccess: () => {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        queryClient.invalidateQueries({ queryKey: getListExportsQueryKey() });
-        Alert.alert("Exported", "Prospect exported to CSV. View in Exports tab.");
       },
       onError: (err) => Alert.alert("Error", String(err)),
     },
@@ -222,24 +208,30 @@ export default function ProspectDetailScreen() {
             <SectionHeader title="EXPORT" />
             <Badge label={prospect.exportStatus} value={prospect.exportStatus} />
           </View>
-          <Pressable
-            style={[styles.actionButton, exportMutation.isPending && styles.actionButtonDisabled]}
-            onPress={() =>
-              exportMutation.mutate({
-                data: { prospectIds: [id], format: CreateExportBodyFormat.csv },
-              })
-            }
-            disabled={exportMutation.isPending}
-          >
-            {exportMutation.isPending ? (
-              <ActivityIndicator size="small" color="#fff" />
-            ) : (
-              <>
-                <Feather name="upload" size={16} color="#fff" />
-                <Text style={styles.actionButtonText}>Export this Prospect</Text>
-              </>
-            )}
-          </Pressable>
+          {prospect.exportStatus !== "pending" && (
+            <Pressable
+              style={[styles.actionButtonOutline, statusMutation.isPending && styles.actionButtonDisabled]}
+              onPress={() =>
+                statusMutation.mutate({ id, data: { exportStatus: "pending" } })
+              }
+              disabled={statusMutation.isPending}
+            >
+              {statusMutation.isPending ? (
+                <ActivityIndicator size="small" color={Colors.brand.tealLight} />
+              ) : (
+                <>
+                  <Feather name="clock" size={16} color={Colors.brand.tealLight} />
+                  <Text style={styles.actionButtonOutlineText}>Mark Export-Ready</Text>
+                </>
+              )}
+            </Pressable>
+          )}
+          {prospect.exportStatus === "pending" && (
+            <View style={styles.pendingBadge}>
+              <Feather name="check-circle" size={14} color={Colors.brand.tealLight} />
+              <Text style={styles.pendingBadgeText}>In Export Queue — use the Exports tab to batch export</Text>
+            </View>
+          )}
         </View>
 
         {/* Interactions */}
@@ -480,6 +472,42 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontFamily: "Inter_600SemiBold",
     color: "#fff",
+  },
+  actionButtonOutline: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: "#0A2020",
+    borderWidth: 1,
+    borderColor: Colors.brand.teal,
+    borderRadius: 12,
+    paddingVertical: 12,
+    marginTop: 8,
+  },
+  actionButtonOutlineText: {
+    fontSize: 15,
+    fontFamily: "Inter_600SemiBold",
+    color: Colors.brand.tealLight,
+  },
+  pendingBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#0A2020",
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: Colors.brand.teal,
+  },
+  pendingBadgeText: {
+    flex: 1,
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+    color: Colors.brand.tealLight,
+    lineHeight: 18,
   },
   interactionRow: {
     flexDirection: "row",

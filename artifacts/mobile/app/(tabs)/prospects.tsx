@@ -8,9 +8,15 @@ import {
   Platform,
   Pressable,
   Alert,
+  ActivityIndicator,
 } from "react-native";
 import * as Haptics from "expo-haptics";
-import { useListProspects } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  useListProspects,
+  useUpdateProspect,
+  getListProspectsQueryKey,
+} from "@workspace/api-client-react";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
@@ -31,9 +37,11 @@ const STATUS_FILTERS = [
 
 export default function ProspectsScreen() {
   const insets = useSafeAreaInsets();
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isQueuing, setIsQueuing] = useState(false);
   const isSelecting = selectedIds.size > 0;
 
   const listParams = {
@@ -42,6 +50,7 @@ export default function ProspectsScreen() {
   };
 
   const { data, isLoading, isError, refetch, isFetching } = useListProspects(listParams);
+  const updateProspect = useUpdateProspect();
 
   const isWeb = Platform.OS === "web";
   const topPad = isWeb ? Math.max(insets.top, 67) : insets.top;
@@ -96,6 +105,26 @@ export default function ProspectsScreen() {
     }
   }, [prospects, selectedIds, clearSelection]);
 
+  const handleQueueExport = useCallback(async () => {
+    if (selectedIds.size === 0) return;
+    setIsQueuing(true);
+    try {
+      await Promise.all(
+        Array.from(selectedIds).map((id) =>
+          updateProspect.mutateAsync({ id, data: { exportStatus: "pending" } }),
+        ),
+      );
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      await queryClient.invalidateQueries({ queryKey: getListProspectsQueryKey() });
+      clearSelection();
+      Alert.alert("Queued", `${selectedIds.size} prospect${selectedIds.size !== 1 ? "s" : ""} added to Export Queue.`);
+    } catch (err: unknown) {
+      Alert.alert("Error", String(err));
+    } finally {
+      setIsQueuing(false);
+    }
+  }, [selectedIds, updateProspect, queryClient, clearSelection]);
+
   return (
     <View style={[styles.container, { paddingTop: topPad }]}>
       <View style={styles.header}>
@@ -114,6 +143,17 @@ export default function ProspectsScreen() {
                 size={18}
                 color={Colors.brand.tealLight}
               />
+            </Pressable>
+            <Pressable
+              style={[styles.actionBtn, styles.queueBtn]}
+              onPress={handleQueueExport}
+              disabled={isQueuing}
+            >
+              {isQueuing ? (
+                <ActivityIndicator size="small" color={Colors.brand.tealLight} />
+              ) : (
+                <Feather name="clock" size={16} color={Colors.brand.tealLight} />
+              )}
             </Pressable>
             <Pressable style={[styles.actionBtn, styles.exportBtn]} onPress={handleExport}>
               <Feather name="upload" size={16} color="#fff" />
@@ -260,6 +300,10 @@ const styles = StyleSheet.create({
     borderColor: Colors.dark.border,
     alignItems: "center",
     justifyContent: "center",
+  },
+  queueBtn: {
+    backgroundColor: "#0A2020",
+    borderColor: Colors.brand.teal,
   },
   exportBtn: {
     flexDirection: "row",
