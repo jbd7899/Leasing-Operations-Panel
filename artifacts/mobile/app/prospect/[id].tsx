@@ -27,6 +27,7 @@ import {
   getListProspectsQueryKey,
   useSendSms,
 } from "@workspace/api-client-react";
+import type { ProspectDetail, TwilioNumber } from "@workspace/api-client-react";
 import { Badge } from "@/components/ui/Badge";
 
 const STATUS_OPTIONS = ["new", "contacted", "qualified", "disqualified", "archived"];
@@ -85,14 +86,21 @@ function ComposeModal({
   prospectName,
   onSend,
   isSending,
+  twilioNumbers,
+  selectedNumberId,
+  onSelectNumber,
 }: {
   visible: boolean;
   onClose: () => void;
   prospectName: string;
   onSend: (text: string) => void;
   isSending: boolean;
+  twilioNumbers: TwilioNumber[];
+  selectedNumberId: string | null;
+  onSelectNumber: (id: string) => void;
 }) {
   const [messageText, setMessageText] = useState("");
+  const multipleNumbers = twilioNumbers.length > 1;
 
   const handleSend = () => {
     if (messageText.trim()) {
@@ -104,6 +112,8 @@ function ComposeModal({
     setMessageText("");
     onClose();
   };
+
+  const selectedNumber = twilioNumbers.find((n) => n.id === selectedNumberId) ?? twilioNumbers[0];
 
   return (
     <Modal
@@ -123,8 +133,8 @@ function ComposeModal({
           <Text style={composeStyles.title}>New Message</Text>
           <Pressable
             onPress={handleSend}
-            style={[composeStyles.sendBtn, (!messageText.trim() || isSending) && composeStyles.sendBtnDisabled]}
-            disabled={!messageText.trim() || isSending}
+            style={[composeStyles.sendBtn, (!messageText.trim() || isSending || !selectedNumber) && composeStyles.sendBtnDisabled]}
+            disabled={!messageText.trim() || isSending || !selectedNumber}
           >
             {isSending ? (
               <ActivityIndicator size="small" color="#fff" />
@@ -139,6 +149,39 @@ function ComposeModal({
           <Text style={composeStyles.toLabel}>To:</Text>
           <Text style={composeStyles.toName}>{prospectName}</Text>
         </View>
+
+        {twilioNumbers.length === 0 ? (
+          <View style={composeStyles.noNumberWarn}>
+            <Feather name="alert-triangle" size={16} color="#FCA84A" />
+            <Text style={composeStyles.noNumberWarnText}>
+              No Twilio numbers configured. Add one in Settings.
+            </Text>
+          </View>
+        ) : multipleNumbers ? (
+          <View style={composeStyles.fromRow}>
+            <Feather name="phone-outgoing" size={15} color={Colors.dark.textMuted} />
+            <Text style={composeStyles.fromLabel}>From:</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={composeStyles.numberChips}>
+              {twilioNumbers.map((n) => (
+                <Pressable
+                  key={n.id}
+                  style={[composeStyles.numberChip, selectedNumberId === n.id && composeStyles.numberChipActive]}
+                  onPress={() => onSelectNumber(n.id)}
+                >
+                  <Text style={[composeStyles.numberChipText, selectedNumberId === n.id && composeStyles.numberChipTextActive]}>
+                    {n.friendlyName ?? n.phoneNumber}
+                  </Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
+        ) : selectedNumber ? (
+          <View style={composeStyles.fromRowSingle}>
+            <Feather name="phone-outgoing" size={15} color={Colors.dark.textMuted} />
+            <Text style={composeStyles.fromLabel}>From:</Text>
+            <Text style={composeStyles.fromValue}>{selectedNumber.friendlyName ?? selectedNumber.phoneNumber}</Text>
+          </View>
+        ) : null}
 
         <View style={composeStyles.divider} />
 
@@ -164,13 +207,23 @@ export default function ProspectDetailScreen() {
   const queryClient = useQueryClient();
   const [noteText, setNoteText] = useState("");
   const [composeVisible, setComposeVisible] = useState(false);
+  const [selectedTwilioNumberId, setSelectedTwilioNumberId] = useState<string | null>(null);
   const noteInputRef = useRef<TextInput>(null);
 
   const { data, isLoading, isError, refetch } = useGetProspect(id, {
     query: { enabled: !!id, queryKey: getGetProspectQueryKey(id) },
   });
 
-  const { data: twilioNumbersData } = useListTwilioNumbers();
+  const { data: twilioNumbersData } = useListTwilioNumbers({
+    query: {
+      select: (d) => ({
+        ...d,
+        twilioNumbers: d.twilioNumbers.filter((n) => n.isActive),
+      }),
+    },
+  });
+
+  const activeTwilioNumbers = twilioNumbersData?.twilioNumbers ?? [];
 
   const statusMutation = useUpdateProspect({
     mutation: {
@@ -196,14 +249,71 @@ export default function ProspectDetailScreen() {
 
   const smsMutation = useSendSms({
     mutation: {
-      onSuccess: () => {
+      onMutate: async ({ body, fromTwilioNumberId }) => {
+        await queryClient.cancelQueries({ queryKey: getGetProspectQueryKey(id) });
+        const previous = queryClient.getQueryData<ProspectDetail>(getGetProspectQueryKey(id));
+
+        const fromNumber = activeTwilioNumbers.find((n) => n.id === fromTwilioNumberId)?.phoneNumber
+          ?? activeTwilioNumbers[0]?.phoneNumber
+          ?? "";
+
+        const now = new Date().toISOString();
+        const optimisticInteraction = {
+          id: `optimistic-${Date.now()}`,
+          accountId: previous?.prospect.accountId ?? "",
+          prospectId: id,
+          propertyId: previous?.prospect.assignedPropertyId ?? null,
+          sourceType: "sms",
+          direction: "outbound",
+          twilioMessageSid: null,
+          twilioCallSid: null,
+          parentThreadKey: null,
+          fromNumber,
+          toNumber: previous?.prospect.phonePrimary ?? "",
+          rawText: body,
+          transcript: null,
+          summary: body,
+          category: null,
+          urgency: null,
+          sentiment: null,
+          extractionConfidence: null,
+          structuredExtractionJson: null,
+          extractionStatus: "skipped",
+          occurredAt: now,
+          createdAt: now,
+          updatedAt: now,
+        };
+
+        if (previous) {
+          queryClient.setQueryData<ProspectDetail>(getGetProspectQueryKey(id), {
+            ...previous,
+            interactions: [...(previous.interactions ?? []), optimisticInteraction],
+          });
+        }
+
+        return { previous };
+      },
+      onError: (_err: unknown, _vars: unknown, context?: { previous?: ProspectDetail }) => {
+        if (context?.previous) {
+          queryClient.setQueryData(getGetProspectQueryKey(id), context.previous);
+        }
+        const msg = _err instanceof Error ? _err.message : String(_err);
+        Alert.alert("Failed to Send", msg);
+      },
+      onSuccess: (interaction) => {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         setComposeVisible(false);
-        queryClient.invalidateQueries({ queryKey: getGetProspectQueryKey(id) });
-      },
-      onError: (err: unknown) => {
-        const msg = err instanceof Error ? err.message : String(err);
-        Alert.alert("Failed to Send", msg);
+        const previous = queryClient.getQueryData<ProspectDetail>(getGetProspectQueryKey(id));
+        if (previous) {
+          queryClient.setQueryData<ProspectDetail>(getGetProspectQueryKey(id), {
+            ...previous,
+            interactions: (previous.interactions ?? [])
+              .filter((i) => !i.id.startsWith("optimistic-"))
+              .concat(interaction),
+          });
+        } else {
+          queryClient.invalidateQueries({ queryKey: getGetProspectQueryKey(id) });
+        }
       },
     },
   });
@@ -220,12 +330,11 @@ export default function ProspectDetailScreen() {
   };
 
   const handleSendMessage = (text: string) => {
-    const twilioNumbers = twilioNumbersData?.twilioNumbers ?? [];
-    const activeNumber = twilioNumbers.find((n) => n.isActive) ?? twilioNumbers[0];
+    const fromId = selectedTwilioNumberId ?? activeTwilioNumbers[0]?.id;
     smsMutation.mutate({
       prospectId: id,
       body: text,
-      ...(activeNumber ? { fromTwilioNumberId: activeNumber.id } : {}),
+      ...(fromId ? { fromTwilioNumberId: fromId } : {}),
     });
   };
 
@@ -261,6 +370,9 @@ export default function ProspectDetailScreen() {
         prospectName={name}
         onSend={handleSendMessage}
         isSending={smsMutation.isPending}
+        twilioNumbers={activeTwilioNumbers}
+        selectedNumberId={selectedTwilioNumberId ?? activeTwilioNumbers[0]?.id ?? null}
+        onSelectNumber={setSelectedTwilioNumberId}
       />
 
       <KeyboardAvoidingView
@@ -390,67 +502,74 @@ export default function ProspectDetailScreen() {
           {(interactions ?? []).length > 0 && (
             <View style={styles.card}>
               <SectionHeader title={`INTERACTIONS (${interactions!.length})`} />
-              {interactions!.map((interaction) => (
-                <Pressable
-                  key={interaction.id}
-                  style={styles.interactionRow}
-                  onPress={() =>
-                    router.push({
-                      pathname: "/interaction/[id]",
-                      params: { id: interaction.id, prospectId: id },
-                    })
-                  }
-                >
-                  <View style={[
-                    styles.interactionIconWrap,
-                    interaction.direction === "outbound" && styles.interactionIconWrapOutbound,
-                  ]}>
-                    <Feather
-                      name={
-                        interaction.direction === "outbound"
-                          ? "send"
-                          : interaction.sourceType === "sms"
-                          ? "message-square"
-                          : interaction.sourceType === "voicemail"
-                          ? "mic"
-                          : "phone"
-                      }
-                      size={14}
-                      color={interaction.direction === "outbound" ? "#A3E4D7" : Colors.brand.tealLight}
-                    />
-                  </View>
-                  <View style={styles.interactionContent}>
-                    <View style={styles.interactionTopRow}>
-                      <View style={styles.interactionBadgeRow}>
-                        <Badge label={interaction.sourceType} value={interaction.sourceType} />
-                        {interaction.direction === "outbound" && (
-                          <View style={styles.outboundBadge}>
-                            <Text style={styles.outboundBadgeText}>Sent</Text>
-                          </View>
-                        )}
-                      </View>
-                      <Text style={styles.interactionTime}>
-                        {new Date(interaction.occurredAt).toLocaleDateString("en-US", {
-                          month: "short",
-                          day: "numeric",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </Text>
+              {interactions!.map((interaction) => {
+                const isOptimistic = interaction.id.startsWith("optimistic-");
+                const isOutbound = interaction.direction === "outbound";
+                return (
+                  <Pressable
+                    key={interaction.id}
+                    style={styles.interactionRow}
+                    onPress={() => {
+                      if (isOptimistic) return;
+                      router.push({
+                        pathname: "/interaction/[id]",
+                        params: { id: interaction.id, prospectId: id },
+                      });
+                    }}
+                  >
+                    <View style={[
+                      styles.interactionIconWrap,
+                      isOutbound && styles.interactionIconWrapOutbound,
+                    ]}>
+                      <Feather
+                        name={
+                          isOutbound
+                            ? "send"
+                            : interaction.sourceType === "sms"
+                            ? "message-square"
+                            : interaction.sourceType === "voicemail"
+                            ? "mic"
+                            : "phone"
+                        }
+                        size={14}
+                        color={isOutbound ? "#A3E4D7" : Colors.brand.tealLight}
+                      />
                     </View>
-                    {(interaction.summary ?? interaction.rawText ?? interaction.transcript) && (
-                      <Text style={styles.interactionText}>
-                        {interaction.summary ?? interaction.rawText ?? interaction.transcript}
-                      </Text>
-                    )}
-                    {interaction.category && (
-                      <Text style={styles.interactionCategory}>
-                        {interaction.category.replace(/_/g, " ")}
-                      </Text>
-                    )}
-                  </View>
-                </Pressable>
-              ))}
+                    <View style={styles.interactionContent}>
+                      <View style={styles.interactionTopRow}>
+                        <View style={styles.interactionBadgeRow}>
+                          <Badge label={interaction.sourceType} value={interaction.sourceType} />
+                          {isOutbound && (
+                            <View style={styles.outboundBadge}>
+                              <Text style={styles.outboundBadgeText}>
+                                {isOptimistic ? "Sending…" : "Sent"}
+                              </Text>
+                            </View>
+                          )}
+                        </View>
+                        <Text style={styles.interactionTime}>
+                          {new Date(interaction.occurredAt).toLocaleDateString("en-US", {
+                            month: "short",
+                            day: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </Text>
+                      </View>
+                      {(interaction.summary ?? interaction.rawText ?? interaction.transcript) && (
+                        <Text style={[styles.interactionText, isOptimistic && styles.interactionTextOptimistic]}>
+                          {interaction.summary ?? interaction.rawText ?? interaction.transcript}
+                        </Text>
+                      )}
+                      {interaction.category && !isOutbound && (
+                        <Text style={styles.interactionCategory}>
+                          {interaction.category.replace(/_/g, " ")}
+                        </Text>
+                      )}
+                    </View>
+                  </Pressable>
+                );
+              })}
             </View>
           )}
 
@@ -650,22 +769,8 @@ const styles = StyleSheet.create({
     color: Colors.dark.textSecondary,
     lineHeight: 21,
   },
-  actionButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    backgroundColor: Colors.brand.teal,
-    borderRadius: 12,
-    paddingVertical: 13,
-  },
   actionButtonDisabled: {
     opacity: 0.6,
-  },
-  actionButtonText: {
-    fontSize: 15,
-    fontFamily: "Inter_600SemiBold",
-    color: "#fff",
   },
   actionButtonOutline: {
     flexDirection: "row",
@@ -759,6 +864,9 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_400Regular",
     color: Colors.dark.textSecondary,
     lineHeight: 18,
+  },
+  interactionTextOptimistic: {
+    opacity: 0.6,
   },
   interactionCategory: {
     fontSize: 11,
@@ -908,6 +1016,75 @@ const composeStyles = StyleSheet.create({
     fontFamily: "Inter_600SemiBold",
     color: Colors.dark.text,
     flex: 1,
+  },
+  fromRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingBottom: 10,
+  },
+  fromRowSingle: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingBottom: 10,
+  },
+  fromLabel: {
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+    color: Colors.dark.textMuted,
+    marginRight: 2,
+  },
+  fromValue: {
+    fontSize: 13,
+    fontFamily: "Inter_500Medium",
+    color: Colors.dark.textSecondary,
+  },
+  numberChips: {
+    flexDirection: "row",
+    gap: 8,
+    paddingRight: 16,
+  },
+  numberChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    backgroundColor: Colors.dark.bgCard,
+    borderWidth: 1,
+    borderColor: Colors.dark.border,
+  },
+  numberChipActive: {
+    backgroundColor: "#0D2A2A",
+    borderColor: Colors.brand.tealLight,
+  },
+  numberChipText: {
+    fontSize: 12,
+    fontFamily: "Inter_500Medium",
+    color: Colors.dark.textSecondary,
+  },
+  numberChipTextActive: {
+    color: Colors.brand.tealLight,
+  },
+  noNumberWarn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#2A1A0A",
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    marginHorizontal: 16,
+    borderWidth: 1,
+    borderColor: "#664400",
+  },
+  noNumberWarnText: {
+    flex: 1,
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+    color: "#FCA84A",
+    lineHeight: 18,
   },
   divider: {
     height: 1,
