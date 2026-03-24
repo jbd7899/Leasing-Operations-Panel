@@ -89,13 +89,6 @@ router.post("/exports", async (req: Request, res: Response) => {
 
   const validatedProspectIds = ownedProspects.map((p) => p.id);
 
-  const { content, mimeType } = await generateExportContent(
-    accountId,
-    validatedProspectIds,
-    typedFormat,
-    "",
-  );
-
   const [batch] = await db
     .insert(exportBatchesTable)
     .values({
@@ -104,17 +97,24 @@ router.post("/exports", async (req: Request, res: Response) => {
       format: typedFormat,
       targetSystem: targetSystem as string | undefined,
       recordCount: validatedProspectIds.length,
-      status: "completed",
-      mimeType,
-      fileContent: content,
+      status: "pending",
     })
     .returning();
 
-  const fileUrl = buildDownloadUrl(req, batch.id);
+  const batchId = batch.id;
+  const fileUrl = buildDownloadUrl(req, batchId);
+
+  const { content, mimeType } = await generateExportContent(
+    accountId,
+    validatedProspectIds,
+    typedFormat,
+    batchId,
+  );
+
   const [updated] = await db
     .update(exportBatchesTable)
-    .set({ fileUrl })
-    .where(eq(exportBatchesTable.id, batch.id))
+    .set({ status: "completed", mimeType, fileContent: content, fileUrl })
+    .where(eq(exportBatchesTable.id, batchId))
     .returning({
       id: exportBatchesTable.id,
       accountId: exportBatchesTable.accountId,
@@ -226,7 +226,10 @@ async function generateExportContent(
       tagName: tagsTable.name,
     })
     .from(prospectTagsTable)
-    .innerJoin(tagsTable, eq(prospectTagsTable.tagId, tagsTable.id))
+    .innerJoin(
+      tagsTable,
+      and(eq(prospectTagsTable.tagId, tagsTable.id), eq(tagsTable.accountId, accountId)),
+    )
     .where(inArray(prospectTagsTable.prospectId, prospectIds));
 
   const latestInteractionRows = await db
