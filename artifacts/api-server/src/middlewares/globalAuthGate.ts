@@ -6,6 +6,8 @@ const PUBLIC_PATHS = new Set([
   "/api/callback",
   "/api/logout",
   "/api/auth/user",
+  "/api/privacy",
+  "/api/terms",
 ]);
 
 const WEBHOOK_PREFIXES = [

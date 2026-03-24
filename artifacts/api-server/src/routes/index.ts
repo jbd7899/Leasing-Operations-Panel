@@ -13,6 +13,7 @@ import webhooksRouter from "./webhooks";
 import internalRouter from "./internal";
 import analyticsRouter from "./analytics";
 import settingsRouter from "./settings";
+import legalRouter from "./legal";
 
 const router: IRouter = Router();
 
@@ -20,6 +21,7 @@ router.use(healthRouter);
 router.use(authRouter);
 router.use(webhooksRouter);
 router.use(internalRouter);
+router.use(legalRouter);
 router.use(propertiesRouter);
 router.use(twilioNumbersRouter);
 router.use(usersRouter);
