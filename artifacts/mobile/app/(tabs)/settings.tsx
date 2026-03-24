@@ -11,8 +11,8 @@ import {
   Modal,
   KeyboardAvoidingView,
   Platform,
-  Clipboard,
 } from "react-native";
+import * as Clipboard from "expo-clipboard";
 import { useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -746,8 +746,9 @@ export default function SettingsScreen() {
                       style={webhookStyles.urlBox}
                       onPress={() => {
                         const url = `${getWebhookBaseUrl()}/api/webhooks/twilio/sms`;
-                        Clipboard.setString(url);
-                        Alert.alert("Copied", "SMS webhook URL copied.");
+                        Clipboard.setStringAsync(url).then(() => {
+                          Alert.alert("Copied", "SMS webhook URL copied.");
+                        });
                       }}
                     >
                       <View style={{ flex: 1 }}>
@@ -762,8 +763,9 @@ export default function SettingsScreen() {
                       style={[webhookStyles.urlBox, { marginTop: 8 }]}
                       onPress={() => {
                         const url = `${getWebhookBaseUrl()}/api/webhooks/twilio/voice`;
-                        Clipboard.setString(url);
-                        Alert.alert("Copied", "Voice webhook URL copied.");
+                        Clipboard.setStringAsync(url).then(() => {
+                          Alert.alert("Copied", "Voice webhook URL copied.");
+                        });
                       }}
                     >
                       <View style={{ flex: 1 }}>
