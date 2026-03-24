@@ -1,6 +1,7 @@
 /**
  * Static server for Expo web build (dist-web/).
  * Serves the SPA with an index.html fallback for all unmatched routes.
+ * Honors BASE_PATH for subpath deployments.
  * Zero external dependencies — uses only Node.js built-ins.
  */
 
@@ -9,6 +10,7 @@ const fs = require("fs");
 const path = require("path");
 
 const DIST_ROOT = path.resolve(__dirname, "..", "dist-web");
+const basePath = (process.env.BASE_PATH || "").replace(/\/+$/, "");
 
 const MIME_TYPES = {
   ".html": "text/html; charset=utf-8",
@@ -50,7 +52,13 @@ const indexHtml = path.join(DIST_ROOT, "index.html");
 
 const server = http.createServer((req, res) => {
   const url = new URL(req.url || "/", `http://${req.headers.host}`);
-  const file = resolveFile(url.pathname);
+  let pathname = url.pathname;
+
+  if (basePath && pathname.startsWith(basePath)) {
+    pathname = pathname.slice(basePath.length) || "/";
+  }
+
+  const file = resolveFile(pathname);
 
   if (file) {
     const ext = path.extname(file).toLowerCase();
@@ -74,5 +82,5 @@ const server = http.createServer((req, res) => {
 
 const port = parseInt(process.env.PORT || "3001", 10);
 server.listen(port, "0.0.0.0", () => {
-  console.log(`Serving Expo web build on port ${port}`);
+  console.log(`Serving Expo web build on port ${port}${basePath || ""}`);
 });

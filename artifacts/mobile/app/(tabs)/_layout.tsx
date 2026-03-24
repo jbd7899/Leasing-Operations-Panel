@@ -4,8 +4,8 @@ import { Tabs, usePathname, router } from "expo-router";
 import { Icon, Label, NativeTabs } from "expo-router/unstable-native-tabs";
 import { SymbolView } from "expo-symbols";
 import { Feather } from "@expo/vector-icons";
-import React, { useEffect, useState } from "react";
-import { Platform, StyleSheet, View, Text, Pressable, Dimensions } from "react-native";
+import React from "react";
+import { Platform, StyleSheet, View, Text, Pressable, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Colors from "@/constants/colors";
 
@@ -52,14 +52,7 @@ const NAV_ITEMS = [
 function WebSidebarLayout() {
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
-  const [width, setWidth] = useState(Dimensions.get("window").width);
-
-  useEffect(() => {
-    const sub = Dimensions.addEventListener("change", ({ window }) => {
-      setWidth(window.width);
-    });
-    return () => sub.remove();
-  }, []);
+  const { width } = useWindowDimensions();
 
   const isWide = width >= WEB_SIDEBAR_BREAKPOINT;
 
