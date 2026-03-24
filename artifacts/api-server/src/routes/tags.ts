@@ -1,6 +1,6 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { db, tagsTable } from "@workspace/db";
-import { eq, and } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
 const router: IRouter = Router();
 
@@ -12,15 +12,9 @@ function requireAuth(req: Request, res: Response): boolean {
   return true;
 }
 
-function getAccountId(req: Request): string | null {
-  if (!req.isAuthenticated()) return null;
-  return (req.user as any).accountId ?? null;
-}
-
 router.get("/tags", async (req: Request, res: Response) => {
   if (!requireAuth(req, res)) return;
-  const accountId = getAccountId(req);
-  if (!accountId) { res.status(403).json({ error: "No account" }); return; }
+  const { accountId } = req.user!;
 
   const tags = await db
     .select()
@@ -33,8 +27,7 @@ router.get("/tags", async (req: Request, res: Response) => {
 
 router.post("/tags", async (req: Request, res: Response) => {
   if (!requireAuth(req, res)) return;
-  const accountId = getAccountId(req);
-  if (!accountId) { res.status(403).json({ error: "No account" }); return; }
+  const { accountId } = req.user!;
 
   const { name, color } = req.body;
   if (!name) { res.status(400).json({ error: "name is required" }); return; }

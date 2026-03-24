@@ -12,15 +12,9 @@ function requireAuth(req: Request, res: Response): boolean {
   return true;
 }
 
-function getAccountId(req: Request): string | null {
-  if (!req.isAuthenticated()) return null;
-  return (req.user as any).accountId ?? null;
-}
-
 router.get("/inbox", async (req: Request, res: Response) => {
   if (!requireAuth(req, res)) return;
-  const accountId = getAccountId(req);
-  if (!accountId) { res.status(403).json({ error: "No account" }); return; }
+  const { accountId } = req.user!;
 
   const { status, propertyId, sourceType, exportStatus, search } = req.query;
   const limit = parseInt(req.query.limit as string) || 50;

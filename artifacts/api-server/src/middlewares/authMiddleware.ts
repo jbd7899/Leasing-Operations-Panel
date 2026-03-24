@@ -1,6 +1,6 @@
 import * as oidc from "openid-client";
 import { type Request, type Response, type NextFunction } from "express";
-import type { AuthUser } from "@workspace/api-zod";
+import type { SessionUser } from "../lib/types";
 import {
   clearSession,
   getOidcConfig,
@@ -9,11 +9,6 @@ import {
   updateSession,
   type SessionData,
 } from "../lib/auth";
-
-export interface SessionUser extends AuthUser {
-  accountId: string;
-  role: string;
-}
 
 declare global {
   namespace Express {
@@ -86,6 +81,6 @@ export async function authMiddleware(
     return;
   }
 
-  req.user = refreshed.user as Express.User;
+  req.user = refreshed.user;
   next();
 }

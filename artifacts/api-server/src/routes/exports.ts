@@ -12,15 +12,9 @@ function requireAuth(req: Request, res: Response): boolean {
   return true;
 }
 
-function getAccountId(req: Request): string | null {
-  if (!req.isAuthenticated()) return null;
-  return (req.user as any).accountId ?? null;
-}
-
 router.get("/exports", async (req: Request, res: Response) => {
   if (!requireAuth(req, res)) return;
-  const accountId = getAccountId(req);
-  if (!accountId) { res.status(403).json({ error: "No account" }); return; }
+  const { accountId } = req.user!;
 
   const exports = await db
     .select()
@@ -33,8 +27,7 @@ router.get("/exports", async (req: Request, res: Response) => {
 
 router.post("/exports", async (req: Request, res: Response) => {
   if (!requireAuth(req, res)) return;
-  const accountId = getAccountId(req);
-  if (!accountId) { res.status(403).json({ error: "No account" }); return; }
+  const { accountId, id: userId } = req.user!;
 
   const { prospectIds, format, targetSystem } = req.body;
   if (!prospectIds || !Array.isArray(prospectIds) || prospectIds.length === 0) {
@@ -48,7 +41,7 @@ router.post("/exports", async (req: Request, res: Response) => {
 
   const [batch] = await db.insert(exportBatchesTable).values({
     accountId,
-    createdByUserId: req.user!.id,
+    createdByUserId: userId,
     format,
     targetSystem,
     recordCount: prospectIds.length,
@@ -68,8 +61,7 @@ router.post("/exports", async (req: Request, res: Response) => {
 
 router.get("/exports/:id/download", async (req: Request, res: Response) => {
   if (!requireAuth(req, res)) return;
-  const accountId = getAccountId(req);
-  if (!accountId) { res.status(403).json({ error: "No account" }); return; }
+  const { accountId } = req.user!;
 
   const { id } = req.params;
   const [batch] = await db.select().from(exportBatchesTable)
@@ -80,9 +72,11 @@ router.get("/exports/:id/download", async (req: Request, res: Response) => {
   const items = await db.select().from(exportBatchItemsTable)
     .where(eq(exportBatchItemsTable.exportBatchId, id));
 
-  const prospectIds = items.map(i => i.prospectId);
+  const prospectIds = items.map((i) => i.prospectId);
   const prospects = prospectIds.length > 0
-    ? await db.select().from(prospectsTable).where(inArray(prospectsTable.id, prospectIds))
+    ? await db.select().from(prospectsTable).where(
+        and(inArray(prospectsTable.id, prospectIds), eq(prospectsTable.accountId, accountId)),
+      )
     : [];
 
   if (batch.format === "csv") {
@@ -92,14 +86,14 @@ router.get("/exports/:id/download", async (req: Request, res: Response) => {
       "pets", "voucher_type", "employment_status", "monthly_income",
       "lead_status", "export_status",
     ];
-    const rows = prospects.map(p => [
+    const rows = prospects.map((p) => [
       p.id, p.firstName ?? "", p.lastName ?? "", p.fullName ?? "",
       p.phonePrimary, p.email ?? "",
       p.desiredBedrooms ?? "", p.desiredMoveInDate ?? "",
       p.budgetMin ?? "", p.budgetMax ?? "",
       p.pets ?? "", p.voucherType ?? "", p.employmentStatus ?? "", p.monthlyIncome ?? "",
       p.status, p.exportStatus,
-    ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(","));
+    ].map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","));
 
     const csv = [headers.join(","), ...rows].join("\n");
     res.setHeader("Content-Type", "text/csv");

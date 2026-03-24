@@ -3,6 +3,8 @@ import { db } from "@workspace/db";
 import { propertiesTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 
+const ADMIN_ROLES = new Set(["owner", "admin"]);
+
 const router: IRouter = Router();
 
 function requireAuth(req: Request, res: Response): boolean {
@@ -15,18 +17,16 @@ function requireAuth(req: Request, res: Response): boolean {
 
 function requireAdmin(req: Request, res: Response): boolean {
   if (!requireAuth(req, res)) return false;
+  if (!ADMIN_ROLES.has(req.user!.role)) {
+    res.status(403).json({ error: "Forbidden: admin or owner role required" });
+    return false;
+  }
   return true;
-}
-
-function getAccountId(req: Request): string | null {
-  if (!req.isAuthenticated()) return null;
-  return (req.user as any).accountId ?? null;
 }
 
 router.get("/properties", async (req: Request, res: Response) => {
   if (!requireAuth(req, res)) return;
-  const accountId = getAccountId(req);
-  if (!accountId) { res.status(403).json({ error: "No account" }); return; }
+  const { accountId } = req.user!;
 
   const properties = await db
     .select()
@@ -39,8 +39,7 @@ router.get("/properties", async (req: Request, res: Response) => {
 
 router.post("/properties", async (req: Request, res: Response) => {
   if (!requireAdmin(req, res)) return;
-  const accountId = getAccountId(req);
-  if (!accountId) { res.status(403).json({ error: "No account" }); return; }
+  const { accountId } = req.user!;
 
   const { name, address1, address2, city, state, zip, status } = req.body;
   if (!name) { res.status(400).json({ error: "name is required" }); return; }
@@ -55,8 +54,7 @@ router.post("/properties", async (req: Request, res: Response) => {
 
 router.patch("/properties/:id", async (req: Request, res: Response) => {
   if (!requireAdmin(req, res)) return;
-  const accountId = getAccountId(req);
-  if (!accountId) { res.status(403).json({ error: "No account" }); return; }
+  const { accountId } = req.user!;
 
   const { id } = req.params;
   const { name, address1, address2, city, state, zip, status } = req.body;

@@ -2,6 +2,8 @@ import { Router, type IRouter, type Request, type Response } from "express";
 import { db, twilioNumbersTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 
+const ADMIN_ROLES = new Set(["owner", "admin"]);
+
 const router: IRouter = Router();
 
 function requireAuth(req: Request, res: Response): boolean {
@@ -12,15 +14,18 @@ function requireAuth(req: Request, res: Response): boolean {
   return true;
 }
 
-function getAccountId(req: Request): string | null {
-  if (!req.isAuthenticated()) return null;
-  return (req.user as any).accountId ?? null;
+function requireAdmin(req: Request, res: Response): boolean {
+  if (!requireAuth(req, res)) return false;
+  if (!ADMIN_ROLES.has(req.user!.role)) {
+    res.status(403).json({ error: "Forbidden: admin or owner role required" });
+    return false;
+  }
+  return true;
 }
 
 router.get("/twilio-numbers", async (req: Request, res: Response) => {
   if (!requireAuth(req, res)) return;
-  const accountId = getAccountId(req);
-  if (!accountId) { res.status(403).json({ error: "No account" }); return; }
+  const { accountId } = req.user!;
 
   const twilioNumbers = await db
     .select()
@@ -32,9 +37,8 @@ router.get("/twilio-numbers", async (req: Request, res: Response) => {
 });
 
 router.post("/twilio-numbers", async (req: Request, res: Response) => {
-  if (!requireAuth(req, res)) return;
-  const accountId = getAccountId(req);
-  if (!accountId) { res.status(403).json({ error: "No account" }); return; }
+  if (!requireAdmin(req, res)) return;
+  const { accountId } = req.user!;
 
   const { phoneNumber, friendlyName, propertyId, purpose } = req.body;
   if (!phoneNumber) { res.status(400).json({ error: "phoneNumber is required" }); return; }
@@ -48,9 +52,8 @@ router.post("/twilio-numbers", async (req: Request, res: Response) => {
 });
 
 router.patch("/twilio-numbers/:id", async (req: Request, res: Response) => {
-  if (!requireAuth(req, res)) return;
-  const accountId = getAccountId(req);
-  if (!accountId) { res.status(403).json({ error: "No account" }); return; }
+  if (!requireAdmin(req, res)) return;
+  const { accountId } = req.user!;
 
   const { id } = req.params;
   const { friendlyName, propertyId, purpose, isActive } = req.body;

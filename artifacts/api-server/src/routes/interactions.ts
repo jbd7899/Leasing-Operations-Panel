@@ -12,15 +12,9 @@ function requireAuth(req: Request, res: Response): boolean {
   return true;
 }
 
-function getAccountId(req: Request): string | null {
-  if (!req.isAuthenticated()) return null;
-  return (req.user as any).accountId ?? null;
-}
-
 router.get("/interactions/:id", async (req: Request, res: Response) => {
   if (!requireAuth(req, res)) return;
-  const accountId = getAccountId(req);
-  if (!accountId) { res.status(403).json({ error: "No account" }); return; }
+  const { accountId } = req.user!;
 
   const { id } = req.params;
   const [interaction] = await db
@@ -34,8 +28,7 @@ router.get("/interactions/:id", async (req: Request, res: Response) => {
 
 router.patch("/interactions/:id/review", async (req: Request, res: Response) => {
   if (!requireAuth(req, res)) return;
-  const accountId = getAccountId(req);
-  if (!accountId) { res.status(403).json({ error: "No account" }); return; }
+  const { accountId } = req.user!;
 
   const { id } = req.params;
   const { summary, category, propertyId, prospectId, structuredExtractionJson } = req.body;

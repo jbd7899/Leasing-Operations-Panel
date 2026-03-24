@@ -19,15 +19,9 @@ function requireAuth(req: Request, res: Response): boolean {
   return true;
 }
 
-function getAccountId(req: Request): string | null {
-  if (!req.isAuthenticated()) return null;
-  return (req.user as any).accountId ?? null;
-}
-
 router.get("/prospects", async (req: Request, res: Response) => {
   if (!requireAuth(req, res)) return;
-  const accountId = getAccountId(req);
-  if (!accountId) { res.status(403).json({ error: "No account" }); return; }
+  const { accountId } = req.user!;
 
   const { status, exportStatus, propertyId, search } = req.query;
   const limit = parseInt(req.query.limit as string) || 50;
@@ -64,8 +58,7 @@ router.get("/prospects", async (req: Request, res: Response) => {
 
 router.post("/prospects", async (req: Request, res: Response) => {
   if (!requireAuth(req, res)) return;
-  const accountId = getAccountId(req);
-  if (!accountId) { res.status(403).json({ error: "No account" }); return; }
+  const { accountId } = req.user!;
 
   const { phonePrimary, firstName, lastName, email, assignedPropertyId, status } = req.body;
   if (!phonePrimary) { res.status(400).json({ error: "phonePrimary is required" }); return; }
@@ -82,8 +75,7 @@ router.post("/prospects", async (req: Request, res: Response) => {
 
 router.get("/prospects/:id", async (req: Request, res: Response) => {
   if (!requireAuth(req, res)) return;
-  const accountId = getAccountId(req);
-  if (!accountId) { res.status(403).json({ error: "No account" }); return; }
+  const { accountId } = req.user!;
 
   const { id } = req.params;
 
@@ -106,8 +98,12 @@ router.get("/prospects/:id", async (req: Request, res: Response) => {
 
   let tags: typeof tagsTable.$inferSelect[] = [];
   if (prospectTagRows.length > 0) {
+    const tagIds = prospectTagRows.map((r) => r.tagId);
     tags = await db.select().from(tagsTable)
-      .where(inArray(tagsTable.id, prospectTagRows.map(r => r.tagId)));
+      .where(and(
+        inArray(tagsTable.id, tagIds),
+        eq(tagsTable.accountId, accountId),
+      ));
   }
 
   res.json({ prospect, interactions, notes, tags });
@@ -115,8 +111,7 @@ router.get("/prospects/:id", async (req: Request, res: Response) => {
 
 router.patch("/prospects/:id", async (req: Request, res: Response) => {
   if (!requireAuth(req, res)) return;
-  const accountId = getAccountId(req);
-  if (!accountId) { res.status(403).json({ error: "No account" }); return; }
+  const { accountId } = req.user!;
 
   const { id } = req.params;
   const allowedFields = [
@@ -155,8 +150,7 @@ router.patch("/prospects/:id", async (req: Request, res: Response) => {
 
 router.post("/prospects/:id/notes", async (req: Request, res: Response) => {
   if (!requireAuth(req, res)) return;
-  const accountId = getAccountId(req);
-  if (!accountId) { res.status(403).json({ error: "No account" }); return; }
+  const { accountId } = req.user!;
 
   const { id } = req.params;
   const { body: noteBody } = req.body;
@@ -177,8 +171,7 @@ router.post("/prospects/:id/notes", async (req: Request, res: Response) => {
 
 router.post("/prospects/:id/tags", async (req: Request, res: Response) => {
   if (!requireAuth(req, res)) return;
-  const accountId = getAccountId(req);
-  if (!accountId) { res.status(403).json({ error: "No account" }); return; }
+  const { accountId } = req.user!;
 
   const { id } = req.params;
   const { tagIds } = req.body;
@@ -189,15 +182,28 @@ router.post("/prospects/:id/tags", async (req: Request, res: Response) => {
     .where(and(eq(prospectsTable.id, id), eq(prospectsTable.accountId, accountId)));
   if (!prospect) { res.status(404).json({ error: "Prospect not found" }); return; }
 
-  await db.delete(prospectTagsTable).where(eq(prospectTagsTable.prospectId, id));
+  let validatedTagIds: string[] = [];
   if (tagIds.length > 0) {
+    const ownedTags = await db.select({ id: tagsTable.id })
+      .from(tagsTable)
+      .where(and(inArray(tagsTable.id, tagIds), eq(tagsTable.accountId, accountId)));
+    validatedTagIds = ownedTags.map((t) => t.id);
+
+    if (validatedTagIds.length !== tagIds.length) {
+      res.status(400).json({ error: "One or more tagIds do not belong to this account" });
+      return;
+    }
+  }
+
+  await db.delete(prospectTagsTable).where(eq(prospectTagsTable.prospectId, id));
+  if (validatedTagIds.length > 0) {
     await db.insert(prospectTagsTable).values(
-      tagIds.map((tagId: string) => ({ prospectId: id, tagId })),
+      validatedTagIds.map((tagId) => ({ prospectId: id, tagId })),
     );
   }
 
-  const tags = tagIds.length > 0
-    ? await db.select().from(tagsTable).where(and(inArray(tagsTable.id, tagIds), eq(tagsTable.accountId, accountId)))
+  const tags = validatedTagIds.length > 0
+    ? await db.select().from(tagsTable).where(and(inArray(tagsTable.id, validatedTagIds), eq(tagsTable.accountId, accountId)))
     : [];
 
   res.json({ tags });

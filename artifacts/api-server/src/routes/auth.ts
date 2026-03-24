@@ -19,6 +19,7 @@ import {
   ISSUER_URL,
   type SessionData,
 } from "../lib/auth";
+import type { SessionUser } from "../lib/types";
 
 const OIDC_COOKIE_TTL = 10 * 60 * 1000;
 
@@ -81,7 +82,10 @@ async function upsertUser(claims: Record<string, unknown>) {
   return user;
 }
 
-async function ensureAccountForUser(userId: string, displayName: string | null): Promise<string> {
+async function ensureAccountForUser(
+  userId: string,
+  displayName: string | null,
+): Promise<{ accountId: string; role: string }> {
   const [existingMembership] = await db
     .select()
     .from(accountUsersTable)
@@ -89,13 +93,35 @@ async function ensureAccountForUser(userId: string, displayName: string | null):
     .limit(1);
 
   if (existingMembership) {
-    return existingMembership.accountId;
+    return { accountId: existingMembership.accountId, role: existingMembership.role };
   }
 
   const accountName = displayName ? `${displayName}'s Account` : "My Account";
   const [account] = await db.insert(accountsTable).values({ name: accountName }).returning();
-  await db.insert(accountUsersTable).values({ accountId: account.id, userId, role: "owner", name: displayName, email: null });
-  return account.id;
+  await db.insert(accountUsersTable).values({
+    accountId: account.id,
+    userId,
+    role: "owner",
+    name: displayName,
+    email: null,
+  });
+  return { accountId: account.id, role: "owner" };
+}
+
+function buildSessionUser(
+  dbUser: { id: string; email: string | null; firstName: string | null; lastName: string | null; profileImageUrl: string | null },
+  accountId: string,
+  role: string,
+): SessionUser {
+  return {
+    id: dbUser.id,
+    email: dbUser.email,
+    firstName: dbUser.firstName,
+    lastName: dbUser.lastName,
+    profileImageUrl: dbUser.profileImageUrl,
+    accountId,
+    role,
+  };
 }
 
 router.get("/auth/user", (req: Request, res: Response) => {
@@ -182,18 +208,11 @@ router.get("/callback", async (req: Request, res: Response) => {
 
   const dbUser = await upsertUser(claims as unknown as Record<string, unknown>);
   const displayName = [dbUser.firstName, dbUser.lastName].filter(Boolean).join(" ") || null;
-  const accountId = await ensureAccountForUser(dbUser.id, displayName);
+  const { accountId, role } = await ensureAccountForUser(dbUser.id, displayName);
 
   const now = Math.floor(Date.now() / 1000);
   const sessionData: SessionData = {
-    user: {
-      id: dbUser.id,
-      email: dbUser.email,
-      firstName: dbUser.firstName,
-      lastName: dbUser.lastName,
-      profileImageUrl: dbUser.profileImageUrl,
-      accountId,
-    } as any,
+    user: buildSessionUser(dbUser, accountId, role),
     access_token: tokens.access_token,
     refresh_token: tokens.refresh_token,
     expires_at: tokens.expiresIn() ? now + tokens.expiresIn()! : claims.exp,
@@ -253,18 +272,11 @@ router.post(
 
       const dbUser = await upsertUser(claims as unknown as Record<string, unknown>);
       const displayName = [dbUser.firstName, dbUser.lastName].filter(Boolean).join(" ") || null;
-      const accountId = await ensureAccountForUser(dbUser.id, displayName);
+      const { accountId, role } = await ensureAccountForUser(dbUser.id, displayName);
 
       const now = Math.floor(Date.now() / 1000);
       const sessionData: SessionData = {
-        user: {
-          id: dbUser.id,
-          email: dbUser.email,
-          firstName: dbUser.firstName,
-          lastName: dbUser.lastName,
-          profileImageUrl: dbUser.profileImageUrl,
-          accountId,
-        } as any,
+        user: buildSessionUser(dbUser, accountId, role),
         access_token: tokens.access_token,
         refresh_token: tokens.refresh_token,
         expires_at: tokens.expiresIn() ? now + tokens.expiresIn()! : claims.exp,
