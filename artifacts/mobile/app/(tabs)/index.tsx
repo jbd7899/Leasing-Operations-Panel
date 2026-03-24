@@ -227,21 +227,21 @@ export default function InboxScreen() {
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.filterChips}
           >
-            {SOURCE_FILTERS.filter((f) => f.value !== "").map((f) => (
+            {SOURCE_FILTERS.map((f) => (
               <FilterChip
-                key={f.value}
+                key={`src-${f.value}`}
                 label={f.label}
                 active={sourceFilter === f.value}
-                onPress={() => setSourceFilter(sourceFilter === f.value ? "" : f.value)}
+                onPress={() => setSourceFilter(f.value)}
               />
             ))}
             <View style={styles.filterDivider} />
-            {STATUS_FILTERS.filter((f) => f.value !== "").map((f) => (
+            {STATUS_FILTERS.map((f) => (
               <FilterChip
-                key={f.value}
+                key={`st-${f.value}`}
                 label={f.label}
                 active={statusFilter === f.value}
-                onPress={() => setStatusFilter(statusFilter === f.value ? "" : f.value)}
+                onPress={() => setStatusFilter(f.value)}
               />
             ))}
           </ScrollView>
