@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react";
+import { Platform } from "react-native";
 import * as AuthSession from "expo-auth-session";
 import * as WebBrowser from "expo-web-browser";
 import * as storage from "@/lib/storage";
@@ -48,9 +49,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   const discovery = AuthSession.useAutoDiscovery(ISSUER_URL);
-
   const redirectUri = AuthSession.makeRedirectUri();
-
   const [request, response, promptAsync] = AuthSession.useAuthRequest(
     {
       clientId: getClientId(),
@@ -63,24 +62,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const fetchUser = useCallback(async () => {
     try {
-      const token = await storage.getItem(AUTH_TOKEN_KEY);
-      if (!token) {
-        setUser(null);
-        setIsLoading(false);
-        return;
-      }
-
       const apiBase = getApiBaseUrl();
-      const res = await fetch(`${apiBase}/api/auth/user`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
 
-      if (data.user) {
-        setUser(data.user);
+      if (Platform.OS === "web") {
+        const res = await fetch(`${apiBase}/api/auth/user`, {
+          credentials: "include",
+        });
+        const data = await res.json();
+        setUser(data.user ?? null);
       } else {
-        await storage.deleteItem(AUTH_TOKEN_KEY);
-        setUser(null);
+        const token = await storage.getItem(AUTH_TOKEN_KEY);
+        if (!token) {
+          setUser(null);
+          setIsLoading(false);
+          return;
+        }
+
+        const res = await fetch(`${apiBase}/api/auth/user`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await res.json();
+
+        if (data.user) {
+          setUser(data.user);
+        } else {
+          await storage.deleteItem(AUTH_TOKEN_KEY);
+          setUser(null);
+        }
       }
     } catch {
       setUser(null);
@@ -94,6 +102,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [fetchUser]);
 
   useEffect(() => {
+    if (Platform.OS === "web") return;
     if (response?.type !== "success" || !request?.codeVerifier) return;
 
     const { code, state } = response.params;
@@ -137,6 +146,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [response, request, redirectUri, fetchUser]);
 
   const login = useCallback(async () => {
+    if (Platform.OS === "web") {
+      const apiBase = getApiBaseUrl();
+      window.location.href = `${apiBase}/api/login`;
+      return;
+    }
     try {
       await promptAsync();
     } catch (err) {
@@ -145,6 +159,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [promptAsync]);
 
   const logout = useCallback(async () => {
+    if (Platform.OS === "web") {
+      const apiBase = getApiBaseUrl();
+      window.location.href = `${apiBase}/api/logout`;
+      return;
+    }
     try {
       const token = await storage.getItem(AUTH_TOKEN_KEY);
       if (token) {

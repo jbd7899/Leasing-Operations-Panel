@@ -1,5 +1,6 @@
 import { setBaseUrl, setAuthTokenGetter } from "@workspace/api-client-react";
-import * as SecureStore from "expo-secure-store";
+import { Platform } from "react-native";
+import * as storage from "@/lib/storage";
 
 export const AUTH_TOKEN_KEY = "auth_session_token";
 
@@ -8,7 +9,9 @@ export function initApiClient() {
   if (domain) {
     setBaseUrl(`https://${domain}`);
   }
-  setAuthTokenGetter(() => SecureStore.getItemAsync(AUTH_TOKEN_KEY));
+  if (Platform.OS !== "web") {
+    setAuthTokenGetter(() => storage.getItem(AUTH_TOKEN_KEY));
+  }
 }
 
 const BASE = () => {
@@ -17,7 +20,10 @@ const BASE = () => {
 };
 
 async function authHeaders(): Promise<HeadersInit> {
-  const token = await SecureStore.getItemAsync(AUTH_TOKEN_KEY);
+  if (Platform.OS === "web") {
+    return { "Content-Type": "application/json" };
+  }
+  const token = await storage.getItem(AUTH_TOKEN_KEY);
   return {
     "Content-Type": "application/json",
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
