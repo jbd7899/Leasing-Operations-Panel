@@ -288,6 +288,7 @@ router.post("/prospects/:id/conflicts/:fieldName/resolve", async (req: Request, 
   const fieldToProspectKey: Record<string, string> = {
     firstName: "firstName",
     lastName: "lastName",
+    phone: "phonePrimary",
     email: "email",
     desiredBedrooms: "desiredBedrooms",
     desiredMoveInDate: "desiredMoveInDate",

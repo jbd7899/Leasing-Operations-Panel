@@ -6,6 +6,7 @@ import { logger } from "./logger";
 const CONFLICT_FIELDS: (keyof ProspectExtraction)[] = [
   "firstName",
   "lastName",
+  "phone",
   "email",
   "desiredBedrooms",
   "desiredMoveInDate",
@@ -21,6 +22,7 @@ function prospectValueForField(prospect: ProspectRow, field: keyof ProspectExtra
   switch (field) {
     case "firstName": return prospect.firstName ?? null;
     case "lastName": return prospect.lastName ?? null;
+    case "phone": return prospect.phonePrimary ?? null;
     case "email": return prospect.email ?? null;
     case "desiredBedrooms": return prospect.desiredBedrooms ?? null;
     case "desiredMoveInDate": return prospect.desiredMoveInDate ?? null;
@@ -51,6 +53,9 @@ async function detectAndStoreConflicts(
     const existingVal = prospectValueForField(prospect, field);
 
     if (existingVal == null) {
+      if (field === "phone") {
+        continue;
+      }
       const fieldMap: Partial<Record<keyof ProspectExtraction, Partial<ProspectRow>>> = {
         firstName: { firstName: extractedVal },
         lastName: { lastName: extractedVal },
