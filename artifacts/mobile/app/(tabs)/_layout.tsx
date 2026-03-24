@@ -88,13 +88,19 @@ function WebSidebarLayout() {
               <Pressable
                 key={item.name}
                 style={[sidebarStyles.navItem, isActive && sidebarStyles.navItemActive]}
-                onPress={() =>
-                  router.push(
-                    item.name === "index"
-                      ? "/(tabs)"
-                      : (`/(tabs)/${item.name}` as any),
-                  )
-                }
+                onPress={() => {
+                  if (item.name === "index") {
+                    router.push("/(tabs)");
+                  } else if (item.name === "prospects") {
+                    router.push("/(tabs)/prospects");
+                  } else if (item.name === "exports") {
+                    router.push("/(tabs)/exports");
+                  } else if (item.name === "analytics") {
+                    router.push("/(tabs)/analytics");
+                  } else if (item.name === "settings") {
+                    router.push("/(tabs)/settings");
+                  }
+                }}
               >
                 <Feather
                   name={item.icon}

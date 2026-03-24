@@ -27,6 +27,7 @@ PORT = "18115"
 BASE_PATH = "/mobile/"
 
 [[services]]
+kind = "web"
 name = "web"
 paths = [ "/" ]
 localPort = 18116
