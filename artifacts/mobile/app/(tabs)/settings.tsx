@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -26,11 +26,15 @@ import {
   useCreateProperty,
   useCreateTwilioNumber,
   useCreateUser,
+  useGetAccountSettings,
+  useUpdateAccountSettings,
+  useTestTwilioCredentials,
   getListPropertiesQueryKey,
   getListTwilioNumbersQueryKey,
   getListUsersQueryKey,
+  getGetAccountSettingsQueryKey,
 } from "@workspace/api-client-react";
-import type { Property, TwilioNumber, AccountUser } from "@workspace/api-client-react";
+import type { Property, TwilioNumber, AccountUser, AccountSettings } from "@workspace/api-client-react";
 
 function getWebhookBaseUrl(): string {
   const domain = process.env.EXPO_PUBLIC_DOMAIN;
@@ -538,6 +542,228 @@ function AddTeamMemberModal({
   );
 }
 
+function TwilioIntegrationModal({
+  visible,
+  onClose,
+  currentSettings,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  currentSettings: AccountSettings | null;
+}) {
+  const queryClient = useQueryClient();
+  const [accountSid, setAccountSid] = useState(currentSettings?.twilioAccountSid ?? "");
+  const [authToken, setAuthToken] = useState("");
+  const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
+  const [isTesting, setIsTesting] = useState(false);
+
+  useEffect(() => {
+    if (visible) {
+      setAccountSid(currentSettings?.twilioAccountSid ?? "");
+      setAuthToken("");
+      setTestResult(null);
+    }
+  }, [visible, currentSettings?.twilioAccountSid]);
+
+  const updateMutation = useUpdateAccountSettings({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getGetAccountSettingsQueryKey() });
+        Alert.alert("Saved", "Your Twilio credentials have been saved.");
+        onClose();
+      },
+      onError: (err: unknown) => Alert.alert("Error", String(err)),
+    },
+  });
+
+  const testMutation = useTestTwilioCredentials();
+
+  function handleClose() {
+    setTestResult(null);
+    setIsTesting(false);
+    onClose();
+  }
+
+  async function handleTest() {
+    const sid = accountSid.trim();
+    const token = authToken.trim();
+    if (!sid || !token) {
+      Alert.alert("Missing fields", "Enter both Account SID and Auth Token to test.");
+      return;
+    }
+    setIsTesting(true);
+    setTestResult(null);
+    try {
+      const result = await testMutation.mutateAsync({ data: { twilioAccountSid: sid, twilioAuthToken: token } });
+      if (result.ok) {
+        setTestResult({ ok: true, message: result.accountFriendlyName ? `Connected: ${result.accountFriendlyName}` : "Connected successfully!" });
+      } else {
+        setTestResult({ ok: false, message: result.error ?? "Connection failed." });
+      }
+    } catch (err) {
+      setTestResult({ ok: false, message: String(err) });
+    } finally {
+      setIsTesting(false);
+    }
+  }
+
+  function handleSave() {
+    const sid = accountSid.trim();
+    const token = authToken.trim();
+    if (!sid) { Alert.alert("Missing field", "Account SID is required."); return; }
+    if (!token) { Alert.alert("Missing field", "Auth Token is required."); return; }
+    updateMutation.mutate({ data: { twilioAccountSid: sid, twilioAuthToken: token } });
+  }
+
+  function handleDisconnect() {
+    Alert.alert(
+      "Disconnect Twilio",
+      "This will remove your Twilio credentials. Outbound SMS will stop working until you reconnect.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Disconnect",
+          style: "destructive",
+          onPress: () => {
+            updateMutation.mutate({ data: { twilioAccountSid: null, twilioAuthToken: null } });
+          },
+        },
+      ]
+    );
+  }
+
+  const isConnected = currentSettings?.twilioConfigured ?? false;
+  const canSave = accountSid.trim().length > 0 && authToken.trim().length > 0;
+
+  return (
+    <Modal
+      visible={visible}
+      animationType={Platform.OS === "web" ? "fade" : "slide"}
+      presentationStyle={Platform.OS === "web" ? "overFullScreen" : "pageSheet"}
+      onRequestClose={handleClose}
+    >
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+        <View style={modalStyles.container}>
+          <View style={modalStyles.header}>
+            <Text style={modalStyles.title}>Twilio Integration</Text>
+            <Pressable onPress={handleClose}>
+              <Feather name="x" size={22} color={Colors.dark.textSecondary} />
+            </Pressable>
+          </View>
+
+          <ScrollView style={modalStyles.body} keyboardShouldPersistTaps="handled">
+            <View style={integrationStyles.statusRow}>
+              <View style={[integrationStyles.statusDot, isConnected && integrationStyles.statusDotActive]} />
+              <Text style={integrationStyles.statusText}>
+                {isConnected ? "Connected" : "Not connected"}
+              </Text>
+            </View>
+
+            {isConnected && currentSettings?.twilioAccountSid && (
+              <View style={integrationStyles.maskedRow}>
+                <Feather name="check-circle" size={14} color={Colors.brand.tealLight} />
+                <Text style={integrationStyles.maskedText}>
+                  SID: {currentSettings.twilioAccountSid}
+                </Text>
+              </View>
+            )}
+            {isConnected && currentSettings?.twilioAuthTokenMasked && (
+              <View style={integrationStyles.maskedRow}>
+                <Feather name="lock" size={14} color={Colors.brand.tealLight} />
+                <Text style={integrationStyles.maskedText}>
+                  Token: {currentSettings.twilioAuthTokenMasked}
+                </Text>
+              </View>
+            )}
+
+            <Text style={[modalStyles.fieldLabel, { marginTop: 20 }]}>
+              {isConnected ? "Update" : "Enter"} Credentials
+            </Text>
+            <Text style={integrationStyles.hint}>
+              Find these in your Twilio Console at console.twilio.com
+            </Text>
+
+            <Text style={modalStyles.fieldLabel}>Account SID</Text>
+            <TextInput
+              value={accountSid}
+              onChangeText={setAccountSid}
+              placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+              placeholderTextColor={Colors.dark.textMuted}
+              style={modalStyles.input}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+
+            <Text style={modalStyles.fieldLabel}>Auth Token</Text>
+            <TextInput
+              value={authToken}
+              onChangeText={(v) => { setAuthToken(v); setTestResult(null); }}
+              placeholder={isConnected ? "Enter new token to update" : "Your Twilio Auth Token"}
+              placeholderTextColor={Colors.dark.textMuted}
+              style={modalStyles.input}
+              autoCapitalize="none"
+              autoCorrect={false}
+              secureTextEntry
+            />
+
+            {testResult && (
+              <View style={[webhookStyles.errorBanner, testResult.ok && integrationStyles.successBanner]}>
+                <Feather
+                  name={testResult.ok ? "check-circle" : "alert-circle"}
+                  size={14}
+                  color={testResult.ok ? Colors.brand.tealLight : "#FF6B6B"}
+                />
+                <Text style={[webhookStyles.errorText, testResult.ok && integrationStyles.successText]}>
+                  {testResult.message}
+                </Text>
+              </View>
+            )}
+
+            <Pressable
+              style={[integrationStyles.testBtn, (isTesting || !canSave) && integrationStyles.testBtnDisabled]}
+              onPress={handleTest}
+              disabled={isTesting || !canSave}
+            >
+              {isTesting ? (
+                <ActivityIndicator size="small" color={Colors.brand.tealLight} />
+              ) : (
+                <>
+                  <Feather name="zap" size={14} color={Colors.brand.tealLight} />
+                  <Text style={integrationStyles.testBtnText}>Test Connection</Text>
+                </>
+              )}
+            </Pressable>
+
+            {isConnected && (
+              <Pressable style={integrationStyles.disconnectBtn} onPress={handleDisconnect}>
+                <Feather name="trash-2" size={14} color="#FF6B6B" />
+                <Text style={integrationStyles.disconnectText}>Disconnect Twilio</Text>
+              </Pressable>
+            )}
+          </ScrollView>
+
+          <View style={modalStyles.footer}>
+            <Pressable style={modalStyles.cancelBtn} onPress={handleClose}>
+              <Text style={modalStyles.cancelBtnText}>Cancel</Text>
+            </Pressable>
+            <Pressable
+              style={[modalStyles.saveBtn, (!canSave || updateMutation.isPending) && modalStyles.saveBtnDisabled]}
+              onPress={handleSave}
+              disabled={!canSave || updateMutation.isPending}
+            >
+              {updateMutation.isPending ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Text style={modalStyles.saveBtnText}>Save Credentials</Text>
+              )}
+            </Pressable>
+          </View>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
 function PropertyCard({ property }: { property: Property }) {
   return (
     <View style={styles.propertyCard}>
@@ -617,6 +843,7 @@ export default function SettingsScreen() {
   const [showAddProperty, setShowAddProperty] = useState(false);
   const [showAddTwilioNumber, setShowAddTwilioNumber] = useState(false);
   const [showAddTeamMember, setShowAddTeamMember] = useState(false);
+  const [showTwilioIntegration, setShowTwilioIntegration] = useState(false);
   const [propertiesExpanded, setPropertiesExpanded] = useState(true);
   const [twilioExpanded, setTwilioExpanded] = useState(false);
   const [usersExpanded, setUsersExpanded] = useState(false);
@@ -624,6 +851,8 @@ export default function SettingsScreen() {
   const { data: authUserData } = useGetCurrentAuthUser();
   const currentRole = authUserData?.user?.role ?? null;
   const isAdminOrOwner = currentRole === "owner" || currentRole === "admin";
+
+  const { data: accountSettingsData } = useGetAccountSettings();
 
   const { data: propertiesData, isLoading: propertiesLoading } = useListProperties();
 
@@ -716,6 +945,32 @@ export default function SettingsScreen() {
               </Pressable>
             </>
           )}
+        </View>
+
+        {/* Integrations */}
+        <View style={styles.card}>
+          <SectionHeader title="INTEGRATIONS" />
+          <Pressable style={integrationStyles.integrationCard} onPress={() => setShowTwilioIntegration(true)}>
+            <View style={integrationStyles.integrationIconWrap}>
+              <Feather name="phone-call" size={16} color={Colors.brand.tealLight} />
+            </View>
+            <View style={integrationStyles.integrationInfo}>
+              <Text style={integrationStyles.integrationName}>Twilio</Text>
+              <Text style={integrationStyles.integrationDesc}>SMS & Voice — your account credentials</Text>
+            </View>
+            <View style={[
+              integrationStyles.integrationBadge,
+              accountSettingsData?.twilioConfigured && integrationStyles.integrationBadgeActive,
+            ]}>
+              <Text style={[
+                integrationStyles.integrationBadgeText,
+                accountSettingsData?.twilioConfigured && integrationStyles.integrationBadgeTextActive,
+              ]}>
+                {accountSettingsData?.twilioConfigured ? "Connected" : "Not set"}
+              </Text>
+            </View>
+            <Feather name="chevron-right" size={16} color={Colors.dark.textMuted} />
+          </Pressable>
         </View>
 
         {/* Twilio Numbers */}
@@ -868,6 +1123,12 @@ export default function SettingsScreen() {
         onCreated={() => {
           queryClient.invalidateQueries({ queryKey: getListUsersQueryKey() });
         }}
+      />
+
+      <TwilioIntegrationModal
+        visible={showTwilioIntegration}
+        onClose={() => setShowTwilioIntegration(false)}
+        currentSettings={accountSettingsData ?? null}
       />
     </View>
   );
@@ -1350,5 +1611,150 @@ const webhookStyles = StyleSheet.create({
     color: "#FF6B6B",
     marginTop: 4,
     marginLeft: 2,
+  },
+});
+
+const integrationStyles = StyleSheet.create({
+  integrationCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: Colors.dark.border,
+  },
+  integrationIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: "#0D2A2A",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  integrationInfo: {
+    flex: 1,
+    gap: 2,
+  },
+  integrationName: {
+    fontSize: 14,
+    fontFamily: "Inter_600SemiBold",
+    color: Colors.dark.text,
+  },
+  integrationDesc: {
+    fontSize: 12,
+    fontFamily: "Inter_400Regular",
+    color: Colors.dark.textSecondary,
+  },
+  integrationBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    backgroundColor: Colors.dark.bgElevated,
+    borderWidth: 1,
+    borderColor: Colors.dark.border,
+  },
+  integrationBadgeActive: {
+    backgroundColor: "#0D2A2A",
+    borderColor: Colors.brand.teal + "44",
+  },
+  integrationBadgeText: {
+    fontSize: 11,
+    fontFamily: "Inter_500Medium",
+    color: Colors.dark.textMuted,
+  },
+  integrationBadgeTextActive: {
+    color: Colors.brand.tealLight,
+  },
+  statusRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 8,
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: Colors.dark.textMuted,
+  },
+  statusDotActive: {
+    backgroundColor: Colors.brand.tealLight,
+  },
+  statusText: {
+    fontSize: 13,
+    fontFamily: "Inter_500Medium",
+    color: Colors.dark.textSecondary,
+  },
+  maskedRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    backgroundColor: "#0D2A2A",
+    borderRadius: 8,
+    marginBottom: 4,
+    borderWidth: 1,
+    borderColor: Colors.brand.teal + "44",
+  },
+  maskedText: {
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+    color: Colors.brand.tealLight,
+    flex: 1,
+  },
+  hint: {
+    fontSize: 12,
+    fontFamily: "Inter_400Regular",
+    color: Colors.dark.textMuted,
+    marginBottom: 8,
+    marginTop: 2,
+    lineHeight: 17,
+  },
+  testBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.brand.teal + "66",
+    backgroundColor: "#0D2A2A",
+    alignSelf: "flex-start",
+    marginTop: 14,
+  },
+  testBtnDisabled: {
+    opacity: 0.5,
+  },
+  testBtnText: {
+    fontSize: 14,
+    fontFamily: "Inter_500Medium",
+    color: Colors.brand.tealLight,
+  },
+  disconnectBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#FF6B6B44",
+    backgroundColor: "#2A0D0D",
+    alignSelf: "flex-start",
+    marginTop: 12,
+  },
+  disconnectText: {
+    fontSize: 14,
+    fontFamily: "Inter_500Medium",
+    color: "#FF6B6B",
+  },
+  successBanner: {
+    backgroundColor: "#0D2A2A",
+    borderColor: Colors.brand.teal + "44",
+  },
+  successText: {
+    color: Colors.brand.tealLight,
   },
 });

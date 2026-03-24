@@ -1,0 +1,147 @@
+import { Router, type IRouter, type Request, type Response } from "express";
+import { db, accountsTable } from "@workspace/db";
+import { eq } from "drizzle-orm";
+import twilio from "twilio";
+import { logger } from "../lib/logger";
+
+const router: IRouter = Router();
+
+function requireAuth(req: Request, res: Response): boolean {
+  if (!req.isAuthenticated()) {
+    res.status(401).json({ error: "Unauthorized" });
+    return false;
+  }
+  return true;
+}
+
+function maskToken(token: string | null | undefined): string | null {
+  if (!token) return null;
+  if (token.length <= 8) return "••••••••";
+  return token.slice(0, 4) + "••••••••••••" + token.slice(-4);
+}
+
+router.get("/settings/account", async (req: Request, res: Response) => {
+  if (!requireAuth(req, res)) return;
+  const { accountId } = req.user!;
+
+  const [account] = await db
+    .select({
+      id: accountsTable.id,
+      name: accountsTable.name,
+      plan: accountsTable.plan,
+      twilioAccountSid: accountsTable.twilioAccountSid,
+      twilioAuthToken: accountsTable.twilioAuthToken,
+    })
+    .from(accountsTable)
+    .where(eq(accountsTable.id, accountId));
+
+  if (!account) {
+    res.status(404).json({ error: "Account not found" });
+    return;
+  }
+
+  res.json({
+    id: account.id,
+    name: account.name,
+    plan: account.plan,
+    twilioConfigured: !!(account.twilioAccountSid && account.twilioAuthToken),
+    twilioAccountSid: account.twilioAccountSid ?? null,
+    twilioAuthTokenMasked: maskToken(account.twilioAuthToken),
+  });
+});
+
+router.put("/settings/account", async (req: Request, res: Response) => {
+  if (!requireAuth(req, res)) return;
+  const { accountId } = req.user!;
+
+  const { twilioAccountSid, twilioAuthToken } = req.body as {
+    twilioAccountSid?: string | null;
+    twilioAuthToken?: string | null;
+  };
+
+  const updates: Record<string, unknown> = { updatedAt: new Date() };
+
+  if (twilioAccountSid !== undefined) {
+    updates.twilioAccountSid = twilioAccountSid?.trim() || null;
+  }
+  if (twilioAuthToken !== undefined) {
+    updates.twilioAuthToken = twilioAuthToken?.trim() || null;
+  }
+
+  const [account] = await db
+    .update(accountsTable)
+    .set(updates)
+    .where(eq(accountsTable.id, accountId))
+    .returning({
+      id: accountsTable.id,
+      name: accountsTable.name,
+      plan: accountsTable.plan,
+      twilioAccountSid: accountsTable.twilioAccountSid,
+      twilioAuthToken: accountsTable.twilioAuthToken,
+    });
+
+  if (!account) {
+    res.status(404).json({ error: "Account not found" });
+    return;
+  }
+
+  logger.info({ accountId }, "Account Twilio credentials updated");
+
+  res.json({
+    id: account.id,
+    name: account.name,
+    plan: account.plan,
+    twilioConfigured: !!(account.twilioAccountSid && account.twilioAuthToken),
+    twilioAccountSid: account.twilioAccountSid ?? null,
+    twilioAuthTokenMasked: maskToken(account.twilioAuthToken),
+  });
+});
+
+router.post("/settings/account/test-twilio", async (req: Request, res: Response) => {
+  if (!requireAuth(req, res)) return;
+  const { accountId } = req.user!;
+
+  const { twilioAccountSid, twilioAuthToken } = req.body as {
+    twilioAccountSid?: string;
+    twilioAuthToken?: string;
+  };
+
+  const sid = twilioAccountSid?.trim();
+  const token = twilioAuthToken?.trim();
+
+  if (!sid || !token) {
+    res.status(400).json({ error: "twilioAccountSid and twilioAuthToken are required" });
+    return;
+  }
+
+  try {
+    const client = twilio(sid, token);
+    const account = await client.api.accounts(sid).fetch();
+    res.json({
+      ok: true,
+      accountFriendlyName: account.friendlyName ?? null,
+    });
+  } catch (err) {
+    logger.warn({ accountId, err }, "Twilio credential test failed");
+    const msg = err instanceof Error ? err.message : String(err);
+    res.status(200).json({ ok: false, error: msg });
+  }
+});
+
+export async function getTwilioClientForAccount(accountId: string): Promise<ReturnType<typeof twilio> | null> {
+  const [account] = await db
+    .select({
+      twilioAccountSid: accountsTable.twilioAccountSid,
+      twilioAuthToken: accountsTable.twilioAuthToken,
+    })
+    .from(accountsTable)
+    .where(eq(accountsTable.id, accountId));
+
+  const sid = account?.twilioAccountSid || process.env.TWILIO_ACCOUNT_SID;
+  const token = account?.twilioAuthToken || process.env.TWILIO_AUTH_TOKEN;
+
+  if (!sid || !token) return null;
+  return twilio(sid, token);
+}
+
+export default router;

@@ -98,9 +98,10 @@ Expo React Native mobile app — MyRentCard Leasing Operations Panel. Uses file-
 - Entry: `app/_layout.tsx` — Root layout with AuthProvider, QueryClientProvider, font loading, and Stack nav
 - Auth: `lib/auth.tsx` — Replit OIDC PKCE flow via expo-auth-session; token stored in expo-secure-store
 - API client: `lib/api.ts` — Custom fetch wrapper using expo-secure-store for Bearer token
-- Tabs: `app/(tabs)/` — index (Inbox), prospects, exports, settings
+- Tabs: `app/(tabs)/` — index (Inbox), prospects, exports, settings, analytics
 - Screens: `app/prospect/[id].tsx` (detail), `app/interaction/[id].tsx` (review + AI apply), `app/export-modal.tsx`
 - Components: `components/ui/` — Badge, InboxItem, ProspectCard, SearchBar, SkeletonLoader, EmptyState
+- Settings tab includes an "Integrations" section where users can connect their own Twilio account (Account SID + Auth Token stored in DB per account)
 
 Key packages: expo-auth-session, expo-secure-store, expo-crypto, @tanstack/react-query, expo-haptics
 

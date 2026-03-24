@@ -17,6 +17,7 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
+  AccountSettings,
   AccountUser,
   AddNoteBody,
   AuthUserEnvelope,
@@ -50,8 +51,11 @@ import type {
   SetTagsBody,
   Tag,
   TagList,
+  TestTwilioBody,
+  TestTwilioResult,
   TwilioNumber,
   TwilioNumberList,
+  UpdateAccountSettingsBody,
   UpdatePropertyBody,
   UpdateProspectBody,
   UpdateTwilioNumberBody,
@@ -2920,4 +2924,211 @@ export const useRetryExtraction = <
   TContext
 > => {
   return useMutation(getRetryExtractionMutationOptions(options));
+};
+
+// ─── Account Settings ───────────────────────────────────────────────────────
+
+export const getAccountSettingsUrl = () => {
+  return `/api/settings/account`;
+};
+
+export const getAccountSettings = async (
+  options?: RequestInit,
+): Promise<AccountSettings> => {
+  return customFetch<AccountSettings>(getAccountSettingsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetAccountSettingsQueryKey = () => {
+  return [`/api/settings/account`] as const;
+};
+
+export const getGetAccountSettingsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getAccountSettings>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getAccountSettings>>, TError, TData>>;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+  const queryKey = queryOptions?.queryKey ?? getGetAccountSettingsQueryKey();
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getAccountSettings>>> = () =>
+    getAccountSettings(requestOptions);
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getAccountSettings>>,
+    TError,
+    TData
+  >;
+};
+
+export type GetAccountSettingsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getAccountSettings>>
+>;
+export type GetAccountSettingsQueryError = ErrorType<unknown>;
+
+export const useGetAccountSettings = <
+  TData = Awaited<ReturnType<typeof getAccountSettings>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getAccountSettings>>, TError, TData>>;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } => {
+  const queryOptions = getGetAccountSettingsQueryOptions(options);
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: QueryKey };
+  query.queryKey = queryOptions.queryKey;
+  return query;
+};
+
+export const updateAccountSettings = async (
+  updateAccountSettingsBody: BodyType<UpdateAccountSettingsBody>,
+  options?: RequestInit,
+): Promise<AccountSettings> => {
+  return customFetch<AccountSettings>(getAccountSettingsUrl(), {
+    ...options,
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateAccountSettingsBody),
+  });
+};
+
+export const getUpdateAccountSettingsMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateAccountSettings>>,
+    TError,
+    { data: BodyType<UpdateAccountSettingsBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateAccountSettings>>,
+  TError,
+  { data: BodyType<UpdateAccountSettingsBody> },
+  TContext
+> => {
+  const mutationKey = ["updateAccountSettings"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateAccountSettings>>,
+    { data: BodyType<UpdateAccountSettingsBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+    return updateAccountSettings(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateAccountSettingsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateAccountSettings>>
+>;
+export type UpdateAccountSettingsMutationError = ErrorType<unknown>;
+
+export const useUpdateAccountSettings = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateAccountSettings>>,
+    TError,
+    { data: BodyType<UpdateAccountSettingsBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateAccountSettings>>,
+  TError,
+  { data: BodyType<UpdateAccountSettingsBody> },
+  TContext
+> => {
+  return useMutation(getUpdateAccountSettingsMutationOptions(options));
+};
+
+export const getTestTwilioCredentialsUrl = () => {
+  return `/api/settings/account/test-twilio`;
+};
+
+export const testTwilioCredentials = async (
+  testTwilioBody: BodyType<TestTwilioBody>,
+  options?: RequestInit,
+): Promise<TestTwilioResult> => {
+  return customFetch<TestTwilioResult>(getTestTwilioCredentialsUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(testTwilioBody),
+  });
+};
+
+export const getTestTwilioCredentialsMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof testTwilioCredentials>>,
+    TError,
+    { data: BodyType<TestTwilioBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof testTwilioCredentials>>,
+  TError,
+  { data: BodyType<TestTwilioBody> },
+  TContext
+> => {
+  const mutationKey = ["testTwilioCredentials"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof testTwilioCredentials>>,
+    { data: BodyType<TestTwilioBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+    return testTwilioCredentials(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type TestTwilioCredentialsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof testTwilioCredentials>>
+>;
+export type TestTwilioCredentialsMutationError = ErrorType<unknown>;
+
+export const useTestTwilioCredentials = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof testTwilioCredentials>>,
+    TError,
+    { data: BodyType<TestTwilioBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof testTwilioCredentials>>,
+  TError,
+  { data: BodyType<TestTwilioBody> },
+  TContext
+> => {
+  return useMutation(getTestTwilioCredentialsMutationOptions(options));
 };

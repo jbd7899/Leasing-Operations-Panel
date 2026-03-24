@@ -8,6 +8,8 @@ export const accountsTable = pgTable("accounts", {
   name: varchar("name", { length: 255 }).notNull(),
   myrentcardAccountId: varchar("myrentcard_account_id", { length: 255 }),
   plan: varchar("plan", { length: 50 }).notNull().default("free"),
+  twilioAccountSid: varchar("twilio_account_sid", { length: 100 }),
+  twilioAuthToken: varchar("twilio_auth_token", { length: 100 }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

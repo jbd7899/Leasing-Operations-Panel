@@ -415,3 +415,36 @@ export type GetInboxParams = {
 };
 
 export type DownloadExport200Two = { [key: string]: unknown };
+
+
+export interface AccountSettings {
+  id: string;
+  name: string;
+  plan: string;
+  /** True if both twilioAccountSid and twilioAuthToken are stored for this account */
+  twilioConfigured: boolean;
+  /** The stored Twilio Account SID (shown in full) @nullable */
+  twilioAccountSid?: string | null;
+  /** The Twilio Auth Token, masked for display (e.g. AC12••••••••1234) @nullable */
+  twilioAuthTokenMasked?: string | null;
+}
+
+export interface UpdateAccountSettingsBody {
+  /** Twilio Account SID (starts with AC). Pass null to clear. @nullable */
+  twilioAccountSid?: string | null;
+  /** Twilio Auth Token. Pass null to clear. @nullable */
+  twilioAuthToken?: string | null;
+}
+
+export interface TestTwilioBody {
+  twilioAccountSid: string;
+  twilioAuthToken: string;
+}
+
+export interface TestTwilioResult {
+  ok: boolean;
+  /** Friendly name from Twilio if credentials are valid @nullable */
+  accountFriendlyName?: string | null;
+  /** Error message if credentials are invalid @nullable */
+  error?: string | null;
+}

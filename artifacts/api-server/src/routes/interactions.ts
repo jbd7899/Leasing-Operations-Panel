@@ -1,10 +1,10 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { db, interactionsTable, prospectsTable, propertiesTable, twilioNumbersTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
-import twilio from "twilio";
 import { logger } from "../lib/logger";
 import { processInteraction } from "../lib/processInteraction";
 import { normalizePhoneE164, findOrCreateProspectShell } from "../lib/prospectShell";
+import { getTwilioClientForAccount } from "./settings";
 
 const router: IRouter = Router();
 
@@ -14,13 +14,6 @@ function requireAuth(req: Request, res: Response): boolean {
     return false;
   }
   return true;
-}
-
-function getTwilioClient(): ReturnType<typeof twilio> | null {
-  const accountSid = process.env.TWILIO_ACCOUNT_SID;
-  const authToken = process.env.TWILIO_AUTH_TOKEN;
-  if (!accountSid || !authToken) return null;
-  return twilio(accountSid, authToken);
 }
 
 router.get("/interactions/:id", async (req: Request, res: Response) => {
@@ -150,9 +143,9 @@ router.post("/interactions/initiate-sms", async (req: Request, res: Response) =>
     .where(and(eq(prospectsTable.id, prospectId), eq(prospectsTable.accountId, accountId)))
     .limit(1);
 
-  const client = getTwilioClient();
+  const client = await getTwilioClientForAccount(accountId);
   if (!client) {
-    res.status(503).json({ error: "Twilio is not configured on this server. Set TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN." });
+    res.status(503).json({ error: "Twilio is not configured for this account. Add your Twilio Account SID and Auth Token in Settings → Integrations." });
     return;
   }
 
@@ -244,9 +237,9 @@ router.post("/interactions/send-sms", async (req: Request, res: Response) => {
     twilioNumber = numbers[0];
   }
 
-  const client = getTwilioClient();
+  const client = await getTwilioClientForAccount(accountId);
   if (!client) {
-    res.status(503).json({ error: "Twilio is not configured on this server. Set TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN." });
+    res.status(503).json({ error: "Twilio is not configured for this account. Add your Twilio Account SID and Auth Token in Settings → Integrations." });
     return;
   }
 

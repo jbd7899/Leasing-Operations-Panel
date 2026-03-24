@@ -31,6 +31,8 @@ tags:
     description: Twilio webhook endpoints
   - name: Internal
     description: Internal processing endpoints
+  - name: AccountSettings
+    description: Account-level settings including integration credentials
 
 paths:
   /healthz:
@@ -631,6 +633,63 @@ paths:
             application/json:
               schema:
                 type: object
+
+  # Account Settings
+  /settings/account:
+    get:
+      tags: [AccountSettings]
+      operationId: getAccountSettings
+      summary: Get account settings including Twilio configuration
+      responses:
+        '200':
+          description: Account settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountSettings'
+        '401':
+          description: Unauthorized
+    put:
+      tags: [AccountSettings]
+      operationId: updateAccountSettings
+      summary: Update account settings (e.g. Twilio credentials)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateAccountSettingsBody'
+      responses:
+        '200':
+          description: Updated account settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountSettings'
+        '401':
+          description: Unauthorized
+  /settings/account/test-twilio:
+    post:
+      tags: [AccountSettings]
+      operationId: testTwilioCredentials
+      summary: Test Twilio credentials without saving them
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TestTwilioBody'
+      responses:
+        '200':
+          description: Test result (ok=true on success, ok=false with error message on failure)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestTwilioResult'
+        '400':
+          description: Missing credentials
+        '401':
+          description: Unauthorized
 
   # Webhooks
   /webhooks/twilio/sms:
@@ -1301,3 +1360,53 @@ components:
           enum: [csv, json]
         targetSystem:
           type: string
+
+    # Account Settings schemas
+    AccountSettings:
+      type: object
+      required: [id, name, plan, twilioConfigured]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        plan:
+          type: string
+        twilioConfigured:
+          type: boolean
+          description: True if both twilioAccountSid and twilioAuthToken are stored for this account
+        twilioAccountSid:
+          type: [string, 'null']
+          description: The stored Twilio Account SID (shown in full)
+        twilioAuthTokenMasked:
+          type: [string, 'null']
+          description: The Twilio Auth Token, masked for display (e.g. AC12••••••••1234)
+    UpdateAccountSettingsBody:
+      type: object
+      properties:
+        twilioAccountSid:
+          type: [string, 'null']
+          description: Twilio Account SID (starts with AC). Pass null to clear.
+        twilioAuthToken:
+          type: [string, 'null']
+          description: Twilio Auth Token. Pass null to clear.
+    TestTwilioBody:
+      type: object
+      required: [twilioAccountSid, twilioAuthToken]
+      properties:
+        twilioAccountSid:
+          type: string
+        twilioAuthToken:
+          type: string
+    TestTwilioResult:
+      type: object
+      required: [ok]
+      properties:
+        ok:
+          type: boolean
+        accountFriendlyName:
+          type: [string, 'null']
+          description: Friendly name from Twilio if credentials are valid
+        error:
+          type: [string, 'null']
+          description: Error message if credentials are invalid
