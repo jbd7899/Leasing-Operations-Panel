@@ -6,8 +6,16 @@ import {
   notesTable,
   tagsTable,
   prospectTagsTable,
+  propertiesTable,
 } from "@workspace/db";
 import { eq, and, or, ilike, inArray, sql } from "drizzle-orm";
+
+async function validatePropertyOwnership(propertyId: string, accountId: string): Promise<boolean> {
+  const [property] = await db.select({ id: propertiesTable.id })
+    .from(propertiesTable)
+    .where(and(eq(propertiesTable.id, propertyId), eq(propertiesTable.accountId, accountId)));
+  return !!property;
+}
 
 const router: IRouter = Router();
 
@@ -62,6 +70,11 @@ router.post("/prospects", async (req: Request, res: Response) => {
 
   const { phonePrimary, firstName, lastName, email, assignedPropertyId, status } = req.body;
   if (!phonePrimary) { res.status(400).json({ error: "phonePrimary is required" }); return; }
+
+  if (assignedPropertyId) {
+    const valid = await validatePropertyOwnership(assignedPropertyId, accountId);
+    if (!valid) { res.status(400).json({ error: "assignedPropertyId does not belong to this account" }); return; }
+  }
 
   const fullName = [firstName, lastName].filter(Boolean).join(" ") || null;
 
@@ -124,6 +137,11 @@ router.patch("/prospects/:id", async (req: Request, res: Response) => {
   const updates: Record<string, unknown> = {};
   for (const field of allowedFields) {
     if (req.body[field] !== undefined) updates[field] = req.body[field];
+  }
+
+  if (updates.assignedPropertyId) {
+    const valid = await validatePropertyOwnership(updates.assignedPropertyId as string, accountId);
+    if (!valid) { res.status(400).json({ error: "assignedPropertyId does not belong to this account" }); return; }
   }
 
   if (updates.firstName !== undefined || updates.lastName !== undefined) {

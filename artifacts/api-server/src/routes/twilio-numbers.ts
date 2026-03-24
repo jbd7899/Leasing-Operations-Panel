@@ -1,5 +1,5 @@
 import { Router, type IRouter, type Request, type Response } from "express";
-import { db, twilioNumbersTable } from "@workspace/db";
+import { db, twilioNumbersTable, propertiesTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 
 const ADMIN_ROLES = new Set(["owner", "admin"]);
@@ -23,6 +23,13 @@ function requireAdmin(req: Request, res: Response): boolean {
   return true;
 }
 
+async function validatePropertyOwnership(propertyId: string, accountId: string): Promise<boolean> {
+  const [property] = await db.select({ id: propertiesTable.id })
+    .from(propertiesTable)
+    .where(and(eq(propertiesTable.id, propertyId), eq(propertiesTable.accountId, accountId)));
+  return !!property;
+}
+
 router.get("/twilio-numbers", async (req: Request, res: Response) => {
   if (!requireAuth(req, res)) return;
   const { accountId } = req.user!;
@@ -43,6 +50,11 @@ router.post("/twilio-numbers", async (req: Request, res: Response) => {
   const { phoneNumber, friendlyName, propertyId, purpose } = req.body;
   if (!phoneNumber) { res.status(400).json({ error: "phoneNumber is required" }); return; }
 
+  if (propertyId) {
+    const valid = await validatePropertyOwnership(propertyId, accountId);
+    if (!valid) { res.status(400).json({ error: "propertyId does not belong to this account" }); return; }
+  }
+
   const [number] = await db
     .insert(twilioNumbersTable)
     .values({ accountId, phoneNumber, friendlyName, propertyId, purpose })
@@ -57,6 +69,11 @@ router.patch("/twilio-numbers/:id", async (req: Request, res: Response) => {
 
   const { id } = req.params;
   const { friendlyName, propertyId, purpose, isActive } = req.body;
+
+  if (propertyId !== undefined) {
+    const valid = await validatePropertyOwnership(propertyId, accountId);
+    if (!valid) { res.status(400).json({ error: "propertyId does not belong to this account" }); return; }
+  }
 
   const updates: Record<string, unknown> = {};
   if (friendlyName !== undefined) updates.friendlyName = friendlyName;
