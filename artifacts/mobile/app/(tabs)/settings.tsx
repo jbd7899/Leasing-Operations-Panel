@@ -11,6 +11,7 @@ import {
   Modal,
   KeyboardAvoidingView,
   Platform,
+  Clipboard,
 } from "react-native";
 import { useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
@@ -22,11 +23,18 @@ import {
   useListTwilioNumbers,
   useListUsers,
   useCreateProperty,
+  useCreateTwilioNumber,
+  useCreateUser,
   getListPropertiesQueryKey,
   getListTwilioNumbersQueryKey,
   getListUsersQueryKey,
 } from "@workspace/api-client-react";
 import type { Property, TwilioNumber, AccountUser } from "@workspace/api-client-react";
+
+function getWebhookBaseUrl(): string {
+  const domain = process.env.EXPO_PUBLIC_DOMAIN;
+  return domain ? `https://${domain}` : "";
+}
 
 function SectionHeader({ title }: { title: string }) {
   return <Text style={styles.sectionHeader}>{title}</Text>;
@@ -170,6 +178,328 @@ function AddPropertyModal({
   );
 }
 
+function AddTwilioNumberModal({
+  visible,
+  onClose,
+  onCreated,
+  properties,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  onCreated: () => void;
+  properties: Property[];
+}) {
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [friendlyName, setFriendlyName] = useState("");
+  const [purpose, setPurpose] = useState("");
+  const [selectedPropertyId, setSelectedPropertyId] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
+  const [error, setError] = useState("");
+
+  const createMutation = useCreateTwilioNumber({
+    mutation: {
+      onSuccess: () => {
+        setSuccess(true);
+        onCreated();
+      },
+      onError: (err: unknown) => {
+        const msg = err instanceof Error ? err.message : String(err);
+        setError(msg.includes("403") ? "You need admin or owner role to add numbers." : msg);
+      },
+    },
+  });
+
+  function handleClose() {
+    setPhoneNumber("");
+    setFriendlyName("");
+    setPurpose("");
+    setSelectedPropertyId(null);
+    setSuccess(false);
+    setError("");
+    onClose();
+  }
+
+  const smsUrl = `${getWebhookBaseUrl()}/api/webhooks/twilio/sms`;
+  const voiceUrl = `${getWebhookBaseUrl()}/api/webhooks/twilio/voice`;
+
+  return (
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={handleClose}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+        <View style={modalStyles.container}>
+          <View style={modalStyles.header}>
+            <Text style={modalStyles.title}>{success ? "Number Added!" : "Add Twilio Number"}</Text>
+            <Pressable onPress={handleClose}>
+              <Feather name="x" size={22} color={Colors.dark.textSecondary} />
+            </Pressable>
+          </View>
+
+          {success ? (
+            <ScrollView style={modalStyles.body}>
+              <View style={webhookStyles.successBanner}>
+                <Feather name="check-circle" size={20} color={Colors.brand.tealLight} />
+                <Text style={webhookStyles.successText}>
+                  {phoneNumber} has been registered. Now configure Twilio to send webhooks to these URLs:
+                </Text>
+              </View>
+              <Text style={modalStyles.fieldLabel}>SMS Webhook URL</Text>
+              <Pressable
+                style={webhookStyles.urlBox}
+                onPress={() => {
+                  Clipboard.setString(smsUrl);
+                  Alert.alert("Copied", "SMS webhook URL copied to clipboard.");
+                }}
+              >
+                <Text style={webhookStyles.urlText} numberOfLines={2}>{smsUrl}</Text>
+                <Feather name="copy" size={14} color={Colors.brand.tealLight} />
+              </Pressable>
+              <Text style={modalStyles.fieldLabel}>Voice Webhook URL</Text>
+              <Pressable
+                style={webhookStyles.urlBox}
+                onPress={() => {
+                  Clipboard.setString(voiceUrl);
+                  Alert.alert("Copied", "Voice webhook URL copied to clipboard.");
+                }}
+              >
+                <Text style={webhookStyles.urlText} numberOfLines={2}>{voiceUrl}</Text>
+                <Feather name="copy" size={14} color={Colors.brand.tealLight} />
+              </Pressable>
+              <Text style={webhookStyles.hint}>
+                In your Twilio console, open the phone number settings and paste these URLs into the "A call comes in" and "A message comes in" fields. Set the method to HTTP POST.
+              </Text>
+            </ScrollView>
+          ) : (
+            <ScrollView style={modalStyles.body} keyboardShouldPersistTaps="handled">
+              {error ? (
+                <View style={webhookStyles.errorBanner}>
+                  <Feather name="alert-circle" size={14} color="#FF6B6B" />
+                  <Text style={webhookStyles.errorText}>{error}</Text>
+                </View>
+              ) : null}
+              <Text style={modalStyles.fieldLabel}>Phone Number * (E.164 format)</Text>
+              <TextInput
+                value={phoneNumber}
+                onChangeText={setPhoneNumber}
+                placeholder="+15035551234"
+                placeholderTextColor={Colors.dark.textMuted}
+                style={modalStyles.input}
+                keyboardType="phone-pad"
+                autoCorrect={false}
+              />
+              <Text style={modalStyles.fieldLabel}>Friendly Name</Text>
+              <TextInput
+                value={friendlyName}
+                onChangeText={setFriendlyName}
+                placeholder="e.g. Leasing Office Line"
+                placeholderTextColor={Colors.dark.textMuted}
+                style={modalStyles.input}
+              />
+              <Text style={modalStyles.fieldLabel}>Purpose</Text>
+              <TextInput
+                value={purpose}
+                onChangeText={setPurpose}
+                placeholder="e.g. Main leasing intake"
+                placeholderTextColor={Colors.dark.textMuted}
+                style={modalStyles.input}
+              />
+              {properties.length > 0 && (
+                <>
+                  <Text style={modalStyles.fieldLabel}>Assign to Property (optional)</Text>
+                  <View style={webhookStyles.propertyChips}>
+                    <Pressable
+                      style={[webhookStyles.propertyChip, !selectedPropertyId && webhookStyles.propertyChipSelected]}
+                      onPress={() => setSelectedPropertyId(null)}
+                    >
+                      <Text style={[webhookStyles.propertyChipText, !selectedPropertyId && webhookStyles.propertyChipTextSelected]}>
+                        None
+                      </Text>
+                    </Pressable>
+                    {properties.map((p) => (
+                      <Pressable
+                        key={p.id}
+                        style={[webhookStyles.propertyChip, selectedPropertyId === p.id && webhookStyles.propertyChipSelected]}
+                        onPress={() => setSelectedPropertyId(p.id)}
+                      >
+                        <Text style={[webhookStyles.propertyChipText, selectedPropertyId === p.id && webhookStyles.propertyChipTextSelected]}>
+                          {p.name}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                </>
+              )}
+            </ScrollView>
+          )}
+
+          <View style={modalStyles.footer}>
+            <Pressable style={modalStyles.cancelBtn} onPress={handleClose}>
+              <Text style={modalStyles.cancelBtnText}>{success ? "Close" : "Cancel"}</Text>
+            </Pressable>
+            {!success && (
+              <Pressable
+                style={[
+                  modalStyles.saveBtn,
+                  (!phoneNumber.trim() || createMutation.isPending) && modalStyles.saveBtnDisabled,
+                ]}
+                onPress={() => {
+                  setError("");
+                  createMutation.mutate({
+                    data: {
+                      phoneNumber: phoneNumber.trim(),
+                      friendlyName: friendlyName.trim() || undefined,
+                      purpose: purpose.trim() || undefined,
+                      propertyId: selectedPropertyId ?? undefined,
+                    },
+                  });
+                }}
+                disabled={!phoneNumber.trim() || createMutation.isPending}
+              >
+                {createMutation.isPending ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={modalStyles.saveBtnText}>Add Number</Text>
+                )}
+              </Pressable>
+            )}
+          </View>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
+const ROLE_OPTIONS = [
+  { label: "Agent", value: "agent" },
+  { label: "Admin", value: "admin" },
+];
+
+function AddTeamMemberModal({
+  visible,
+  onClose,
+  onCreated,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  onCreated: () => void;
+}) {
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [role, setRole] = useState<"agent" | "admin">("agent");
+  const [error, setError] = useState("");
+
+  const createMutation = useCreateUser({
+    mutation: {
+      onSuccess: () => {
+        onCreated();
+        onClose();
+        setName("");
+        setEmail("");
+        setRole("agent");
+        setError("");
+      },
+      onError: (err: unknown) => {
+        const msg = err instanceof Error ? err.message : String(err);
+        setError(msg.includes("403") ? "You need admin or owner role to invite members." : msg);
+      },
+    },
+  });
+
+  function handleClose() {
+    setName("");
+    setEmail("");
+    setRole("agent");
+    setError("");
+    onClose();
+  }
+
+  const isValid = email.trim().includes("@");
+
+  return (
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={handleClose}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+        <View style={modalStyles.container}>
+          <View style={modalStyles.header}>
+            <Text style={modalStyles.title}>Invite Team Member</Text>
+            <Pressable onPress={handleClose}>
+              <Feather name="x" size={22} color={Colors.dark.textSecondary} />
+            </Pressable>
+          </View>
+
+          <ScrollView style={modalStyles.body} keyboardShouldPersistTaps="handled">
+            {error ? (
+              <View style={webhookStyles.errorBanner}>
+                <Feather name="alert-circle" size={14} color="#FF6B6B" />
+                <Text style={webhookStyles.errorText}>{error}</Text>
+              </View>
+            ) : null}
+            <Text style={modalStyles.fieldLabel}>Full Name</Text>
+            <TextInput
+              value={name}
+              onChangeText={setName}
+              placeholder="e.g. Jordan Rivera"
+              placeholderTextColor={Colors.dark.textMuted}
+              style={modalStyles.input}
+            />
+            <Text style={modalStyles.fieldLabel}>Email *</Text>
+            <TextInput
+              value={email}
+              onChangeText={setEmail}
+              placeholder="e.g. jordan@yourcompany.com"
+              placeholderTextColor={Colors.dark.textMuted}
+              style={modalStyles.input}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            <Text style={modalStyles.fieldLabel}>Role</Text>
+            <View style={webhookStyles.propertyChips}>
+              {ROLE_OPTIONS.map((opt) => (
+                <Pressable
+                  key={opt.value}
+                  style={[webhookStyles.propertyChip, role === opt.value && webhookStyles.propertyChipSelected]}
+                  onPress={() => setRole(opt.value as "agent" | "admin")}
+                >
+                  <Text style={[webhookStyles.propertyChipText, role === opt.value && webhookStyles.propertyChipTextSelected]}>
+                    {opt.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+            <Text style={webhookStyles.hint}>
+              This member will be able to sign in with their Replit account using {email || "the email above"} and access your leasing panel.
+            </Text>
+          </ScrollView>
+
+          <View style={modalStyles.footer}>
+            <Pressable style={modalStyles.cancelBtn} onPress={handleClose}>
+              <Text style={modalStyles.cancelBtnText}>Cancel</Text>
+            </Pressable>
+            <Pressable
+              style={[modalStyles.saveBtn, (!isValid || createMutation.isPending) && modalStyles.saveBtnDisabled]}
+              onPress={() => {
+                setError("");
+                createMutation.mutate({
+                  data: {
+                    email: email.trim(),
+                    name: name.trim() || undefined,
+                    role,
+                  },
+                });
+              }}
+              disabled={!isValid || createMutation.isPending}
+            >
+              {createMutation.isPending ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Text style={modalStyles.saveBtnText}>Send Invite</Text>
+              )}
+            </Pressable>
+          </View>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
 function PropertyCard({ property }: { property: Property }) {
   return (
     <View style={styles.propertyCard}>
@@ -247,6 +577,8 @@ export default function SettingsScreen() {
   const { user, logout } = useAuth();
   const queryClient = useQueryClient();
   const [showAddProperty, setShowAddProperty] = useState(false);
+  const [showAddTwilioNumber, setShowAddTwilioNumber] = useState(false);
+  const [showAddTeamMember, setShowAddTeamMember] = useState(false);
   const [propertiesExpanded, setPropertiesExpanded] = useState(true);
   const [twilioExpanded, setTwilioExpanded] = useState(false);
   const [usersExpanded, setUsersExpanded] = useState(false);
@@ -367,6 +699,13 @@ export default function SettingsScreen() {
               ) : (
                 twilioNumbers.map((n) => <TwilioNumberCard key={n.id} number={n} />)
               )}
+              <Pressable
+                style={[styles.addBtn, { marginTop: 8 }]}
+                onPress={() => setShowAddTwilioNumber(true)}
+              >
+                <Feather name="plus" size={14} color={Colors.brand.tealLight} />
+                <Text style={styles.addBtnText}>Add Number</Text>
+              </Pressable>
             </>
           )}
         </View>
@@ -396,6 +735,13 @@ export default function SettingsScreen() {
               ) : (
                 users.map((u) => <UserCard key={u.id} user={u} />)
               )}
+              <Pressable
+                style={[styles.addBtn, { marginTop: 8 }]}
+                onPress={() => setShowAddTeamMember(true)}
+              >
+                <Feather name="user-plus" size={14} color={Colors.brand.tealLight} />
+                <Text style={styles.addBtnText}>Invite Member</Text>
+              </Pressable>
             </>
           )}
         </View>
@@ -414,6 +760,23 @@ export default function SettingsScreen() {
         onClose={() => setShowAddProperty(false)}
         onCreated={() => {
           queryClient.invalidateQueries({ queryKey: getListPropertiesQueryKey() });
+        }}
+      />
+
+      <AddTwilioNumberModal
+        visible={showAddTwilioNumber}
+        onClose={() => setShowAddTwilioNumber(false)}
+        onCreated={() => {
+          queryClient.invalidateQueries({ queryKey: getListTwilioNumbersQueryKey() });
+        }}
+        properties={properties}
+      />
+
+      <AddTeamMemberModal
+        visible={showAddTeamMember}
+        onClose={() => setShowAddTeamMember(false)}
+        onCreated={() => {
+          queryClient.invalidateQueries({ queryKey: getListUsersQueryKey() });
         }}
       />
     </View>
@@ -786,5 +1149,94 @@ const modalStyles = StyleSheet.create({
     fontSize: 15,
     fontFamily: "Inter_600SemiBold",
     color: "#fff",
+  },
+});
+
+const webhookStyles = StyleSheet.create({
+  successBanner: {
+    flexDirection: "row",
+    gap: 10,
+    alignItems: "flex-start",
+    backgroundColor: "#0D2A2A",
+    borderRadius: 12,
+    padding: 14,
+    marginTop: 4,
+    borderWidth: 1,
+    borderColor: Colors.brand.teal + "44",
+  },
+  successText: {
+    flex: 1,
+    fontSize: 14,
+    fontFamily: "Inter_400Regular",
+    color: Colors.dark.text,
+    lineHeight: 20,
+  },
+  errorBanner: {
+    flexDirection: "row",
+    gap: 8,
+    alignItems: "flex-start",
+    backgroundColor: "#2A0D0D",
+    borderRadius: 10,
+    padding: 12,
+    marginTop: 4,
+    borderWidth: 1,
+    borderColor: "#FF6B6B44",
+  },
+  errorText: {
+    flex: 1,
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+    color: "#FF6B6B",
+    lineHeight: 18,
+  },
+  urlBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: Colors.dark.bgCard,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Colors.dark.border,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  urlText: {
+    flex: 1,
+    fontSize: 12,
+    fontFamily: "Inter_400Regular",
+    color: Colors.brand.tealLight,
+  },
+  hint: {
+    marginTop: 14,
+    fontSize: 12,
+    fontFamily: "Inter_400Regular",
+    color: Colors.dark.textMuted,
+    lineHeight: 18,
+  },
+  propertyChips: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 4,
+  },
+  propertyChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: Colors.dark.border,
+    backgroundColor: Colors.dark.bgCard,
+  },
+  propertyChipSelected: {
+    borderColor: Colors.brand.teal,
+    backgroundColor: "#0D2A2A",
+  },
+  propertyChipText: {
+    fontSize: 13,
+    fontFamily: "Inter_500Medium",
+    color: Colors.dark.textSecondary,
+  },
+  propertyChipTextSelected: {
+    color: Colors.brand.tealLight,
   },
 });
