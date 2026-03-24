@@ -56,18 +56,25 @@ async function detectAndStoreConflicts(
       if (field === "phone") {
         continue;
       }
-      const fieldMap: Partial<Record<keyof ProspectExtraction, Partial<ProspectRow>>> = {
-        firstName: { firstName: extractedVal },
-        lastName: { lastName: extractedVal },
-        email: { email: extractedVal },
-        desiredBedrooms: { desiredBedrooms: extractedVal },
-        desiredMoveInDate: { desiredMoveInDate: extractedVal },
-        budgetMin: { budgetMin: extractedVal },
-        budgetMax: { budgetMax: extractedVal },
-        pets: { pets: extractedVal },
-        voucherType: { voucherType: extractedVal },
-      };
-      const updateSet = fieldMap[field];
+      let updateSet: Partial<ProspectRow> | null = null;
+      if (field === "firstName") {
+        const parts = [extractedVal, prospect.lastName].filter(Boolean);
+        updateSet = { firstName: extractedVal, ...(parts.length > 0 ? { fullName: parts.join(" ") } : {}) };
+      } else if (field === "lastName") {
+        const parts = [prospect.firstName, extractedVal].filter(Boolean);
+        updateSet = { lastName: extractedVal, ...(parts.length > 0 ? { fullName: parts.join(" ") } : {}) };
+      } else {
+        const simpleFieldMap: Partial<Record<keyof ProspectExtraction, Partial<ProspectRow>>> = {
+          email: { email: extractedVal },
+          desiredBedrooms: { desiredBedrooms: extractedVal },
+          desiredMoveInDate: { desiredMoveInDate: extractedVal },
+          budgetMin: { budgetMin: extractedVal },
+          budgetMax: { budgetMax: extractedVal },
+          pets: { pets: extractedVal },
+          voucherType: { voucherType: extractedVal },
+        };
+        updateSet = simpleFieldMap[field] ?? null;
+      }
       if (updateSet) {
         await db
           .update(prospectsTable)
