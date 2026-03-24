@@ -22,8 +22,8 @@ function requireAuth(req: Request, res: Response): boolean {
   return true;
 }
 
-function downloadUrl(req: Request, batchId: string): string {
-  const proto = req.headers["x-forwarded-proto"] ?? "https";
+function buildDownloadUrl(req: Request, batchId: string): string {
+  const proto = (req.headers["x-forwarded-proto"] as string | undefined) ?? "https";
   const host = req.headers.host ?? req.hostname;
   return `${proto}://${host}/api/exports/${batchId}/download`;
 }
@@ -33,7 +33,17 @@ router.get("/exports", async (req: Request, res: Response) => {
   const { accountId } = req.user!;
 
   const exports = await db
-    .select()
+    .select({
+      id: exportBatchesTable.id,
+      accountId: exportBatchesTable.accountId,
+      format: exportBatchesTable.format,
+      targetSystem: exportBatchesTable.targetSystem,
+      recordCount: exportBatchesTable.recordCount,
+      status: exportBatchesTable.status,
+      fileUrl: exportBatchesTable.fileUrl,
+      mimeType: exportBatchesTable.mimeType,
+      createdAt: exportBatchesTable.createdAt,
+    })
     .from(exportBatchesTable)
     .where(eq(exportBatchesTable.accountId, accountId))
     .orderBy(sql`${exportBatchesTable.createdAt} desc`);
@@ -60,6 +70,8 @@ router.post("/exports", async (req: Request, res: Response) => {
     return;
   }
 
+  const typedFormat = format as "csv" | "json";
+
   const ownedProspects = await db
     .select({ id: prospectsTable.id })
     .from(prospectsTable)
@@ -77,17 +89,43 @@ router.post("/exports", async (req: Request, res: Response) => {
 
   const validatedProspectIds = ownedProspects.map((p) => p.id);
 
+  const { content, mimeType } = await generateExportContent(
+    accountId,
+    validatedProspectIds,
+    typedFormat,
+    "",
+  );
+
   const [batch] = await db
     .insert(exportBatchesTable)
     .values({
       accountId,
       createdByUserId: userId,
-      format: format as string,
+      format: typedFormat,
       targetSystem: targetSystem as string | undefined,
       recordCount: validatedProspectIds.length,
       status: "completed",
+      mimeType,
+      fileContent: content,
     })
     .returning();
+
+  const fileUrl = buildDownloadUrl(req, batch.id);
+  const [updated] = await db
+    .update(exportBatchesTable)
+    .set({ fileUrl })
+    .where(eq(exportBatchesTable.id, batch.id))
+    .returning({
+      id: exportBatchesTable.id,
+      accountId: exportBatchesTable.accountId,
+      format: exportBatchesTable.format,
+      targetSystem: exportBatchesTable.targetSystem,
+      recordCount: exportBatchesTable.recordCount,
+      status: exportBatchesTable.status,
+      fileUrl: exportBatchesTable.fileUrl,
+      mimeType: exportBatchesTable.mimeType,
+      createdAt: exportBatchesTable.createdAt,
+    });
 
   await db
     .insert(exportBatchItemsTable)
@@ -103,8 +141,8 @@ router.post("/exports", async (req: Request, res: Response) => {
       ),
     );
 
-  const url = downloadUrl(req, batch.id);
-  res.status(201).json({ ...batch, downloadUrl: url });
+  const downloadUrl = fileUrl;
+  res.status(201).json({ ...updated, downloadUrl });
 });
 
 router.get("/exports/:id/download", async (req: Request, res: Response) => {
@@ -123,20 +161,46 @@ router.get("/exports/:id/download", async (req: Request, res: Response) => {
     return;
   }
 
+  const ext = batch.format === "json" ? "json" : "csv";
+  const filename = `export-${id}.${ext}`;
+  const mime = batch.mimeType ?? (batch.format === "json" ? "application/json; charset=utf-8" : "text/csv; charset=utf-8");
+
+  res.setHeader("Content-Type", mime);
+  res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+
+  if (batch.fileContent) {
+    res.send(batch.fileContent);
+    return;
+  }
+
   const items = await db
     .select()
     .from(exportBatchItemsTable)
     .where(eq(exportBatchItemsTable.exportBatchId, id));
 
   const prospectIds = items.map((i) => i.prospectId);
-
   if (prospectIds.length === 0) {
     const empty = batch.format === "csv" ? buildCsvHeaders() : JSON.stringify({ exportBatchId: id, prospects: [] }, null, 2);
-    const mime = batch.format === "csv" ? "text/csv" : "application/json";
-    res.setHeader("Content-Type", mime);
-    res.setHeader("Content-Disposition", `attachment; filename="export-${id}.${batch.format}"`);
     res.send(empty);
     return;
+  }
+
+  const { content } = await generateExportContent(accountId, prospectIds, batch.format as "csv" | "json", id);
+  res.send(content);
+});
+
+async function generateExportContent(
+  accountId: string,
+  prospectIds: string[],
+  format: "csv" | "json",
+  batchId: string,
+): Promise<{ content: string; mimeType: string }> {
+  if (prospectIds.length === 0) {
+    const empty = format === "csv"
+      ? buildCsvHeaders()
+      : JSON.stringify({ exportBatchId: batchId, prospects: [] }, null, 2);
+    const mimeType = format === "json" ? "application/json; charset=utf-8" : "text/csv; charset=utf-8";
+    return { content: empty, mimeType };
   }
 
   const prospectsWithProperty = await db
@@ -198,18 +262,15 @@ router.get("/exports/:id/download", async (req: Request, res: Response) => {
   for (const r of latestInteractionRows) {
     if (!r.prospectId) continue;
     const existing = latestByProspect.get(r.prospectId);
-    const rowDate = r.latestAt ? new Date(r.latestAt) : null;
+    const rowDate = r.latestAt ? new Date(r.latestAt as unknown as string) : null;
     if (!existing || (rowDate && (!existing.latestAt || rowDate > existing.latestAt))) {
       latestByProspect.set(r.prospectId, { latestAt: rowDate, category: r.category ?? null });
     }
   }
 
-  if (batch.format === "csv") {
-    const csv = buildCsv(prospectsWithProperty, notesByProspect, tagsByProspect, latestByProspect);
-    res.setHeader("Content-Type", "text/csv; charset=utf-8");
-    res.setHeader("Content-Disposition", `attachment; filename="export-${id}.csv"`);
-    res.send(csv);
-    return;
+  if (format === "csv") {
+    const content = buildCsv(prospectsWithProperty, notesByProspect, tagsByProspect, latestByProspect);
+    return { content, mimeType: "text/csv; charset=utf-8" };
   }
 
   const interactionRows = await db
@@ -239,20 +300,17 @@ router.get("/exports/:id/download", async (req: Request, res: Response) => {
   }
 
   const json = buildJson(
-    id,
-    batch,
+    batchId,
+    format,
     prospectsWithProperty,
-    notesByProspect,
     tagsByProspect,
     latestByProspect,
     interactionsByProspect,
     fullNotesByProspect,
   );
 
-  res.setHeader("Content-Type", "application/json; charset=utf-8");
-  res.setHeader("Content-Disposition", `attachment; filename="export-${id}.json"`);
-  res.send(JSON.stringify(json, null, 2));
-});
+  return { content: JSON.stringify(json, null, 2), mimeType: "application/json; charset=utf-8" };
+}
 
 const CSV_HEADERS = [
   "prospect_id",
@@ -308,7 +366,7 @@ function buildCsv(
       p.id,
       p.firstName ?? "",
       p.lastName ?? "",
-      p.fullName ?? [p.firstName, p.lastName].filter(Boolean).join(" "),
+      p.fullName ?? ([p.firstName, p.lastName].filter(Boolean).join(" ") || ""),
       p.phonePrimary,
       p.email ?? "",
       propertyName ?? "",
@@ -336,9 +394,8 @@ function buildCsv(
 
 function buildJson(
   batchId: string,
-  batch: typeof exportBatchesTable.$inferSelect,
+  format: string,
   rows: ProspectWithProperty[],
-  notesByProspect: Map<string, string[]>,
   tagsByProspect: Map<string, string[]>,
   latestByProspect: Map<string, { latestAt: Date | null; category: string | null }>,
   interactionsByProspect: Map<string, (typeof interactionsTable.$inferSelect)[]>,
@@ -370,13 +427,13 @@ function buildJson(
       latest_interaction_at: latest?.latestAt ? latest.latestAt.toISOString() : null,
       notes: (fullNotesByProspect.get(p.id) ?? []).map((n) => ({
         body: n.body,
-        created_at: n.createdAt.toISOString(),
+        created_at: n.createdAt instanceof Date ? n.createdAt.toISOString() : String(n.createdAt),
       })),
       interactions: (interactionsByProspect.get(p.id) ?? []).map((i) => ({
         id: i.id,
         source_type: i.sourceType,
         direction: i.direction,
-        occurred_at: i.occurredAt.toISOString(),
+        occurred_at: i.occurredAt instanceof Date ? i.occurredAt.toISOString() : String(i.occurredAt),
         raw_text: i.rawText ?? null,
         transcript: i.transcript ?? null,
         summary: i.summary ?? null,
@@ -392,8 +449,7 @@ function buildJson(
 
   return {
     export_batch_id: batchId,
-    format: batch.format,
-    target_system: batch.targetSystem ?? null,
+    format,
     generated_at: new Date().toISOString(),
     record_count: prospects.length,
     prospects,

@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, varchar, timestamp, integer, index } from "drizzle-orm/pg-core";
+import { pgTable, varchar, timestamp, integer, text, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { accountsTable } from "./accounts";
@@ -15,6 +15,8 @@ export const exportBatchesTable = pgTable("export_batches", {
   recordCount: integer("record_count").notNull().default(0),
   status: varchar("status", { length: 50 }).notNull().default("pending"),
   fileUrl: varchar("file_url", { length: 1000 }),
+  mimeType: varchar("mime_type", { length: 100 }),
+  fileContent: text("file_content"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   index("idx_export_batches_account_id").on(table.accountId),
