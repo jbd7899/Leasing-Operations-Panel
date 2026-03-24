@@ -59,6 +59,12 @@ export const api = {
     return res.json();
   },
 
+  interactions: {
+    get: (id: string) => api.get<import("../constants/types").Interaction>(`/interactions/${id}`),
+    review: (id: string, body: { summary?: string; category?: string; propertyId?: string | null; structuredExtractionJson?: Record<string, unknown> }) =>
+      api.patch<import("../constants/types").Interaction>(`/interactions/${id}/review`, body),
+  },
+
   prospects: {
     list: (params?: Record<string, string>) => {
       const qs = params ? `?${new URLSearchParams(params)}` : "";
