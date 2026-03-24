@@ -22,6 +22,7 @@ import {
   useListProperties,
   useListTwilioNumbers,
   useListUsers,
+  useGetCurrentAuthUser,
   useCreateProperty,
   useCreateTwilioNumber,
   useCreateUser,
@@ -193,14 +194,21 @@ function AddTwilioNumberModal({
   const [friendlyName, setFriendlyName] = useState("");
   const [purpose, setPurpose] = useState("");
   const [selectedPropertyId, setSelectedPropertyId] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
+
+  const smsUrl = `${getWebhookBaseUrl()}/api/webhooks/twilio/sms`;
+  const voiceUrl = `${getWebhookBaseUrl()}/api/webhooks/twilio/voice`;
 
   const createMutation = useCreateTwilioNumber({
     mutation: {
       onSuccess: () => {
-        setSuccess(true);
         onCreated();
+        handleClose();
+        Alert.alert(
+          "Number Added!",
+          `Configure Twilio webhooks:\n\nSMS: ${smsUrl}\n\nVoice: ${voiceUrl}\n\nPaste these into your Twilio phone number settings (HTTP POST).`,
+          [{ text: "OK" }],
+        );
       },
       onError: (err: unknown) => {
         const msg = err instanceof Error ? err.message : String(err);
@@ -214,152 +222,113 @@ function AddTwilioNumberModal({
     setFriendlyName("");
     setPurpose("");
     setSelectedPropertyId(null);
-    setSuccess(false);
     setError("");
     onClose();
   }
-
-  const smsUrl = `${getWebhookBaseUrl()}/api/webhooks/twilio/sms`;
-  const voiceUrl = `${getWebhookBaseUrl()}/api/webhooks/twilio/voice`;
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={handleClose}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <View style={modalStyles.container}>
           <View style={modalStyles.header}>
-            <Text style={modalStyles.title}>{success ? "Number Added!" : "Add Twilio Number"}</Text>
+            <Text style={modalStyles.title}>Add Twilio Number</Text>
             <Pressable onPress={handleClose}>
               <Feather name="x" size={22} color={Colors.dark.textSecondary} />
             </Pressable>
           </View>
 
-          {success ? (
-            <ScrollView style={modalStyles.body}>
-              <View style={webhookStyles.successBanner}>
-                <Feather name="check-circle" size={20} color={Colors.brand.tealLight} />
-                <Text style={webhookStyles.successText}>
-                  {phoneNumber} has been registered. Now configure Twilio to send webhooks to these URLs:
-                </Text>
+          <ScrollView style={modalStyles.body} keyboardShouldPersistTaps="handled">
+            {error ? (
+              <View style={webhookStyles.errorBanner}>
+                <Feather name="alert-circle" size={14} color="#FF6B6B" />
+                <Text style={webhookStyles.errorText}>{error}</Text>
               </View>
-              <Text style={modalStyles.fieldLabel}>SMS Webhook URL</Text>
-              <Pressable
-                style={webhookStyles.urlBox}
-                onPress={() => {
-                  Clipboard.setString(smsUrl);
-                  Alert.alert("Copied", "SMS webhook URL copied to clipboard.");
-                }}
-              >
-                <Text style={webhookStyles.urlText} numberOfLines={2}>{smsUrl}</Text>
-                <Feather name="copy" size={14} color={Colors.brand.tealLight} />
-              </Pressable>
-              <Text style={modalStyles.fieldLabel}>Voice Webhook URL</Text>
-              <Pressable
-                style={webhookStyles.urlBox}
-                onPress={() => {
-                  Clipboard.setString(voiceUrl);
-                  Alert.alert("Copied", "Voice webhook URL copied to clipboard.");
-                }}
-              >
-                <Text style={webhookStyles.urlText} numberOfLines={2}>{voiceUrl}</Text>
-                <Feather name="copy" size={14} color={Colors.brand.tealLight} />
-              </Pressable>
-              <Text style={webhookStyles.hint}>
-                In your Twilio console, open the phone number settings and paste these URLs into the "A call comes in" and "A message comes in" fields. Set the method to HTTP POST.
-              </Text>
-            </ScrollView>
-          ) : (
-            <ScrollView style={modalStyles.body} keyboardShouldPersistTaps="handled">
-              {error ? (
-                <View style={webhookStyles.errorBanner}>
-                  <Feather name="alert-circle" size={14} color="#FF6B6B" />
-                  <Text style={webhookStyles.errorText}>{error}</Text>
-                </View>
-              ) : null}
-              <Text style={modalStyles.fieldLabel}>Phone Number * (E.164 format)</Text>
-              <TextInput
-                value={phoneNumber}
-                onChangeText={setPhoneNumber}
-                placeholder="+15035551234"
-                placeholderTextColor={Colors.dark.textMuted}
-                style={modalStyles.input}
-                keyboardType="phone-pad"
-                autoCorrect={false}
-              />
-              <Text style={modalStyles.fieldLabel}>Friendly Name</Text>
-              <TextInput
-                value={friendlyName}
-                onChangeText={setFriendlyName}
-                placeholder="e.g. Leasing Office Line"
-                placeholderTextColor={Colors.dark.textMuted}
-                style={modalStyles.input}
-              />
-              <Text style={modalStyles.fieldLabel}>Purpose</Text>
-              <TextInput
-                value={purpose}
-                onChangeText={setPurpose}
-                placeholder="e.g. Main leasing intake"
-                placeholderTextColor={Colors.dark.textMuted}
-                style={modalStyles.input}
-              />
-              {properties.length > 0 && (
-                <>
-                  <Text style={modalStyles.fieldLabel}>Assign to Property (optional)</Text>
-                  <View style={webhookStyles.propertyChips}>
+            ) : null}
+            <Text style={modalStyles.fieldLabel}>Phone Number * (E.164 format)</Text>
+            <TextInput
+              value={phoneNumber}
+              onChangeText={setPhoneNumber}
+              placeholder="+15035551234"
+              placeholderTextColor={Colors.dark.textMuted}
+              style={modalStyles.input}
+              keyboardType="phone-pad"
+              autoCorrect={false}
+            />
+            <Text style={modalStyles.fieldLabel}>Friendly Name</Text>
+            <TextInput
+              value={friendlyName}
+              onChangeText={setFriendlyName}
+              placeholder="e.g. Leasing Office Line"
+              placeholderTextColor={Colors.dark.textMuted}
+              style={modalStyles.input}
+            />
+            <Text style={modalStyles.fieldLabel}>Purpose</Text>
+            <TextInput
+              value={purpose}
+              onChangeText={setPurpose}
+              placeholder="e.g. Main leasing intake"
+              placeholderTextColor={Colors.dark.textMuted}
+              style={modalStyles.input}
+            />
+            {properties.length > 0 && (
+              <>
+                <Text style={modalStyles.fieldLabel}>Assign to Property (optional)</Text>
+                <View style={webhookStyles.propertyChips}>
+                  <Pressable
+                    style={[webhookStyles.propertyChip, !selectedPropertyId && webhookStyles.propertyChipSelected]}
+                    onPress={() => setSelectedPropertyId(null)}
+                  >
+                    <Text style={[webhookStyles.propertyChipText, !selectedPropertyId && webhookStyles.propertyChipTextSelected]}>
+                      None
+                    </Text>
+                  </Pressable>
+                  {properties.map((p) => (
                     <Pressable
-                      style={[webhookStyles.propertyChip, !selectedPropertyId && webhookStyles.propertyChipSelected]}
-                      onPress={() => setSelectedPropertyId(null)}
+                      key={p.id}
+                      style={[webhookStyles.propertyChip, selectedPropertyId === p.id && webhookStyles.propertyChipSelected]}
+                      onPress={() => setSelectedPropertyId(p.id)}
                     >
-                      <Text style={[webhookStyles.propertyChipText, !selectedPropertyId && webhookStyles.propertyChipTextSelected]}>
-                        None
+                      <Text style={[webhookStyles.propertyChipText, selectedPropertyId === p.id && webhookStyles.propertyChipTextSelected]}>
+                        {p.name}
                       </Text>
                     </Pressable>
-                    {properties.map((p) => (
-                      <Pressable
-                        key={p.id}
-                        style={[webhookStyles.propertyChip, selectedPropertyId === p.id && webhookStyles.propertyChipSelected]}
-                        onPress={() => setSelectedPropertyId(p.id)}
-                      >
-                        <Text style={[webhookStyles.propertyChipText, selectedPropertyId === p.id && webhookStyles.propertyChipTextSelected]}>
-                          {p.name}
-                        </Text>
-                      </Pressable>
-                    ))}
-                  </View>
-                </>
-              )}
-            </ScrollView>
-          )}
+                  ))}
+                </View>
+              </>
+            )}
+            <Text style={webhookStyles.hint}>
+              After adding, you will receive the webhook URLs to paste into your Twilio console.
+            </Text>
+          </ScrollView>
 
           <View style={modalStyles.footer}>
             <Pressable style={modalStyles.cancelBtn} onPress={handleClose}>
-              <Text style={modalStyles.cancelBtnText}>{success ? "Close" : "Cancel"}</Text>
+              <Text style={modalStyles.cancelBtnText}>Cancel</Text>
             </Pressable>
-            {!success && (
-              <Pressable
-                style={[
-                  modalStyles.saveBtn,
-                  (!phoneNumber.trim() || createMutation.isPending) && modalStyles.saveBtnDisabled,
-                ]}
-                onPress={() => {
-                  setError("");
-                  createMutation.mutate({
-                    data: {
-                      phoneNumber: phoneNumber.trim(),
-                      friendlyName: friendlyName.trim() || undefined,
-                      purpose: purpose.trim() || undefined,
-                      propertyId: selectedPropertyId ?? undefined,
-                    },
-                  });
-                }}
-                disabled={!phoneNumber.trim() || createMutation.isPending}
-              >
-                {createMutation.isPending ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <Text style={modalStyles.saveBtnText}>Add Number</Text>
-                )}
-              </Pressable>
-            )}
+            <Pressable
+              style={[
+                modalStyles.saveBtn,
+                (!phoneNumber.trim() || createMutation.isPending) && modalStyles.saveBtnDisabled,
+              ]}
+              onPress={() => {
+                setError("");
+                createMutation.mutate({
+                  data: {
+                    phoneNumber: phoneNumber.trim(),
+                    friendlyName: friendlyName.trim() || undefined,
+                    purpose: purpose.trim() || undefined,
+                    propertyId: selectedPropertyId ?? undefined,
+                  },
+                });
+              }}
+              disabled={!phoneNumber.trim() || createMutation.isPending}
+            >
+              {createMutation.isPending ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Text style={modalStyles.saveBtnText}>Add Number</Text>
+              )}
+            </Pressable>
           </View>
         </View>
       </KeyboardAvoidingView>
@@ -583,6 +552,10 @@ export default function SettingsScreen() {
   const [twilioExpanded, setTwilioExpanded] = useState(false);
   const [usersExpanded, setUsersExpanded] = useState(false);
 
+  const { data: authUserData } = useGetCurrentAuthUser();
+  const currentRole = authUserData?.user?.role ?? null;
+  const isAdminOrOwner = currentRole === "owner" || currentRole === "admin";
+
   const { data: propertiesData, isLoading: propertiesLoading } = useListProperties();
 
   const { data: twilioData, isLoading: twilioLoading } = useListTwilioNumbers({
@@ -699,13 +672,15 @@ export default function SettingsScreen() {
               ) : (
                 twilioNumbers.map((n) => <TwilioNumberCard key={n.id} number={n} />)
               )}
-              <Pressable
-                style={[styles.addBtn, { marginTop: 8 }]}
-                onPress={() => setShowAddTwilioNumber(true)}
-              >
-                <Feather name="plus" size={14} color={Colors.brand.tealLight} />
-                <Text style={styles.addBtnText}>Add Number</Text>
-              </Pressable>
+              {isAdminOrOwner && (
+                <Pressable
+                  style={[styles.addBtn, { marginTop: 8 }]}
+                  onPress={() => setShowAddTwilioNumber(true)}
+                >
+                  <Feather name="plus" size={14} color={Colors.brand.tealLight} />
+                  <Text style={styles.addBtnText}>Add Number</Text>
+                </Pressable>
+              )}
             </>
           )}
         </View>
@@ -735,13 +710,15 @@ export default function SettingsScreen() {
               ) : (
                 users.map((u) => <UserCard key={u.id} user={u} />)
               )}
-              <Pressable
-                style={[styles.addBtn, { marginTop: 8 }]}
-                onPress={() => setShowAddTeamMember(true)}
-              >
-                <Feather name="user-plus" size={14} color={Colors.brand.tealLight} />
-                <Text style={styles.addBtnText}>Invite Member</Text>
-              </Pressable>
+              {isAdminOrOwner && (
+                <Pressable
+                  style={[styles.addBtn, { marginTop: 8 }]}
+                  onPress={() => setShowAddTeamMember(true)}
+                >
+                  <Feather name="user-plus" size={14} color={Colors.brand.tealLight} />
+                  <Text style={styles.addBtnText}>Invite Member</Text>
+                </Pressable>
+              )}
             </>
           )}
         </View>
