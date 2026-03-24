@@ -80,7 +80,7 @@ function PropertyBottomSheet({
     <Modal
       visible={visible}
       transparent
-      animationType="slide"
+      animationType={Platform.OS === "web" ? "fade" : "slide"}
       onRequestClose={onClose}
     >
       <Pressable style={sheetStyles.backdrop} onPress={onClose} />
@@ -189,8 +189,8 @@ function NewMessageModal({
   return (
     <Modal
       visible={visible}
-      animationType="slide"
-      presentationStyle="pageSheet"
+      animationType={Platform.OS === "web" ? "fade" : "slide"}
+      presentationStyle={Platform.OS === "web" ? "overFullScreen" : "pageSheet"}
       onRequestClose={handleClose}
     >
       <KeyboardAvoidingView

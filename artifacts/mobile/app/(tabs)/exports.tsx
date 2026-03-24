@@ -134,6 +134,7 @@ export default function ExportsScreen() {
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isExporting, setIsExporting] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const { data: queueData, isLoading: queueLoading, refetch: refetchQueue, isFetching: queueFetching } =
     useListProspects({ exportStatus: "pending" });
@@ -167,46 +168,53 @@ export default function ExportsScreen() {
     }
   }, [allSelected, pendingProspects]);
 
+  const doExport = useCallback(
+    async (format: "csv" | "json") => {
+      setErrorMsg(null);
+      setIsExporting(true);
+      try {
+        await createExport.mutateAsync({
+          data: {
+            prospectIds: Array.from(selectedIds),
+            format:
+              format === "csv"
+                ? CreateExportBodyFormat.csv
+                : CreateExportBodyFormat.json,
+            targetSystem: "AppFolio",
+          },
+        });
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        setSelectedIds(new Set());
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: getListExportsQueryKey() }),
+          queryClient.invalidateQueries({ queryKey: getListProspectsQueryKey() }),
+        ]);
+      } catch (err: unknown) {
+        setErrorMsg(String(err));
+      } finally {
+        setIsExporting(false);
+      }
+    },
+    [selectedIds, createExport, queryClient],
+  );
+
   const handleExport = useCallback(
     (format: "csv" | "json") => {
       if (selectedIds.size === 0) return;
+      if (isWeb) {
+        doExport(format);
+        return;
+      }
       Alert.alert(
         `Export as ${format.toUpperCase()}`,
         `Export ${selectedIds.size} prospect${selectedIds.size !== 1 ? "s" : ""} to ${format.toUpperCase()}?`,
         [
           { text: "Cancel", style: "cancel" },
-          {
-            text: "Export",
-            onPress: async () => {
-              setIsExporting(true);
-              try {
-                await createExport.mutateAsync({
-                  data: {
-                    prospectIds: Array.from(selectedIds),
-                    format:
-                      format === "csv"
-                        ? CreateExportBodyFormat.csv
-                        : CreateExportBodyFormat.json,
-                    targetSystem: "AppFolio",
-                  },
-                });
-                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                setSelectedIds(new Set());
-                await Promise.all([
-                  queryClient.invalidateQueries({ queryKey: getListExportsQueryKey() }),
-                  queryClient.invalidateQueries({ queryKey: getListProspectsQueryKey() }),
-                ]);
-              } catch (err: unknown) {
-                Alert.alert("Export failed", String(err));
-              } finally {
-                setIsExporting(false);
-              }
-            },
-          },
+          { text: "Export", onPress: () => doExport(format) },
         ],
       );
     },
-    [selectedIds, createExport, queryClient],
+    [selectedIds, isWeb, doExport],
   );
 
   const handleRefresh = useCallback(() => {
@@ -231,6 +239,16 @@ export default function ExportsScreen() {
           />
         </Pressable>
       </View>
+
+      {errorMsg && (
+        <View style={styles.errorBanner}>
+          <Feather name="alert-circle" size={14} color="#FF6B6B" />
+          <Text style={styles.errorBannerText}>{errorMsg}</Text>
+          <Pressable onPress={() => setErrorMsg(null)} hitSlop={8}>
+            <Feather name="x" size={14} color="#FF6B6B" />
+          </Pressable>
+        </View>
+      )}
 
       <ScrollView
         style={styles.scroll}
@@ -348,6 +366,25 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.dark.bg,
+  },
+  errorBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginHorizontal: 16,
+    marginBottom: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: "#2A0A0A",
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#FF6B6B44",
+  },
+  errorBannerText: {
+    flex: 1,
+    fontSize: 13,
+    color: "#FF6B6B",
+    fontFamily: "Inter_400Regular",
   },
   scroll: {
     flex: 1,

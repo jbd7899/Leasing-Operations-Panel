@@ -85,7 +85,12 @@ function PropertyPickerModal({
   onClose: () => void;
 }) {
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+    <Modal
+      visible={visible}
+      animationType={Platform.OS === "web" ? "fade" : "slide"}
+      presentationStyle={Platform.OS === "web" ? "overFullScreen" : "pageSheet"}
+      onRequestClose={onClose}
+    >
       <View style={pickerStyles.container}>
         <View style={pickerStyles.header}>
           <Text style={pickerStyles.title}>Select Property</Text>
@@ -142,7 +147,12 @@ function TagPickerModal({
   onClose: () => void;
 }) {
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+    <Modal
+      visible={visible}
+      animationType={Platform.OS === "web" ? "fade" : "slide"}
+      presentationStyle={Platform.OS === "web" ? "overFullScreen" : "pageSheet"}
+      onRequestClose={onClose}
+    >
       <View style={pickerStyles.container}>
         <View style={pickerStyles.header}>
           <Text style={pickerStyles.title}>Select Tags</Text>

@@ -121,8 +121,8 @@ function ComposeModal({
   return (
     <Modal
       visible={visible}
-      animationType="slide"
-      presentationStyle="pageSheet"
+      animationType={Platform.OS === "web" ? "fade" : "slide"}
+      presentationStyle={Platform.OS === "web" ? "overFullScreen" : "pageSheet"}
       onRequestClose={handleClose}
     >
       <KeyboardAvoidingView

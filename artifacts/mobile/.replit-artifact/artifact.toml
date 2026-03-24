@@ -25,3 +25,18 @@ run = [ "pnpm", "--filter", "@workspace/mobile", "run", "serve" ]
 [services.env]
 PORT = "18115"
 BASE_PATH = "/mobile/"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 18116
+
+[services.development]
+run = "EXPO_PUBLIC_DOMAIN=$REPLIT_DEV_DOMAIN pnpm --filter @workspace/mobile run dev:web"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/mobile", "run", "build:web" ]
+run = [ "pnpm", "--filter", "@workspace/mobile", "run", "serve:web" ]
+
+[services.env]
+PORT = "18116"

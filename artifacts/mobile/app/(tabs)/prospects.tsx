@@ -44,6 +44,7 @@ export default function ProspectsScreen() {
   const [statusFilter, setStatusFilter] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isQueuing, setIsQueuing] = useState(false);
+  const [bannerMsg, setBannerMsg] = useState<{ text: string; type: "success" | "error" } | null>(null);
   const isSelecting = selectedIds.size > 0;
 
   const listParams = {
@@ -127,6 +128,7 @@ export default function ProspectsScreen() {
   const handleQueueExport = useCallback(async () => {
     if (selectedIds.size === 0) return;
     setIsQueuing(true);
+    setBannerMsg(null);
     try {
       await Promise.all(
         Array.from(selectedIds).map((id) =>
@@ -136,13 +138,21 @@ export default function ProspectsScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       await queryClient.invalidateQueries({ queryKey: getListProspectsQueryKey() });
       clearSelection();
-      Alert.alert("Queued", `${selectedIds.size} prospect${selectedIds.size !== 1 ? "s" : ""} added to Export Queue.`);
+      if (isWeb) {
+        setBannerMsg({ text: `${selectedIds.size} prospect${selectedIds.size !== 1 ? "s" : ""} added to Export Queue.`, type: "success" });
+      } else {
+        Alert.alert("Queued", `${selectedIds.size} prospect${selectedIds.size !== 1 ? "s" : ""} added to Export Queue.`);
+      }
     } catch (err: unknown) {
-      Alert.alert("Error", String(err));
+      if (isWeb) {
+        setBannerMsg({ text: String(err), type: "error" });
+      } else {
+        Alert.alert("Error", String(err));
+      }
     } finally {
       setIsQueuing(false);
     }
-  }, [selectedIds, updateProspect, queryClient, clearSelection]);
+  }, [selectedIds, updateProspect, queryClient, clearSelection, isWeb]);
 
   return (
     <View style={[styles.container, { paddingTop: topPad }]}>
@@ -199,6 +209,32 @@ export default function ProspectsScreen() {
           <Text style={styles.selectionBannerText}>
             {selectedIds.size} selected — long-press to select, tap to export
           </Text>
+        </View>
+      )}
+
+      {bannerMsg && (
+        <View style={[
+          styles.inlineBanner,
+          bannerMsg.type === "error" ? styles.inlineBannerError : styles.inlineBannerSuccess,
+        ]}>
+          <Feather
+            name={bannerMsg.type === "error" ? "alert-circle" : "check-circle"}
+            size={14}
+            color={bannerMsg.type === "error" ? "#FF6B6B" : Colors.brand.tealLight}
+          />
+          <Text style={[
+            styles.inlineBannerText,
+            bannerMsg.type === "error" ? styles.inlineBannerTextError : styles.inlineBannerTextSuccess,
+          ]}>
+            {bannerMsg.text}
+          </Text>
+          <Pressable onPress={() => setBannerMsg(null)} hitSlop={8}>
+            <Feather
+              name="x"
+              size={14}
+              color={bannerMsg.type === "error" ? "#FF6B6B" : Colors.brand.tealLight}
+            />
+          </Pressable>
         </View>
       )}
 
@@ -354,6 +390,36 @@ const styles = StyleSheet.create({
   selectionBannerText: {
     fontSize: 13,
     fontFamily: "Inter_400Regular",
+    color: Colors.brand.tealLight,
+  },
+  inlineBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginHorizontal: 16,
+    marginBottom: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  inlineBannerError: {
+    backgroundColor: "#2A0A0A",
+    borderColor: "#FF6B6B44",
+  },
+  inlineBannerSuccess: {
+    backgroundColor: "#0A2020",
+    borderColor: Colors.brand.teal + "44",
+  },
+  inlineBannerText: {
+    flex: 1,
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+  },
+  inlineBannerTextError: {
+    color: "#FF6B6B",
+  },
+  inlineBannerTextSuccess: {
     color: Colors.brand.tealLight,
   },
   searchRow: {

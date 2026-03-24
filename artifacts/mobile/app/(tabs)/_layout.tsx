@@ -1,13 +1,135 @@
 import { BlurView } from "expo-blur";
 import { isLiquidGlassAvailable } from "expo-glass-effect";
-import { Tabs } from "expo-router";
+import { Tabs, usePathname, router } from "expo-router";
 import { Icon, Label, NativeTabs } from "expo-router/unstable-native-tabs";
 import { SymbolView } from "expo-symbols";
 import { Feather } from "@expo/vector-icons";
-import React from "react";
-import { Platform, StyleSheet, View } from "react-native";
+import React, { useEffect, useState } from "react";
+import { Platform, StyleSheet, View, Text, Pressable, Dimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Colors from "@/constants/colors";
+
+const WEB_SIDEBAR_BREAKPOINT = 768;
+
+const NAV_ITEMS = [
+  {
+    name: "index",
+    label: "Inbox",
+    icon: "inbox" as const,
+    sfDefault: "tray",
+    sfSelected: "tray.fill",
+  },
+  {
+    name: "prospects",
+    label: "Prospects",
+    icon: "users" as const,
+    sfDefault: "person.2",
+    sfSelected: "person.2.fill",
+  },
+  {
+    name: "exports",
+    label: "Exports",
+    icon: "upload" as const,
+    sfDefault: "arrow.up.doc",
+    sfSelected: "arrow.up.doc.fill",
+  },
+  {
+    name: "analytics",
+    label: "Analytics",
+    icon: "bar-chart-2" as const,
+    sfDefault: "chart.bar",
+    sfSelected: "chart.bar.fill",
+  },
+  {
+    name: "settings",
+    label: "Settings",
+    icon: "settings" as const,
+    sfDefault: "gearshape",
+    sfSelected: "gearshape.fill",
+  },
+];
+
+function WebSidebarLayout() {
+  const pathname = usePathname();
+  const insets = useSafeAreaInsets();
+  const [width, setWidth] = useState(Dimensions.get("window").width);
+
+  useEffect(() => {
+    const sub = Dimensions.addEventListener("change", ({ window }) => {
+      setWidth(window.width);
+    });
+    return () => sub.remove();
+  }, []);
+
+  const isWide = width >= WEB_SIDEBAR_BREAKPOINT;
+
+  if (!isWide) {
+    return <ClassicTabLayout />;
+  }
+
+  const activeTab = NAV_ITEMS.find((item) => {
+    if (item.name === "index") return pathname === "/" || pathname === "/index" || pathname === "/(tabs)" || pathname === "/(tabs)/index";
+    return pathname.includes(item.name);
+  });
+  const activeKey = activeTab?.name ?? "index";
+
+  return (
+    <View style={sidebarStyles.root}>
+      <View style={[sidebarStyles.sidebar, { paddingTop: Math.max(insets.top, 20) }]}>
+        <View style={sidebarStyles.logoRow}>
+          <View style={sidebarStyles.logoDot} />
+          <Text style={sidebarStyles.logoText}>MyRentCard</Text>
+        </View>
+
+        <View style={sidebarStyles.navList}>
+          {NAV_ITEMS.map((item) => {
+            const isActive = activeKey === item.name;
+            return (
+              <Pressable
+                key={item.name}
+                style={[sidebarStyles.navItem, isActive && sidebarStyles.navItemActive]}
+                onPress={() =>
+                  router.push(
+                    item.name === "index"
+                      ? "/(tabs)"
+                      : (`/(tabs)/${item.name}` as any),
+                  )
+                }
+              >
+                <Feather
+                  name={item.icon}
+                  size={18}
+                  color={isActive ? Colors.brand.tealLight : Colors.dark.textSecondary}
+                />
+                <Text
+                  style={[
+                    sidebarStyles.navLabel,
+                    isActive && sidebarStyles.navLabelActive,
+                  ]}
+                >
+                  {item.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      </View>
+
+      <View style={sidebarStyles.content}>
+        <Tabs
+          screenOptions={{
+            headerShown: false,
+            tabBarStyle: { display: "none" },
+          }}
+        >
+          {NAV_ITEMS.map((item) => (
+            <Tabs.Screen key={item.name} name={item.name} />
+          ))}
+        </Tabs>
+      </View>
+    </View>
+  );
+}
 
 function NativeTabLayout() {
   return (
@@ -133,8 +255,74 @@ function ClassicTabLayout() {
 }
 
 export default function TabLayout() {
+  if (Platform.OS === "web") {
+    return <WebSidebarLayout />;
+  }
   if (isLiquidGlassAvailable()) {
     return <NativeTabLayout />;
   }
   return <ClassicTabLayout />;
 }
+
+const sidebarStyles = StyleSheet.create({
+  root: {
+    flex: 1,
+    flexDirection: "row",
+    backgroundColor: Colors.dark.bg,
+  },
+  sidebar: {
+    width: 220,
+    backgroundColor: Colors.dark.bgCard,
+    borderRightWidth: 1,
+    borderRightColor: Colors.dark.border,
+    paddingHorizontal: 12,
+    paddingBottom: 24,
+  },
+  logoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 8,
+    paddingBottom: 28,
+    paddingTop: 4,
+  },
+  logoDot: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: Colors.brand.teal,
+  },
+  logoText: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: Colors.dark.text,
+    letterSpacing: -0.3,
+  },
+  navList: {
+    gap: 2,
+  },
+  navItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 10,
+  },
+  navItemActive: {
+    backgroundColor: "#0D2A2A",
+  },
+  navLabel: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: Colors.dark.textSecondary,
+  },
+  navLabelActive: {
+    color: Colors.brand.tealLight,
+    fontWeight: "600",
+  },
+  content: {
+    flex: 1,
+    overflow: "hidden",
+  },
+});
