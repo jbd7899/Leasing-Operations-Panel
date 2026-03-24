@@ -10,13 +10,17 @@ import {
   type SessionData,
 } from "../lib/auth";
 
+export interface SessionUser extends AuthUser {
+  accountId: string;
+  role: string;
+}
+
 declare global {
   namespace Express {
-    interface User extends AuthUser {}
+    interface User extends SessionUser {}
 
     interface Request {
       isAuthenticated(): this is AuthedRequest;
-
       user?: User | undefined;
     }
 
@@ -82,6 +86,6 @@ export async function authMiddleware(
     return;
   }
 
-  req.user = refreshed.user;
+  req.user = refreshed.user as Express.User;
   next();
 }
