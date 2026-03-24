@@ -39,22 +39,34 @@ router.post("/exports", async (req: Request, res: Response) => {
     return;
   }
 
+  const ownedProspects = await db
+    .select({ id: prospectsTable.id })
+    .from(prospectsTable)
+    .where(and(inArray(prospectsTable.id, prospectIds), eq(prospectsTable.accountId, accountId)));
+
+  if (ownedProspects.length !== prospectIds.length) {
+    res.status(400).json({ error: "One or more prospectIds do not belong to this account" });
+    return;
+  }
+
+  const validatedProspectIds = ownedProspects.map((p) => p.id);
+
   const [batch] = await db.insert(exportBatchesTable).values({
     accountId,
     createdByUserId: userId,
     format,
     targetSystem,
-    recordCount: prospectIds.length,
+    recordCount: validatedProspectIds.length,
     status: "completed",
   }).returning();
 
   await db.insert(exportBatchItemsTable).values(
-    prospectIds.map((pid: string) => ({ exportBatchId: batch.id, prospectId: pid })),
+    validatedProspectIds.map((pid) => ({ exportBatchId: batch.id, prospectId: pid })),
   );
 
   await db.update(prospectsTable)
     .set({ exportStatus: "exported", updatedAt: new Date() })
-    .where(and(inArray(prospectsTable.id, prospectIds), eq(prospectsTable.accountId, accountId)));
+    .where(and(inArray(prospectsTable.id, validatedProspectIds), eq(prospectsTable.accountId, accountId)));
 
   res.status(201).json(batch);
 });
