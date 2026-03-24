@@ -7,8 +7,9 @@ import {
   tagsTable,
   prospectTagsTable,
   propertiesTable,
+  prospectConflictsTable,
 } from "@workspace/db";
-import { eq, and, or, ilike, inArray, sql } from "drizzle-orm";
+import { eq, and, or, ilike, inArray, isNull, sql } from "drizzle-orm";
 
 async function validatePropertyOwnership(propertyId: string, accountId: string): Promise<boolean> {
   const [property] = await db.select({ id: propertiesTable.id })
@@ -225,6 +226,99 @@ router.post("/prospects/:id/tags", async (req: Request, res: Response) => {
     : [];
 
   res.json({ tags });
+});
+
+router.get("/prospects/:id/conflicts", async (req: Request, res: Response) => {
+  if (!requireAuth(req, res)) return;
+  const { accountId } = req.user!;
+  const { id } = req.params;
+
+  const [prospect] = await db.select({ id: prospectsTable.id })
+    .from(prospectsTable)
+    .where(and(eq(prospectsTable.id, id), eq(prospectsTable.accountId, accountId)));
+
+  if (!prospect) { res.status(404).json({ error: "Not found" }); return; }
+
+  const conflicts = await db.select()
+    .from(prospectConflictsTable)
+    .where(
+      and(
+        eq(prospectConflictsTable.prospectId, id),
+        eq(prospectConflictsTable.accountId, accountId),
+        isNull(prospectConflictsTable.resolvedAt),
+      ),
+    );
+
+  res.json({ conflicts });
+});
+
+router.post("/prospects/:id/conflicts/:fieldName/resolve", async (req: Request, res: Response) => {
+  if (!requireAuth(req, res)) return;
+  const { accountId } = req.user!;
+  const { id, fieldName } = req.params;
+  const { chosenValue } = req.body;
+
+  if (chosenValue === undefined) { res.status(400).json({ error: "chosenValue is required" }); return; }
+
+  const [prospect] = await db.select()
+    .from(prospectsTable)
+    .where(and(eq(prospectsTable.id, id), eq(prospectsTable.accountId, accountId)));
+
+  if (!prospect) { res.status(404).json({ error: "Not found" }); return; }
+
+  const [conflict] = await db.select()
+    .from(prospectConflictsTable)
+    .where(
+      and(
+        eq(prospectConflictsTable.prospectId, id),
+        eq(prospectConflictsTable.accountId, accountId),
+        eq(prospectConflictsTable.fieldName, fieldName),
+        isNull(prospectConflictsTable.resolvedAt),
+      ),
+    )
+    .limit(1);
+
+  if (!conflict) { res.status(404).json({ error: "Conflict not found" }); return; }
+
+  await db
+    .update(prospectConflictsTable)
+    .set({ chosenValue, resolvedAt: new Date(), updatedAt: new Date() })
+    .where(eq(prospectConflictsTable.id, conflict.id));
+
+  const fieldToProspectKey: Record<string, string> = {
+    firstName: "firstName",
+    lastName: "lastName",
+    email: "email",
+    desiredBedrooms: "desiredBedrooms",
+    desiredMoveInDate: "desiredMoveInDate",
+    budgetMin: "budgetMin",
+    budgetMax: "budgetMax",
+    pets: "pets",
+    voucherType: "voucherType",
+  };
+
+  const prospectField = fieldToProspectKey[fieldName];
+  if (prospectField) {
+    const updatePayload: Record<string, unknown> = { [prospectField]: chosenValue, updatedAt: new Date() };
+
+    if (fieldName === "firstName" || fieldName === "lastName") {
+      const fn = fieldName === "firstName" ? chosenValue : prospect.firstName;
+      const ln = fieldName === "lastName" ? chosenValue : prospect.lastName;
+      const parts = [fn, ln].filter(Boolean);
+      if (parts.length > 0) updatePayload.fullName = parts.join(" ");
+    }
+
+    await db
+      .update(prospectsTable)
+      .set(updatePayload)
+      .where(and(eq(prospectsTable.id, id), eq(prospectsTable.accountId, accountId)));
+  }
+
+  const [updatedConflict] = await db.select()
+    .from(prospectConflictsTable)
+    .where(eq(prospectConflictsTable.id, conflict.id));
+
+  res.json({ conflict: updatedConflict });
 });
 
 export default router;

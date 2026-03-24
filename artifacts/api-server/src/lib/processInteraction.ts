@@ -1,7 +1,109 @@
-import { db, interactionsTable, prospectsTable } from "@workspace/db";
-import { eq, and } from "drizzle-orm";
-import { extractProspectData, ExtractionValidationError } from "./aiExtract";
+import { db, interactionsTable, prospectsTable, prospectConflictsTable } from "@workspace/db";
+import { eq, and, isNull } from "drizzle-orm";
+import { extractProspectData, ExtractionValidationError, type ProspectExtraction } from "./aiExtract";
 import { logger } from "./logger";
+
+const CONFLICT_FIELDS: (keyof ProspectExtraction)[] = [
+  "firstName",
+  "lastName",
+  "email",
+  "desiredBedrooms",
+  "desiredMoveInDate",
+  "budgetMin",
+  "budgetMax",
+  "pets",
+  "voucherType",
+];
+
+type ProspectRow = typeof prospectsTable.$inferSelect;
+
+function prospectValueForField(prospect: ProspectRow, field: keyof ProspectExtraction): string | null {
+  switch (field) {
+    case "firstName": return prospect.firstName ?? null;
+    case "lastName": return prospect.lastName ?? null;
+    case "email": return prospect.email ?? null;
+    case "desiredBedrooms": return prospect.desiredBedrooms ?? null;
+    case "desiredMoveInDate": return prospect.desiredMoveInDate ?? null;
+    case "budgetMin": return prospect.budgetMin != null ? String(prospect.budgetMin) : null;
+    case "budgetMax": return prospect.budgetMax != null ? String(prospect.budgetMax) : null;
+    case "pets": return prospect.pets ?? null;
+    case "voucherType": return prospect.voucherType ?? null;
+    default: return null;
+  }
+}
+
+function extractedValueForField(extraction: ProspectExtraction, field: keyof ProspectExtraction): string | null {
+  const raw = extraction[field];
+  if (raw == null) return null;
+  return String(raw);
+}
+
+async function detectAndStoreConflicts(
+  accountId: string,
+  prospectId: string,
+  prospect: ProspectRow,
+  extraction: ProspectExtraction,
+): Promise<void> {
+  for (const field of CONFLICT_FIELDS) {
+    const extractedVal = extractedValueForField(extraction, field);
+    if (extractedVal == null) continue;
+
+    const existingVal = prospectValueForField(prospect, field);
+
+    if (existingVal == null) {
+      const fieldMap: Partial<Record<keyof ProspectExtraction, Partial<ProspectRow>>> = {
+        firstName: { firstName: extractedVal },
+        lastName: { lastName: extractedVal },
+        email: { email: extractedVal },
+        desiredBedrooms: { desiredBedrooms: extractedVal },
+        desiredMoveInDate: { desiredMoveInDate: extractedVal },
+        budgetMin: { budgetMin: extractedVal },
+        budgetMax: { budgetMax: extractedVal },
+        pets: { pets: extractedVal },
+        voucherType: { voucherType: extractedVal },
+      };
+      const updateSet = fieldMap[field];
+      if (updateSet) {
+        await db
+          .update(prospectsTable)
+          .set({ ...updateSet, updatedAt: new Date() } as Partial<ProspectRow>)
+          .where(and(eq(prospectsTable.id, prospectId), eq(prospectsTable.accountId, accountId)));
+      }
+      continue;
+    }
+
+    if (existingVal.trim().toLowerCase() === extractedVal.trim().toLowerCase()) {
+      continue;
+    }
+
+    const [existing] = await db
+      .select({ id: prospectConflictsTable.id })
+      .from(prospectConflictsTable)
+      .where(
+        and(
+          eq(prospectConflictsTable.prospectId, prospectId),
+          eq(prospectConflictsTable.fieldName, field),
+          isNull(prospectConflictsTable.resolvedAt),
+        ),
+      )
+      .limit(1);
+
+    if (existing) {
+      await db
+        .update(prospectConflictsTable)
+        .set({ extractedValue: extractedVal, updatedAt: new Date() })
+        .where(eq(prospectConflictsTable.id, existing.id));
+    } else {
+      await db.insert(prospectConflictsTable).values({
+        accountId,
+        prospectId,
+        fieldName: field,
+        existingValue: existingVal,
+        extractedValue: extractedVal,
+      });
+    }
+  }
+}
 
 export async function processInteraction(interactionId: string): Promise<void> {
   const [interaction] = await db
@@ -55,6 +157,7 @@ export async function processInteraction(interactionId: string): Promise<void> {
       interaction.id,
       extraction.summary,
       extraction.sentiment,
+      extraction,
     );
   } catch (err) {
     logger.error({ err, interactionId }, "Failed to process interaction");
@@ -82,6 +185,7 @@ async function updateProspectDisplayFields(
   interactionId: string,
   latestSummary: string,
   latestSentiment: string,
+  extraction: ProspectExtraction,
 ): Promise<void> {
   let prospectId: string | null = existingProspectId;
 
@@ -128,8 +232,17 @@ async function updateProspectDisplayFields(
 
   if (!prospectId) return;
 
+  const [prospect] = await db
+    .select()
+    .from(prospectsTable)
+    .where(and(eq(prospectsTable.id, prospectId), eq(prospectsTable.accountId, accountId)));
+
+  if (!prospect) return;
+
   await db
     .update(prospectsTable)
     .set({ latestSummary, latestSentiment, updatedAt: new Date() })
     .where(and(eq(prospectsTable.id, prospectId), eq(prospectsTable.accountId, accountId)));
+
+  await detectAndStoreConflicts(accountId, prospectId, prospect, extraction);
 }

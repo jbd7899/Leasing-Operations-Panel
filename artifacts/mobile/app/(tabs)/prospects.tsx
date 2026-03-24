@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useMemo } from "react";
 import {
   View,
   Text,
@@ -11,11 +11,13 @@ import {
   ActivityIndicator,
 } from "react-native";
 import * as Haptics from "expo-haptics";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useQueries } from "@tanstack/react-query";
 import {
   useListProspects,
   useUpdateProspect,
   getListProspectsQueryKey,
+  getProspectConflicts,
+  getProspectConflictsQueryKey,
 } from "@workspace/api-client-react";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -56,6 +58,23 @@ export default function ProspectsScreen() {
   const topPad = isWeb ? Math.max(insets.top, 67) : insets.top;
 
   const prospects: Prospect[] = data?.prospects ?? [];
+
+  const conflictQueries = useQueries({
+    queries: prospects.map((p) => ({
+      queryKey: getProspectConflictsQueryKey(p.id),
+      queryFn: () => getProspectConflicts(p.id),
+      staleTime: 30_000,
+    })),
+  });
+
+  const conflictsByProspectId = useMemo(() => {
+    const map = new Map<string, boolean>();
+    prospects.forEach((p, i) => {
+      const result = conflictQueries[i];
+      map.set(p.id, (result?.data?.conflicts?.length ?? 0) > 0);
+    });
+    return map;
+  }, [prospects, conflictQueries]);
 
   const handleCardPress = useCallback(
     (prospect: Prospect) => {
@@ -223,6 +242,7 @@ export default function ProspectsScreen() {
               onPress={() => handleCardPress(item)}
               onLongPress={() => handleLongPress(item)}
               selected={selectedIds.has(item.id)}
+              hasConflicts={conflictsByProspectId.get(item.id) ?? false}
             />
           )}
           contentContainerStyle={[

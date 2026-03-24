@@ -26,8 +26,11 @@ import {
   getGetProspectQueryKey,
   getListProspectsQueryKey,
   useSendSms,
+  useGetProspectConflicts,
+  useResolveProspectConflict,
+  getProspectConflictsQueryKey,
 } from "@workspace/api-client-react";
-import type { ProspectDetail, TwilioNumber } from "@workspace/api-client-react";
+import type { ProspectDetail, TwilioNumber, ProspectConflict } from "@workspace/api-client-react";
 import { Badge } from "@/components/ui/Badge";
 
 const STATUS_OPTIONS = ["new", "contacted", "qualified", "disqualified", "archived"];
@@ -208,6 +211,8 @@ export default function ProspectDetailScreen() {
   const [noteText, setNoteText] = useState("");
   const [composeVisible, setComposeVisible] = useState(false);
   const [selectedTwilioNumberId, setSelectedTwilioNumberId] = useState<string | null>(null);
+  const [customValues, setCustomValues] = useState<Record<string, string>>({});
+  const [editingField, setEditingField] = useState<string | null>(null);
   const noteInputRef = useRef<TextInput>(null);
 
   const { data, isLoading, isError, refetch } = useGetProspect(id, {
@@ -242,6 +247,30 @@ export default function ProspectDetailScreen() {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         setNoteText("");
         queryClient.invalidateQueries({ queryKey: getGetProspectQueryKey(id) });
+      },
+      onError: (err) => Alert.alert("Error", String(err)),
+    },
+  });
+
+  const conflictsQuery = useGetProspectConflicts(id, {
+    query: { enabled: !!id },
+  });
+
+  const conflicts: ProspectConflict[] = conflictsQuery.data?.conflicts ?? [];
+
+  const resolveMutation = useResolveProspectConflict({
+    mutation: {
+      onSuccess: (result) => {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        queryClient.invalidateQueries({ queryKey: getProspectConflictsQueryKey(id) });
+        queryClient.invalidateQueries({ queryKey: getGetProspectQueryKey(id) });
+        queryClient.invalidateQueries({ queryKey: getListProspectsQueryKey() });
+        setEditingField(null);
+        setCustomValues((prev) => {
+          const next = { ...prev };
+          delete next[result.conflict.fieldName];
+          return next;
+        });
       },
       onError: (err) => Alert.alert("Error", String(err)),
     },
@@ -438,6 +467,134 @@ export default function ProspectDetailScreen() {
                 )}
               </View>
               <Text style={styles.summaryText}>{prospect.latestSummary}</Text>
+            </View>
+          )}
+
+          {/* Data Conflicts */}
+          {conflicts.length > 0 && (
+            <View style={[styles.card, conflictStyles.conflictCard]}>
+              <View style={styles.cardHeaderRow}>
+                <View style={conflictStyles.headerLeft}>
+                  <Feather name="alert-circle" size={14} color="#FCA84A" />
+                  <SectionHeader title="DATA CONFLICTS" />
+                </View>
+                <View style={conflictStyles.countBadge}>
+                  <Text style={conflictStyles.countText}>{conflicts.length}</Text>
+                </View>
+              </View>
+              <Text style={conflictStyles.description}>
+                The AI extracted values that differ from what's saved. Choose which is correct.
+              </Text>
+              {conflicts.map((conflict) => {
+                const isEditing = editingField === conflict.fieldName;
+                const isPending = resolveMutation.isPending &&
+                  (resolveMutation.variables as { fieldName: string })?.fieldName === conflict.fieldName;
+                return (
+                  <View key={conflict.id} style={conflictStyles.conflictRow}>
+                    <Text style={conflictStyles.fieldLabel}>
+                      {conflict.fieldName.replace(/([A-Z])/g, " $1").trim()}
+                    </Text>
+                    <View style={conflictStyles.valuesRow}>
+                      <Pressable
+                        style={conflictStyles.valueOption}
+                        onPress={() => {
+                          if (!isPending) {
+                            resolveMutation.mutate({
+                              prospectId: id,
+                              fieldName: conflict.fieldName,
+                              chosenValue: conflict.existingValue ?? "",
+                            });
+                          }
+                        }}
+                        disabled={isPending}
+                      >
+                        <Text style={conflictStyles.valueOptionLabel}>Keep existing</Text>
+                        <Text style={conflictStyles.valueOptionValue} numberOfLines={1}>
+                          {conflict.existingValue ?? "(empty)"}
+                        </Text>
+                      </Pressable>
+                      <Pressable
+                        style={[conflictStyles.valueOption, conflictStyles.valueOptionNew]}
+                        onPress={() => {
+                          if (!isPending) {
+                            resolveMutation.mutate({
+                              prospectId: id,
+                              fieldName: conflict.fieldName,
+                              chosenValue: conflict.extractedValue,
+                            });
+                          }
+                        }}
+                        disabled={isPending}
+                      >
+                        <Text style={[conflictStyles.valueOptionLabel, conflictStyles.valueOptionLabelNew]}>
+                          Use AI value
+                        </Text>
+                        <Text style={[conflictStyles.valueOptionValue, conflictStyles.valueOptionValueNew]} numberOfLines={1}>
+                          {conflict.extractedValue}
+                        </Text>
+                      </Pressable>
+                    </View>
+                    {isEditing ? (
+                      <View style={conflictStyles.customRow}>
+                        <TextInput
+                          value={customValues[conflict.fieldName] ?? ""}
+                          onChangeText={(t) =>
+                            setCustomValues((prev) => ({ ...prev, [conflict.fieldName]: t }))
+                          }
+                          placeholder="Enter custom value..."
+                          placeholderTextColor={Colors.dark.textMuted}
+                          style={conflictStyles.customInput}
+                          autoFocus
+                        />
+                        <Pressable
+                          style={conflictStyles.customSaveBtn}
+                          onPress={() => {
+                            const val = customValues[conflict.fieldName]?.trim();
+                            if (val) {
+                              resolveMutation.mutate({
+                                prospectId: id,
+                                fieldName: conflict.fieldName,
+                                chosenValue: val,
+                              });
+                            }
+                          }}
+                          disabled={isPending || !customValues[conflict.fieldName]?.trim()}
+                        >
+                          {isPending ? (
+                            <ActivityIndicator size="small" color="#fff" />
+                          ) : (
+                            <Text style={conflictStyles.customSaveText}>Save</Text>
+                          )}
+                        </Pressable>
+                        <Pressable
+                          style={conflictStyles.customCancelBtn}
+                          onPress={() => setEditingField(null)}
+                        >
+                          <Feather name="x" size={16} color={Colors.dark.textMuted} />
+                        </Pressable>
+                      </View>
+                    ) : (
+                      <Pressable
+                        style={conflictStyles.customEditBtn}
+                        onPress={() => {
+                          setEditingField(conflict.fieldName);
+                          setCustomValues((prev) => ({ ...prev, [conflict.fieldName]: "" }));
+                        }}
+                      >
+                        <Feather name="edit-2" size={12} color={Colors.dark.textMuted} />
+                        <Text style={conflictStyles.customEditText}>Enter custom value</Text>
+                      </Pressable>
+                    )}
+                    {isPending && !isEditing && (
+                      <ActivityIndicator
+                        size="small"
+                        color={Colors.brand.tealLight}
+                        style={conflictStyles.loadingIndicator}
+                      />
+                    )}
+                  </View>
+                );
+              })}
             </View>
           )}
 
@@ -1176,5 +1333,146 @@ const infoStyles = StyleSheet.create({
     fontFamily: "Inter_500Medium",
     color: Colors.dark.text,
     textAlign: "right",
+  },
+});
+
+const conflictStyles = StyleSheet.create({
+  conflictCard: {
+    borderColor: "#664400",
+    backgroundColor: "#1A0E00",
+  },
+  headerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  countBadge: {
+    backgroundColor: "#FCA84A22",
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderWidth: 1,
+    borderColor: "#664400",
+  },
+  countText: {
+    fontSize: 12,
+    fontFamily: "Inter_600SemiBold",
+    color: "#FCA84A",
+  },
+  description: {
+    fontSize: 12,
+    fontFamily: "Inter_400Regular",
+    color: Colors.dark.textSecondary,
+    lineHeight: 17,
+  },
+  conflictRow: {
+    gap: 8,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: "#664400",
+  },
+  fieldLabel: {
+    fontSize: 12,
+    fontFamily: "Inter_600SemiBold",
+    color: "#FCA84A",
+    textTransform: "capitalize",
+    letterSpacing: 0.3,
+  },
+  valuesRow: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  valueOption: {
+    flex: 1,
+    backgroundColor: Colors.dark.bgElevated,
+    borderRadius: 10,
+    padding: 10,
+    gap: 3,
+    borderWidth: 1,
+    borderColor: Colors.dark.border,
+  },
+  valueOptionNew: {
+    backgroundColor: "#0D2A2A",
+    borderColor: Colors.brand.teal,
+  },
+  valueOptionLabel: {
+    fontSize: 10,
+    fontFamily: "Inter_600SemiBold",
+    color: Colors.dark.textMuted,
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
+  },
+  valueOptionLabelNew: {
+    color: Colors.brand.tealLight,
+  },
+  valueOptionValue: {
+    fontSize: 13,
+    fontFamily: "Inter_500Medium",
+    color: Colors.dark.text,
+  },
+  valueOptionValueNew: {
+    color: Colors.dark.text,
+  },
+  customEditBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    alignSelf: "flex-start",
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    backgroundColor: Colors.dark.bgElevated,
+    borderWidth: 1,
+    borderColor: Colors.dark.border,
+  },
+  customEditText: {
+    fontSize: 11,
+    fontFamily: "Inter_400Regular",
+    color: Colors.dark.textMuted,
+  },
+  customRow: {
+    flexDirection: "row",
+    gap: 8,
+    alignItems: "center",
+  },
+  customInput: {
+    flex: 1,
+    backgroundColor: Colors.dark.bgInput,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+    color: Colors.dark.text,
+    borderWidth: 1,
+    borderColor: Colors.dark.border,
+  },
+  customSaveBtn: {
+    backgroundColor: Colors.brand.teal,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    minWidth: 54,
+  },
+  customSaveText: {
+    fontSize: 13,
+    fontFamily: "Inter_600SemiBold",
+    color: "#fff",
+  },
+  customCancelBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: Colors.dark.bgElevated,
+    borderWidth: 1,
+    borderColor: Colors.dark.border,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  loadingIndicator: {
+    alignSelf: "center",
+    marginTop: 4,
   },
 });

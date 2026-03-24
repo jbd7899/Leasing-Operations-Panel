@@ -4,6 +4,7 @@ export * from "./account-users";
 export * from "./properties";
 export * from "./twilio-numbers";
 export * from "./prospects";
+export * from "./prospect-conflicts";
 export * from "./interactions";
 export * from "./notes";
 export * from "./tags";

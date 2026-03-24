@@ -12,6 +12,7 @@ interface ProspectCardProps {
   onPress: () => void;
   selected?: boolean;
   onLongPress?: () => void;
+  hasConflicts?: boolean;
 }
 
 function formatPhone(phone: string) {
@@ -34,7 +35,7 @@ function sentimentIcon(sentiment?: string | null): { name: FeatherIconName; colo
   }
 }
 
-export function ProspectCard({ prospect, onPress, selected, onLongPress }: ProspectCardProps) {
+export function ProspectCard({ prospect, onPress, selected, onLongPress, hasConflicts }: ProspectCardProps) {
   const sentiment = sentimentIcon(prospect.latestSentiment);
   const name = prospect.fullName || prospect.phonePrimary;
   const initials = prospect.fullName
@@ -62,7 +63,15 @@ export function ProspectCard({ prospect, onPress, selected, onLongPress }: Prosp
       <View style={styles.content}>
         <View style={styles.row}>
           <Text style={styles.name} numberOfLines={1}>{name}</Text>
-          <Badge label={prospect.status} value={prospect.status} />
+          <View style={styles.badgeRow}>
+            {hasConflicts && (
+              <View style={styles.conflictBadge}>
+                <Feather name="alert-circle" size={10} color="#FCA84A" />
+                <Text style={styles.conflictBadgeText}>Review</Text>
+              </View>
+            )}
+            <Badge label={prospect.status} value={prospect.status} />
+          </View>
         </View>
 
         <Text style={styles.phone}>{formatPhone(prospect.phonePrimary)}</Text>
@@ -198,5 +207,26 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontFamily: "Inter_400Regular",
     color: Colors.dark.textSecondary,
+  },
+  badgeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  conflictBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    backgroundColor: "#2A1A0A",
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderWidth: 1,
+    borderColor: "#664400",
+  },
+  conflictBadgeText: {
+    fontSize: 10,
+    fontFamily: "Inter_600SemiBold",
+    color: "#FCA84A",
   },
 });
