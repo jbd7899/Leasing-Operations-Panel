@@ -13,4 +13,5 @@ export interface InboxItem {
   interaction: Interaction;
   prospect?: Prospect | null;
   property?: Property | null;
+  messageCount?: number;
 }

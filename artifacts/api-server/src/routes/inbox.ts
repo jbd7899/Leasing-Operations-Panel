@@ -1,6 +1,6 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { db, interactionsTable, prospectsTable, propertiesTable } from "@workspace/db";
-import { eq, and, or, ilike, desc, inArray, sql } from "drizzle-orm";
+import { eq, and, or, ilike, desc, inArray } from "drizzle-orm";
 
 const router: IRouter = Router();
 
@@ -60,20 +60,70 @@ router.get("/inbox", async (req: Request, res: Response) => {
 
   const whereClause = and(...interactionConditions);
 
-  const [interactions, countResult] = await Promise.all([
-    db.select()
-      .from(interactionsTable)
-      .where(whereClause)
-      .orderBy(desc(interactionsTable.occurredAt))
-      .limit(limit)
-      .offset(offset),
-    db.select({ count: sql<number>`count(*)` })
-      .from(interactionsTable)
-      .where(whereClause),
-  ]);
+  // Group by prospectId: get one row per prospect (most recent interaction),
+  // plus individual rows for orphaned interactions (no prospectId).
+  // We do this in application logic: fetch all matching interactions, then group.
+  const allInteractions = await db.select()
+    .from(interactionsTable)
+    .where(whereClause)
+    .orderBy(desc(interactionsTable.occurredAt));
 
-  const prospectIds = [...new Set(interactions.map((i) => i.prospectId).filter(Boolean) as string[])];
-  const fetchedPropertyIds = [...new Set(interactions.map((i) => i.propertyId).filter(Boolean) as string[])];
+  // Group interactions by prospectId
+  const prospectGroups = new Map<string, typeof allInteractions>();
+  const orphanedInteractions: typeof allInteractions = [];
+
+  for (const interaction of allInteractions) {
+    if (interaction.prospectId) {
+      const group = prospectGroups.get(interaction.prospectId);
+      if (group) {
+        group.push(interaction);
+      } else {
+        prospectGroups.set(interaction.prospectId, [interaction]);
+      }
+    } else {
+      orphanedInteractions.push(interaction);
+    }
+  }
+
+  // Build ungrouped "virtual" items: one per prospect (most recent) + all orphans
+  // Each prospect group is already sorted desc by occurredAt, so first item is most recent.
+  interface GroupedItem {
+    interaction: (typeof allInteractions)[0];
+    messageCount: number;
+    prospectId: string | null;
+    propertyId: string | null;
+  }
+
+  const groupedItems: GroupedItem[] = [];
+
+  for (const [prospectId, interactions] of prospectGroups) {
+    groupedItems.push({
+      interaction: interactions[0],
+      messageCount: interactions.length,
+      prospectId,
+      propertyId: interactions[0].propertyId ?? null,
+    });
+  }
+
+  for (const interaction of orphanedInteractions) {
+    groupedItems.push({
+      interaction,
+      messageCount: 1,
+      prospectId: null,
+      propertyId: interaction.propertyId ?? null,
+    });
+  }
+
+  // Sort grouped items by most recent interaction desc
+  groupedItems.sort((a, b) =>
+    new Date(b.interaction.occurredAt).getTime() - new Date(a.interaction.occurredAt).getTime()
+  );
+
+  const total = groupedItems.length;
+  const paged = groupedItems.slice(offset, offset + limit);
+
+  const prospectIds = [...new Set(paged.map((i) => i.prospectId).filter(Boolean) as string[])];
+  const fetchedPropertyIds = [...new Set(paged.map((i) => i.propertyId).filter(Boolean) as string[])];
 
   const [prospects, properties] = await Promise.all([
     prospectIds.length > 0
@@ -89,13 +139,14 @@ router.get("/inbox", async (req: Request, res: Response) => {
   const prospectMap = new Map(prospects.map((p) => [p.id, p]));
   const propertyMap = new Map(properties.map((p) => [p.id, p]));
 
-  const items = interactions.map((interaction) => ({
-    interaction,
-    prospect: interaction.prospectId ? (prospectMap.get(interaction.prospectId) ?? null) : null,
-    property: interaction.propertyId ? (propertyMap.get(interaction.propertyId) ?? null) : null,
+  const items = paged.map((item) => ({
+    interaction: item.interaction,
+    prospect: item.prospectId ? (prospectMap.get(item.prospectId) ?? null) : null,
+    property: item.propertyId ? (propertyMap.get(item.propertyId) ?? null) : null,
+    messageCount: item.messageCount,
   }));
 
-  res.json({ items, total: Number(countResult[0]?.count ?? 0) });
+  res.json({ items, total });
 });
 
 export default router;

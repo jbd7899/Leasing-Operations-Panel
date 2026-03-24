@@ -318,20 +318,15 @@ export default function InboxScreen() {
   const items = data?.items ?? [];
 
   const handleItemPress = useCallback((item: (typeof items)[0]) => {
-    router.push({
-      pathname: "/interaction/[id]",
-      params: {
-        id: item.interaction.id,
-        ...(item.prospect ? { prospectId: item.prospect.id } : {}),
-      },
-    });
-  }, []);
-
-  const handleItemReply = useCallback((item: (typeof items)[0]) => {
     if (item.prospect?.id) {
       router.push({
         pathname: "/prospect/[id]",
         params: { id: item.prospect.id },
+      });
+    } else {
+      router.push({
+        pathname: "/interaction/[id]",
+        params: { id: item.interaction.id },
       });
     }
   }, []);
@@ -367,7 +362,7 @@ export default function InboxScreen() {
           <View>
             <Text style={styles.screenTitle}>Inbox</Text>
             <Text style={styles.screenSubtitle}>
-              {data ? `${data.total} interaction${data.total !== 1 ? "s" : ""}` : "Loading..."}
+              {data ? `${data.total} conversation${data.total !== 1 ? "s" : ""}` : "Loading..."}
             </Text>
           </View>
           <View style={styles.headerRight}>
@@ -459,7 +454,6 @@ export default function InboxScreen() {
             <InboxItem
               item={item}
               onPress={() => handleItemPress(item)}
-              onReply={item.prospect?.id ? () => handleItemReply(item) : undefined}
             />
           )}
           contentContainerStyle={[
@@ -469,7 +463,7 @@ export default function InboxScreen() {
           ListEmptyComponent={
             <EmptyState
               icon="inbox"
-              title={hasActiveFilters ? "No matching interactions" : "No interactions"}
+              title={hasActiveFilters ? "No matching conversations" : "No conversations"}
               subtitle={
                 hasActiveFilters
                   ? "Try adjusting your filters"

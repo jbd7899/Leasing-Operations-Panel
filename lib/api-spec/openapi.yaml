@@ -1242,6 +1242,9 @@ components:
           oneOf:
             - $ref: '#/components/schemas/Property'
             - type: 'null'
+        messageCount:
+          type: integer
+          description: Total number of interactions in this conversation thread
     InboxResponse:
       type: object
       required: [items, total]

@@ -10,7 +10,6 @@ type FeatherIconName = ComponentProps<typeof Feather>["name"];
 interface InboxItemProps {
   item: InboxItemType;
   onPress: () => void;
-  onReply?: () => void;
 }
 
 function timeAgo(dateStr: string): string {
@@ -41,11 +40,12 @@ function handleCall(phone: string) {
   });
 }
 
-export function InboxItem({ item, onPress, onReply }: InboxItemProps) {
-  const { interaction, prospect, property } = item;
+export function InboxItem({ item, onPress }: InboxItemProps) {
+  const { interaction, prospect, property, messageCount } = item;
   const sourceIcon: FeatherIconName = SOURCE_ICONS[interaction.sourceType] ?? "activity";
   const phoneNumber = prospect?.phonePrimary ?? interaction.fromNumber;
   const canCall = !!phoneNumber;
+  const showMessageBadge = typeof messageCount === "number" && messageCount > 1;
 
   return (
     <Pressable
@@ -68,7 +68,14 @@ export function InboxItem({ item, onPress, onReply }: InboxItemProps) {
           </View>
           <View style={styles.rightMeta}>
             <Text style={styles.time}>{timeAgo(interaction.occurredAt)}</Text>
-            <Badge label={interaction.sourceType} value={interaction.sourceType} />
+            {showMessageBadge && (
+              <View style={styles.messageBadge}>
+                <Text style={styles.messageBadgeText}>{messageCount}</Text>
+              </View>
+            )}
+            {prospect?.status && (
+              <Badge label={prospect.status} value={prospect.status} />
+            )}
           </View>
         </View>
 
@@ -78,18 +85,9 @@ export function InboxItem({ item, onPress, onReply }: InboxItemProps) {
           </Text>
         ) : null}
 
-        <View style={styles.bottomRow}>
-          {interaction.extractionStatus && (
-            <Badge label={interaction.extractionStatus} value={interaction.extractionStatus} />
-          )}
-          {interaction.category && (
-            <Text style={styles.category}>{interaction.category.replace(/_/g, " ")}</Text>
-          )}
-        </View>
-
         {/* Quick action row */}
-        <View style={styles.quickActions}>
-          {canCall && (
+        {canCall && (
+          <View style={styles.quickActions}>
             <Pressable
               style={styles.quickAction}
               onPress={(e) => {
@@ -101,21 +99,8 @@ export function InboxItem({ item, onPress, onReply }: InboxItemProps) {
               <Feather name="phone" size={14} color={Colors.brand.tealLight} />
               <Text style={styles.quickActionLabel}>Call</Text>
             </Pressable>
-          )}
-          {onReply && (
-            <Pressable
-              style={styles.quickAction}
-              onPress={(e) => {
-                e.stopPropagation?.();
-                onReply();
-              }}
-              hitSlop={8}
-            >
-              <Feather name="message-square" size={14} color={Colors.brand.tealLight} />
-              <Text style={styles.quickActionLabel}>Reply</Text>
-            </Pressable>
-          )}
-        </View>
+          </View>
+        )}
       </View>
     </Pressable>
   );
@@ -179,24 +164,25 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_400Regular",
     color: Colors.dark.textMuted,
   },
+  messageBadge: {
+    backgroundColor: Colors.brand.tealLight,
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 5,
+  },
+  messageBadgeText: {
+    fontSize: 11,
+    fontFamily: "Inter_600SemiBold",
+    color: "#0A1A1A",
+  },
   preview: {
     fontSize: 13,
     fontFamily: "Inter_400Regular",
     color: Colors.dark.textSecondary,
     lineHeight: 18,
-  },
-  bottomRow: {
-    flexDirection: "row",
-    gap: 6,
-    alignItems: "center",
-    flexWrap: "wrap",
-    marginTop: 2,
-  },
-  category: {
-    fontSize: 11,
-    fontFamily: "Inter_400Regular",
-    color: Colors.dark.textMuted,
-    textTransform: "capitalize",
   },
   quickActions: {
     flexDirection: "row",
