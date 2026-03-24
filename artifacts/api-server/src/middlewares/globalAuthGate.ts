@@ -8,11 +8,12 @@ const PUBLIC_PATHS = new Set([
   "/api/auth/user",
 ]);
 
-const PUBLIC_PREFIXES = [
+const WEBHOOK_PREFIXES = [
   "/api/webhooks/",
   "/api/mobile-auth/",
-  "/api/internal/",
 ];
+
+const INTERNAL_SECRET = process.env.INTERNAL_API_SECRET;
 
 export function globalAuthGate(req: Request, res: Response, next: NextFunction) {
   const path = req.path;
@@ -22,8 +23,16 @@ export function globalAuthGate(req: Request, res: Response, next: NextFunction) 
     return;
   }
 
-  for (const prefix of PUBLIC_PREFIXES) {
+  for (const prefix of WEBHOOK_PREFIXES) {
     if (path.startsWith(prefix)) {
+      next();
+      return;
+    }
+  }
+
+  if (path.startsWith("/api/internal/")) {
+    const header = req.headers["x-internal-secret"];
+    if (INTERNAL_SECRET && header === INTERNAL_SECRET) {
       next();
       return;
     }
