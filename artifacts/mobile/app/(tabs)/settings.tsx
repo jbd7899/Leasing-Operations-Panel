@@ -191,10 +191,23 @@ function AddTwilioNumberModal({
   properties: Property[];
 }) {
   const [phoneNumber, setPhoneNumber] = useState("");
+  const [phoneError, setPhoneError] = useState("");
   const [friendlyName, setFriendlyName] = useState("");
   const [purpose, setPurpose] = useState("");
   const [selectedPropertyId, setSelectedPropertyId] = useState<string | null>(null);
-  const [error, setError] = useState("");
+  const [apiError, setApiError] = useState("");
+  const [touched, setTouched] = useState(false);
+
+  const E164_REGEX = /^\+[1-9]\d{7,14}$/;
+
+  function validatePhone(val: string): string {
+    if (!val.trim()) return "Phone number is required.";
+    if (!E164_REGEX.test(val.trim())) return "Must be E.164 format, e.g. +15035551234";
+    return "";
+  }
+
+  const phoneValidationError = validatePhone(phoneNumber);
+  const isFormValid = !phoneValidationError;
 
   const createMutation = useCreateTwilioNumber({
     mutation: {
@@ -204,18 +217,39 @@ function AddTwilioNumberModal({
       },
       onError: (err: unknown) => {
         const msg = err instanceof Error ? err.message : String(err);
-        setError(msg.includes("403") ? "You need admin or owner role to add numbers." : msg);
+        setApiError(msg.includes("403") ? "You need admin or owner role to add numbers." : msg);
       },
     },
   });
 
   function handleClose() {
     setPhoneNumber("");
+    setPhoneError("");
     setFriendlyName("");
     setPurpose("");
     setSelectedPropertyId(null);
-    setError("");
+    setApiError("");
+    setTouched(false);
     onClose();
+  }
+
+  function handleSubmit() {
+    setTouched(true);
+    const err = validatePhone(phoneNumber);
+    if (err) {
+      setPhoneError(err);
+      return;
+    }
+    setPhoneError("");
+    setApiError("");
+    createMutation.mutate({
+      data: {
+        phoneNumber: phoneNumber.trim(),
+        friendlyName: friendlyName.trim() || undefined,
+        purpose: purpose.trim() || undefined,
+        propertyId: selectedPropertyId ?? undefined,
+      },
+    });
   }
 
   return (
@@ -230,22 +264,32 @@ function AddTwilioNumberModal({
           </View>
 
           <ScrollView style={modalStyles.body} keyboardShouldPersistTaps="handled">
-            {error ? (
+            {apiError ? (
               <View style={webhookStyles.errorBanner}>
                 <Feather name="alert-circle" size={14} color="#FF6B6B" />
-                <Text style={webhookStyles.errorText}>{error}</Text>
+                <Text style={webhookStyles.errorText}>{apiError}</Text>
               </View>
             ) : null}
             <Text style={modalStyles.fieldLabel}>Phone Number * (E.164 format)</Text>
             <TextInput
               value={phoneNumber}
-              onChangeText={setPhoneNumber}
+              onChangeText={(v) => {
+                setPhoneNumber(v);
+                if (touched) setPhoneError(validatePhone(v));
+              }}
+              onBlur={() => {
+                setTouched(true);
+                setPhoneError(validatePhone(phoneNumber));
+              }}
               placeholder="+15035551234"
               placeholderTextColor={Colors.dark.textMuted}
-              style={modalStyles.input}
+              style={[modalStyles.input, (touched && phoneError) ? webhookStyles.inputError : null]}
               keyboardType="phone-pad"
               autoCorrect={false}
             />
+            {touched && phoneError ? (
+              <Text style={webhookStyles.fieldError}>{phoneError}</Text>
+            ) : null}
             <Text style={modalStyles.fieldLabel}>Friendly Name</Text>
             <TextInput
               value={friendlyName}
@@ -289,7 +333,7 @@ function AddTwilioNumberModal({
               </>
             )}
             <Text style={webhookStyles.hint}>
-              After adding, you will receive the webhook URLs to paste into your Twilio console.
+              After adding, expand the Twilio Numbers section to copy webhook URLs for your Twilio console.
             </Text>
           </ScrollView>
 
@@ -300,20 +344,10 @@ function AddTwilioNumberModal({
             <Pressable
               style={[
                 modalStyles.saveBtn,
-                (!phoneNumber.trim() || createMutation.isPending) && modalStyles.saveBtnDisabled,
+                (touched && !isFormValid || createMutation.isPending) && modalStyles.saveBtnDisabled,
               ]}
-              onPress={() => {
-                setError("");
-                createMutation.mutate({
-                  data: {
-                    phoneNumber: phoneNumber.trim(),
-                    friendlyName: friendlyName.trim() || undefined,
-                    purpose: purpose.trim() || undefined,
-                    propertyId: selectedPropertyId ?? undefined,
-                  },
-                });
-              }}
-              disabled={!phoneNumber.trim() || createMutation.isPending}
+              onPress={handleSubmit}
+              disabled={createMutation.isPending}
             >
               {createMutation.isPending ? (
                 <ActivityIndicator size="small" color="#fff" />
@@ -344,22 +378,31 @@ function AddTeamMemberModal({
 }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [emailError, setEmailError] = useState("");
   const [role, setRole] = useState<"agent" | "admin">("agent");
-  const [error, setError] = useState("");
+  const [apiError, setApiError] = useState("");
+  const [touched, setTouched] = useState(false);
+
+  const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+  function validateEmail(val: string): string {
+    if (!val.trim()) return "Email is required.";
+    if (!EMAIL_REGEX.test(val.trim())) return "Enter a valid email address.";
+    return "";
+  }
+
+  const emailValidationError = validateEmail(email);
+  const isFormValid = !emailValidationError;
 
   const createMutation = useCreateUser({
     mutation: {
       onSuccess: () => {
         onCreated();
-        onClose();
-        setName("");
-        setEmail("");
-        setRole("agent");
-        setError("");
+        handleClose();
       },
       onError: (err: unknown) => {
         const msg = err instanceof Error ? err.message : String(err);
-        setError(msg.includes("403") ? "You need admin or owner role to invite members." : msg);
+        setApiError(msg.includes("403") ? "You need admin or owner role to invite members." : msg);
       },
     },
   });
@@ -367,12 +410,30 @@ function AddTeamMemberModal({
   function handleClose() {
     setName("");
     setEmail("");
+    setEmailError("");
     setRole("agent");
-    setError("");
+    setApiError("");
+    setTouched(false);
     onClose();
   }
 
-  const isValid = email.trim().includes("@");
+  function handleSubmit() {
+    setTouched(true);
+    const err = validateEmail(email);
+    if (err) {
+      setEmailError(err);
+      return;
+    }
+    setEmailError("");
+    setApiError("");
+    createMutation.mutate({
+      data: {
+        email: email.trim(),
+        name: name.trim() || undefined,
+        role,
+      },
+    });
+  }
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={handleClose}>
@@ -386,10 +447,10 @@ function AddTeamMemberModal({
           </View>
 
           <ScrollView style={modalStyles.body} keyboardShouldPersistTaps="handled">
-            {error ? (
+            {apiError ? (
               <View style={webhookStyles.errorBanner}>
                 <Feather name="alert-circle" size={14} color="#FF6B6B" />
-                <Text style={webhookStyles.errorText}>{error}</Text>
+                <Text style={webhookStyles.errorText}>{apiError}</Text>
               </View>
             ) : null}
             <Text style={modalStyles.fieldLabel}>Full Name</Text>
@@ -403,14 +464,24 @@ function AddTeamMemberModal({
             <Text style={modalStyles.fieldLabel}>Email *</Text>
             <TextInput
               value={email}
-              onChangeText={setEmail}
+              onChangeText={(v) => {
+                setEmail(v);
+                if (touched) setEmailError(validateEmail(v));
+              }}
+              onBlur={() => {
+                setTouched(true);
+                setEmailError(validateEmail(email));
+              }}
               placeholder="e.g. jordan@yourcompany.com"
               placeholderTextColor={Colors.dark.textMuted}
-              style={modalStyles.input}
+              style={[modalStyles.input, (touched && emailError) ? webhookStyles.inputError : null]}
               keyboardType="email-address"
               autoCapitalize="none"
               autoCorrect={false}
             />
+            {touched && emailError ? (
+              <Text style={webhookStyles.fieldError}>{emailError}</Text>
+            ) : null}
             <Text style={modalStyles.fieldLabel}>Role</Text>
             <View style={webhookStyles.propertyChips}>
               {ROLE_OPTIONS.map((opt) => (
@@ -435,18 +506,9 @@ function AddTeamMemberModal({
               <Text style={modalStyles.cancelBtnText}>Cancel</Text>
             </Pressable>
             <Pressable
-              style={[modalStyles.saveBtn, (!isValid || createMutation.isPending) && modalStyles.saveBtnDisabled]}
-              onPress={() => {
-                setError("");
-                createMutation.mutate({
-                  data: {
-                    email: email.trim(),
-                    name: name.trim() || undefined,
-                    role,
-                  },
-                });
-              }}
-              disabled={!isValid || createMutation.isPending}
+              style={[modalStyles.saveBtn, ((touched && !isFormValid) || createMutation.isPending) && modalStyles.saveBtnDisabled]}
+              onPress={handleSubmit}
+              disabled={createMutation.isPending}
             >
               {createMutation.isPending ? (
                 <ActivityIndicator size="small" color="#fff" />
@@ -1261,5 +1323,15 @@ const webhookStyles = StyleSheet.create({
   },
   propertyChipTextSelected: {
     color: Colors.brand.tealLight,
+  },
+  inputError: {
+    borderColor: "#FF6B6B",
+  },
+  fieldError: {
+    fontSize: 12,
+    fontFamily: "Inter_400Regular",
+    color: "#FF6B6B",
+    marginTop: 4,
+    marginLeft: 2,
   },
 });
