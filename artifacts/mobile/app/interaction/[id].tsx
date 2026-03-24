@@ -237,6 +237,7 @@ export default function InteractionScreen() {
   const interaction = interactionData;
   const prospect = prospectData?.prospect;
   const prospectTags = prospectData?.tags ?? [];
+  const prospectTagIdStr = prospectTags.map((t) => t.id).join(",");
   const properties = propertiesData?.properties ?? [];
   const allTags = tagsData?.tags ?? [];
 
@@ -281,7 +282,8 @@ export default function InteractionScreen() {
         }));
       }
     }
-  }, [prospect, interaction, prospectTags]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prospect?.id, interaction?.id, prospectTagIdStr]);
 
   const set = useCallback((field: keyof typeof form) => (val: string) => setForm((f) => ({ ...f, [field]: val })), []);
   const toggleTag = useCallback((id: string) => {

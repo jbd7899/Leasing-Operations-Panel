@@ -98,7 +98,7 @@ router.get("/analytics/overview", async (req: Request, res: Response) => {
       )
       .groupBy(interactionsTable.sourceType),
     db
-      .select({ exportStatus: prospectsTable.exportStatus, count: count() })
+      .select({ count: count() })
       .from(prospectsTable)
       .where(and(baseCondition, eq(prospectsTable.exportStatus, "pending"))),
     db
@@ -150,7 +150,7 @@ router.get("/analytics/overview", async (req: Request, res: Response) => {
     { count: number }[],
     { status: string; count: number }[],
     { sourceType: string | null; count: number }[],
-    { exportStatus: string; count: number }[],
+    { count: number }[],
     { count: number }[],
     { propertyId: string | null; count: number }[],
     { rows: { week: string; count: number }[] },
