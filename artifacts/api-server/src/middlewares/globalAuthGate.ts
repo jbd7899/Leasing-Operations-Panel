@@ -11,6 +11,7 @@ const PUBLIC_PATHS = new Set([
 const PUBLIC_PREFIXES = [
   "/api/webhooks/",
   "/api/mobile-auth/",
+  "/api/internal/",
 ];
 
 export function globalAuthGate(req: Request, res: Response, next: NextFunction) {
