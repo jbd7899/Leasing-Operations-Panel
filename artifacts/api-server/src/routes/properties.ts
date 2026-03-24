@@ -25,7 +25,7 @@ function requireAdmin(req: Request, res: Response): boolean {
 }
 
 router.get("/properties", async (req: Request, res: Response) => {
-  if (!requireAuth(req, res)) return;
+  if (!requireAdmin(req, res)) return;
   const { accountId } = req.user!;
 
   const properties = await db

@@ -1,5 +1,5 @@
 import { Router, type IRouter, type Request, type Response } from "express";
-import { db, interactionsTable, prospectsTable } from "@workspace/db";
+import { db, interactionsTable, prospectsTable, propertiesTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 
 const router: IRouter = Router();
@@ -32,6 +32,26 @@ router.patch("/interactions/:id/review", async (req: Request, res: Response) => 
 
   const { id } = req.params;
   const { summary, category, propertyId, prospectId, structuredExtractionJson } = req.body;
+
+  if (propertyId !== undefined) {
+    const [property] = await db.select({ id: propertiesTable.id })
+      .from(propertiesTable)
+      .where(and(eq(propertiesTable.id, propertyId), eq(propertiesTable.accountId, accountId)));
+    if (!property) {
+      res.status(400).json({ error: "propertyId does not belong to this account" });
+      return;
+    }
+  }
+
+  if (prospectId !== undefined) {
+    const [prospect] = await db.select({ id: prospectsTable.id })
+      .from(prospectsTable)
+      .where(and(eq(prospectsTable.id, prospectId), eq(prospectsTable.accountId, accountId)));
+    if (!prospect) {
+      res.status(400).json({ error: "prospectId does not belong to this account" });
+      return;
+    }
+  }
 
   const updates: Record<string, unknown> = {};
   if (summary !== undefined) updates.summary = summary;
