@@ -1,6 +1,8 @@
 import { Router, type IRouter, type Request, type Response } from "express";
-import { db, interactionsTable, prospectsTable, propertiesTable } from "@workspace/db";
+import { db, interactionsTable, prospectsTable, propertiesTable, twilioNumbersTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
+import twilio from "twilio";
+import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
 
@@ -10,6 +12,13 @@ function requireAuth(req: Request, res: Response): boolean {
     return false;
   }
   return true;
+}
+
+function getTwilioClient(): ReturnType<typeof twilio> | null {
+  const accountSid = process.env.TWILIO_ACCOUNT_SID;
+  const authToken = process.env.TWILIO_AUTH_TOKEN;
+  if (!accountSid || !authToken) return null;
+  return twilio(accountSid, authToken);
 }
 
 router.get("/interactions/:id", async (req: Request, res: Response) => {
@@ -75,6 +84,89 @@ router.patch("/interactions/:id/review", async (req: Request, res: Response) => 
   }
 
   res.json(interaction);
+});
+
+router.post("/interactions/send-sms", async (req: Request, res: Response) => {
+  if (!requireAuth(req, res)) return;
+  const { accountId } = req.user!;
+
+  const { prospectId, body, fromTwilioNumberId } = req.body as {
+    prospectId: string;
+    body: string;
+    fromTwilioNumberId?: string;
+  };
+
+  if (!prospectId) { res.status(400).json({ error: "prospectId is required" }); return; }
+  if (!body || !body.trim()) { res.status(400).json({ error: "body is required" }); return; }
+
+  const [prospect] = await db
+    .select()
+    .from(prospectsTable)
+    .where(and(eq(prospectsTable.id, prospectId), eq(prospectsTable.accountId, accountId)));
+  if (!prospect) { res.status(404).json({ error: "Prospect not found" }); return; }
+  if (!prospect.phonePrimary) { res.status(400).json({ error: "Prospect has no phone number" }); return; }
+
+  let twilioNumber;
+  if (fromTwilioNumberId) {
+    const [found] = await db
+      .select()
+      .from(twilioNumbersTable)
+      .where(and(eq(twilioNumbersTable.id, fromTwilioNumberId), eq(twilioNumbersTable.accountId, accountId)));
+    if (!found) { res.status(400).json({ error: "Twilio number not found" }); return; }
+    twilioNumber = found;
+  } else {
+    const numbers = await db
+      .select()
+      .from(twilioNumbersTable)
+      .where(and(eq(twilioNumbersTable.accountId, accountId), eq(twilioNumbersTable.isActive, true)));
+    if (numbers.length === 0) {
+      res.status(422).json({ error: "No active Twilio numbers configured for this account. Add a Twilio number in Settings." });
+      return;
+    }
+    twilioNumber = numbers[0];
+  }
+
+  const client = getTwilioClient();
+  if (!client) {
+    res.status(503).json({ error: "Twilio is not configured on this server. Set TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN." });
+    return;
+  }
+
+  let twilioMessageSid: string | undefined;
+  try {
+    const message = await client.messages.create({
+      body: body.trim(),
+      from: twilioNumber.phoneNumber,
+      to: prospect.phonePrimary,
+    });
+    twilioMessageSid = message.sid;
+    logger.info({ sid: message.sid, to: prospect.phonePrimary }, "Outbound SMS sent via Twilio");
+  } catch (err) {
+    logger.error({ err }, "Failed to send outbound SMS via Twilio");
+    res.status(502).json({ error: `Failed to send SMS: ${err instanceof Error ? err.message : String(err)}` });
+    return;
+  }
+
+  const [interaction] = await db
+    .insert(interactionsTable)
+    .values({
+      accountId,
+      prospectId,
+      propertyId: prospect.assignedPropertyId ?? null,
+      sourceType: "sms",
+      direction: "outbound",
+      twilioMessageSid,
+      fromNumber: twilioNumber.phoneNumber,
+      toNumber: prospect.phonePrimary,
+      rawText: body.trim(),
+      summary: body.trim(),
+      category: "general_question",
+      extractionStatus: "skipped",
+      occurredAt: new Date(),
+    })
+    .returning();
+
+  res.status(201).json(interaction);
 });
 
 export default router;

@@ -89,6 +89,15 @@ export default function InboxScreen() {
     });
   }, []);
 
+  const handleItemReply = useCallback((item: (typeof items)[0]) => {
+    if (item.prospect?.id) {
+      router.push({
+        pathname: "/prospect/[id]",
+        params: { id: item.prospect.id },
+      });
+    }
+  }, []);
+
   const hasActiveFilters = !!(sourceFilter || statusFilter || propertyFilter || search);
 
   return (
@@ -198,7 +207,11 @@ export default function InboxScreen() {
           data={items}
           keyExtractor={(item) => item.interaction.id}
           renderItem={({ item }) => (
-            <InboxItem item={item} onPress={() => handleItemPress(item)} />
+            <InboxItem
+              item={item}
+              onPress={() => handleItemPress(item)}
+              onReply={item.prospect?.id ? () => handleItemReply(item) : undefined}
+            />
           )}
           contentContainerStyle={[
             styles.listContent,

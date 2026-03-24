@@ -1,5 +1,5 @@
 import React, { type ComponentProps } from "react";
-import { View, Text, StyleSheet, Pressable } from "react-native";
+import { View, Text, StyleSheet, Pressable, Linking, Alert } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
 import { Badge } from "./Badge";
@@ -10,6 +10,7 @@ type FeatherIconName = ComponentProps<typeof Feather>["name"];
 interface InboxItemProps {
   item: InboxItemType;
   onPress: () => void;
+  onReply?: () => void;
 }
 
 function timeAgo(dateStr: string): string {
@@ -29,9 +30,22 @@ const SOURCE_ICONS: Record<string, FeatherIconName> = {
   voicemail: "voicemail",
 };
 
-export function InboxItem({ item, onPress }: InboxItemProps) {
+function handleCall(phone: string) {
+  const url = `tel:${phone}`;
+  Linking.canOpenURL(url).then((supported) => {
+    if (supported) {
+      Linking.openURL(url);
+    } else {
+      Alert.alert("Cannot Call", "Your device does not support phone calls.");
+    }
+  });
+}
+
+export function InboxItem({ item, onPress, onReply }: InboxItemProps) {
   const { interaction, prospect, property } = item;
   const sourceIcon: FeatherIconName = SOURCE_ICONS[interaction.sourceType] ?? "activity";
+  const phoneNumber = prospect?.phonePrimary ?? interaction.fromNumber;
+  const canCall = !!phoneNumber;
 
   return (
     <Pressable
@@ -70,6 +84,36 @@ export function InboxItem({ item, onPress }: InboxItemProps) {
           )}
           {interaction.category && (
             <Text style={styles.category}>{interaction.category.replace(/_/g, " ")}</Text>
+          )}
+        </View>
+
+        {/* Quick action row */}
+        <View style={styles.quickActions}>
+          {canCall && (
+            <Pressable
+              style={styles.quickAction}
+              onPress={(e) => {
+                e.stopPropagation?.();
+                handleCall(phoneNumber);
+              }}
+              hitSlop={8}
+            >
+              <Feather name="phone" size={14} color={Colors.brand.tealLight} />
+              <Text style={styles.quickActionLabel}>Call</Text>
+            </Pressable>
+          )}
+          {onReply && (
+            <Pressable
+              style={styles.quickAction}
+              onPress={(e) => {
+                e.stopPropagation?.();
+                onReply();
+              }}
+              hitSlop={8}
+            >
+              <Feather name="message-square" size={14} color={Colors.brand.tealLight} />
+              <Text style={styles.quickActionLabel}>Reply</Text>
+            </Pressable>
           )}
         </View>
       </View>
@@ -153,5 +197,29 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_400Regular",
     color: Colors.dark.textMuted,
     textTransform: "capitalize",
+  },
+  quickActions: {
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 6,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: Colors.dark.border,
+  },
+  quickAction: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    backgroundColor: "#0D2A2A",
+    borderWidth: 1,
+    borderColor: "#164444",
+  },
+  quickActionLabel: {
+    fontSize: 12,
+    fontFamily: "Inter_500Medium",
+    color: Colors.brand.tealLight,
   },
 });

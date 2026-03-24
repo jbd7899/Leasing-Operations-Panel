@@ -10,6 +10,8 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  Modal,
+  Linking,
 } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
 import { useQueryClient } from "@tanstack/react-query";
@@ -20,8 +22,10 @@ import {
   useGetProspect,
   useUpdateProspect,
   useAddProspectNote,
+  useListTwilioNumbers,
   getGetProspectQueryKey,
   getListProspectsQueryKey,
+  useSendSms,
 } from "@workspace/api-client-react";
 import { Badge } from "@/components/ui/Badge";
 
@@ -75,15 +79,98 @@ function StatusPicker({ currentStatus, onSelect, isUpdating }: {
   );
 }
 
+function ComposeModal({
+  visible,
+  onClose,
+  prospectName,
+  onSend,
+  isSending,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  prospectName: string;
+  onSend: (text: string) => void;
+  isSending: boolean;
+}) {
+  const [messageText, setMessageText] = useState("");
+
+  const handleSend = () => {
+    if (messageText.trim()) {
+      onSend(messageText.trim());
+    }
+  };
+
+  const handleClose = () => {
+    setMessageText("");
+    onClose();
+  };
+
+  return (
+    <Modal
+      visible={visible}
+      animationType="slide"
+      presentationStyle="pageSheet"
+      onRequestClose={handleClose}
+    >
+      <KeyboardAvoidingView
+        style={composeStyles.container}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
+        <View style={composeStyles.header}>
+          <Pressable onPress={handleClose} style={composeStyles.cancelBtn}>
+            <Text style={composeStyles.cancelText}>Cancel</Text>
+          </Pressable>
+          <Text style={composeStyles.title}>New Message</Text>
+          <Pressable
+            onPress={handleSend}
+            style={[composeStyles.sendBtn, (!messageText.trim() || isSending) && composeStyles.sendBtnDisabled]}
+            disabled={!messageText.trim() || isSending}
+          >
+            {isSending ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Text style={composeStyles.sendText}>Send</Text>
+            )}
+          </Pressable>
+        </View>
+
+        <View style={composeStyles.toRow}>
+          <Feather name="message-square" size={16} color={Colors.brand.tealLight} />
+          <Text style={composeStyles.toLabel}>To:</Text>
+          <Text style={composeStyles.toName}>{prospectName}</Text>
+        </View>
+
+        <View style={composeStyles.divider} />
+
+        <TextInput
+          value={messageText}
+          onChangeText={setMessageText}
+          placeholder="Type your message..."
+          placeholderTextColor={Colors.dark.textMuted}
+          style={composeStyles.input}
+          multiline
+          autoFocus
+          maxLength={1600}
+        />
+
+        <Text style={composeStyles.charCount}>{messageText.length}/1600</Text>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
 export default function ProspectDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const queryClient = useQueryClient();
   const [noteText, setNoteText] = useState("");
+  const [composeVisible, setComposeVisible] = useState(false);
   const noteInputRef = useRef<TextInput>(null);
 
   const { data, isLoading, isError, refetch } = useGetProspect(id, {
     query: { enabled: !!id, queryKey: getGetProspectQueryKey(id) },
   });
+
+  const { data: twilioNumbersData } = useListTwilioNumbers();
 
   const statusMutation = useUpdateProspect({
     mutation: {
@@ -107,6 +194,41 @@ export default function ProspectDetailScreen() {
     },
   });
 
+  const smsMutation = useSendSms({
+    mutation: {
+      onSuccess: () => {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        setComposeVisible(false);
+        queryClient.invalidateQueries({ queryKey: getGetProspectQueryKey(id) });
+      },
+      onError: (err: unknown) => {
+        const msg = err instanceof Error ? err.message : String(err);
+        Alert.alert("Failed to Send", msg);
+      },
+    },
+  });
+
+  const handleCall = (phone: string) => {
+    const url = `tel:${phone}`;
+    Linking.canOpenURL(url).then((supported) => {
+      if (supported) {
+        Linking.openURL(url);
+      } else {
+        Alert.alert("Cannot Open Phone", "Your device does not support phone calls.");
+      }
+    });
+  };
+
+  const handleSendMessage = (text: string) => {
+    const twilioNumbers = twilioNumbersData?.twilioNumbers ?? [];
+    const activeNumber = twilioNumbers.find((n) => n.isActive) ?? twilioNumbers[0];
+    smsMutation.mutate({
+      prospectId: id,
+      body: text,
+      ...(activeNumber ? { fromTwilioNumberId: activeNumber.id } : {}),
+    });
+  };
+
   if (isLoading) {
     return (
       <View style={styles.loadingCenter}>
@@ -129,239 +251,282 @@ export default function ProspectDetailScreen() {
 
   const { prospect, interactions, notes, tags } = data;
   const name = prospect.fullName ?? prospect.phonePrimary;
+  const hasPhone = !!prospect.phonePrimary;
 
   return (
-    <KeyboardAvoidingView
-      style={styles.flex}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-      keyboardVerticalOffset={88}
-    >
-      <ScrollView
-        style={styles.container}
-        contentContainerStyle={styles.content}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
+    <>
+      <ComposeModal
+        visible={composeVisible}
+        onClose={() => setComposeVisible(false)}
+        prospectName={name}
+        onSend={handleSendMessage}
+        isSending={smsMutation.isPending}
+      />
+
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        keyboardVerticalOffset={88}
       >
-        {/* Hero */}
-        <View style={styles.hero}>
-          <View style={styles.avatarLg}>
-            <Text style={styles.avatarLgText}>
-              {name.split(" ").map((w: string) => w[0]).slice(0, 2).join("").toUpperCase()}
-            </Text>
+        <ScrollView
+          style={styles.container}
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Hero */}
+          <View style={styles.hero}>
+            <View style={styles.avatarLg}>
+              <Text style={styles.avatarLgText}>
+                {name.split(" ").map((w: string) => w[0]).slice(0, 2).join("").toUpperCase()}
+              </Text>
+            </View>
+            <Text style={styles.heroName}>{name}</Text>
+            <Text style={styles.heroPhone}>{prospect.phonePrimary}</Text>
+            {prospect.email && <Text style={styles.heroEmail}>{prospect.email}</Text>}
+
+            {/* Call & Message action buttons */}
+            {hasPhone && (
+              <View style={styles.heroCtas}>
+                <Pressable
+                  style={styles.ctaBtn}
+                  onPress={() => handleCall(prospect.phonePrimary)}
+                >
+                  <Feather name="phone" size={18} color="#fff" />
+                  <Text style={styles.ctaBtnText}>Call</Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.ctaBtn, styles.ctaBtnOutline]}
+                  onPress={() => setComposeVisible(true)}
+                >
+                  <Feather name="message-square" size={18} color={Colors.brand.tealLight} />
+                  <Text style={[styles.ctaBtnText, styles.ctaBtnOutlineText]}>Message</Text>
+                </Pressable>
+              </View>
+            )}
           </View>
-          <Text style={styles.heroName}>{name}</Text>
-          <Text style={styles.heroPhone}>{prospect.phonePrimary}</Text>
-          {prospect.email && <Text style={styles.heroEmail}>{prospect.email}</Text>}
-        </View>
 
-        {/* Status */}
-        <View style={styles.card}>
-          <SectionHeader title="LEAD STATUS" />
-          <StatusPicker
-            currentStatus={prospect.status}
-            onSelect={(s) => statusMutation.mutate({ id, data: { status: s } })}
-            isUpdating={statusMutation.isPending}
-          />
-        </View>
+          {/* Status */}
+          <View style={styles.card}>
+            <SectionHeader title="LEAD STATUS" />
+            <StatusPicker
+              currentStatus={prospect.status}
+              onSelect={(s) => statusMutation.mutate({ id, data: { status: s } })}
+              isUpdating={statusMutation.isPending}
+            />
+          </View>
 
-        {/* AI Summary */}
-        {prospect.latestSummary && (
+          {/* AI Summary */}
+          {prospect.latestSummary && (
+            <View style={styles.card}>
+              <View style={styles.cardHeaderRow}>
+                <SectionHeader title="AI SUMMARY" />
+                {prospect.latestSentiment && (
+                  <Badge label={prospect.latestSentiment} value={prospect.latestSentiment} />
+                )}
+              </View>
+              <Text style={styles.summaryText}>{prospect.latestSummary}</Text>
+            </View>
+          )}
+
+          {/* Leasing Details */}
+          <View style={styles.card}>
+            <SectionHeader title="LEASING DETAILS" />
+            <InfoRow icon="home" label="Bedrooms" value={prospect.desiredBedrooms} />
+            <InfoRow icon="calendar" label="Move-in" value={prospect.desiredMoveInDate} />
+            <InfoRow
+              icon="dollar-sign"
+              label="Budget"
+              value={
+                prospect.budgetMin || prospect.budgetMax
+                  ? `$${prospect.budgetMin ?? "?"} – $${prospect.budgetMax ?? "?"}`
+                  : null
+              }
+            />
+            <InfoRow icon="heart" label="Pets" value={prospect.pets} />
+            <InfoRow icon="shield" label="Voucher" value={prospect.voucherType} />
+            <InfoRow icon="briefcase" label="Employment" value={prospect.employmentStatus} />
+            <InfoRow
+              icon="trending-up"
+              label="Income"
+              value={prospect.monthlyIncome ? `$${prospect.monthlyIncome}/mo` : null}
+            />
+            <InfoRow icon="globe" label="Language" value={prospect.languagePreference} />
+          </View>
+
+          {/* Export Status */}
           <View style={styles.card}>
             <View style={styles.cardHeaderRow}>
-              <SectionHeader title="AI SUMMARY" />
-              {prospect.latestSentiment && (
-                <Badge label={prospect.latestSentiment} value={prospect.latestSentiment} />
-              )}
+              <SectionHeader title="EXPORT" />
+              <Badge label={prospect.exportStatus} value={prospect.exportStatus} />
             </View>
-            <Text style={styles.summaryText}>{prospect.latestSummary}</Text>
-          </View>
-        )}
-
-        {/* Leasing Details */}
-        <View style={styles.card}>
-          <SectionHeader title="LEASING DETAILS" />
-          <InfoRow icon="home" label="Bedrooms" value={prospect.desiredBedrooms} />
-          <InfoRow icon="calendar" label="Move-in" value={prospect.desiredMoveInDate} />
-          <InfoRow
-            icon="dollar-sign"
-            label="Budget"
-            value={
-              prospect.budgetMin || prospect.budgetMax
-                ? `$${prospect.budgetMin ?? "?"} – $${prospect.budgetMax ?? "?"}`
-                : null
-            }
-          />
-          <InfoRow icon="heart" label="Pets" value={prospect.pets} />
-          <InfoRow icon="shield" label="Voucher" value={prospect.voucherType} />
-          <InfoRow icon="briefcase" label="Employment" value={prospect.employmentStatus} />
-          <InfoRow
-            icon="trending-up"
-            label="Income"
-            value={prospect.monthlyIncome ? `$${prospect.monthlyIncome}/mo` : null}
-          />
-          <InfoRow icon="globe" label="Language" value={prospect.languagePreference} />
-        </View>
-
-        {/* Export Status */}
-        <View style={styles.card}>
-          <View style={styles.cardHeaderRow}>
-            <SectionHeader title="EXPORT" />
-            <Badge label={prospect.exportStatus} value={prospect.exportStatus} />
-          </View>
-          {prospect.exportStatus !== "pending" && (
-            <Pressable
-              style={[styles.actionButtonOutline, statusMutation.isPending && styles.actionButtonDisabled]}
-              onPress={() =>
-                statusMutation.mutate({ id, data: { exportStatus: "pending" } })
-              }
-              disabled={statusMutation.isPending}
-            >
-              {statusMutation.isPending ? (
-                <ActivityIndicator size="small" color={Colors.brand.tealLight} />
-              ) : (
-                <>
-                  <Feather name="clock" size={16} color={Colors.brand.tealLight} />
-                  <Text style={styles.actionButtonOutlineText}>Mark Export-Ready</Text>
-                </>
-              )}
-            </Pressable>
-          )}
-          {prospect.exportStatus === "pending" && (
-            <View style={styles.pendingBadge}>
-              <Feather name="check-circle" size={14} color={Colors.brand.tealLight} />
-              <Text style={styles.pendingBadgeText}>In Export Queue — use the Exports tab to batch export</Text>
-            </View>
-          )}
-        </View>
-
-        {/* Interactions */}
-        {(interactions ?? []).length > 0 && (
-          <View style={styles.card}>
-            <SectionHeader title={`INTERACTIONS (${interactions!.length})`} />
-            {interactions!.map((interaction) => (
+            {prospect.exportStatus !== "pending" && (
               <Pressable
-                key={interaction.id}
-                style={styles.interactionRow}
+                style={[styles.actionButtonOutline, statusMutation.isPending && styles.actionButtonDisabled]}
                 onPress={() =>
-                  router.push({
-                    pathname: "/interaction/[id]",
-                    params: { id: interaction.id, prospectId: id },
-                  })
+                  statusMutation.mutate({ id, data: { exportStatus: "pending" } })
                 }
+                disabled={statusMutation.isPending}
               >
-                <View style={styles.interactionIconWrap}>
-                  <Feather
-                    name={
-                      interaction.sourceType === "sms"
-                        ? "message-square"
-                        : interaction.sourceType === "voicemail"
-                        ? "mic"
-                        : "phone"
-                    }
-                    size={14}
-                    color={Colors.brand.tealLight}
-                  />
-                </View>
-                <View style={styles.interactionContent}>
-                  <View style={styles.interactionTopRow}>
-                    <Badge label={interaction.sourceType} value={interaction.sourceType} />
-                    <Text style={styles.interactionTime}>
-                      {new Date(interaction.occurredAt).toLocaleDateString("en-US", {
-                        month: "short",
-                        day: "numeric",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </Text>
-                  </View>
-                  {(interaction.summary ?? interaction.rawText ?? interaction.transcript) && (
-                    <Text style={styles.interactionText}>
-                      {interaction.summary ?? interaction.rawText ?? interaction.transcript}
-                    </Text>
-                  )}
-                  {interaction.category && (
-                    <Text style={styles.interactionCategory}>
-                      {interaction.category.replace(/_/g, " ")}
-                    </Text>
-                  )}
-                </View>
+                {statusMutation.isPending ? (
+                  <ActivityIndicator size="small" color={Colors.brand.tealLight} />
+                ) : (
+                  <>
+                    <Feather name="clock" size={16} color={Colors.brand.tealLight} />
+                    <Text style={styles.actionButtonOutlineText}>Mark Export-Ready</Text>
+                  </>
+                )}
               </Pressable>
-            ))}
+            )}
+            {prospect.exportStatus === "pending" && (
+              <View style={styles.pendingBadge}>
+                <Feather name="check-circle" size={14} color={Colors.brand.tealLight} />
+                <Text style={styles.pendingBadgeText}>In Export Queue — use the Exports tab to batch export</Text>
+              </View>
+            )}
           </View>
-        )}
 
-        {/* Tags */}
-        {(tags ?? []).length > 0 && (
-          <View style={styles.card}>
-            <SectionHeader title="TAGS" />
-            <View style={styles.tagsRow}>
-              {tags!.map((tag) => (
-                <View
-                  key={tag.id}
-                  style={[styles.tagChip, tag.color ? { backgroundColor: `${tag.color}22`, borderColor: `${tag.color}66` } : {}]}
+          {/* Interactions */}
+          {(interactions ?? []).length > 0 && (
+            <View style={styles.card}>
+              <SectionHeader title={`INTERACTIONS (${interactions!.length})`} />
+              {interactions!.map((interaction) => (
+                <Pressable
+                  key={interaction.id}
+                  style={styles.interactionRow}
+                  onPress={() =>
+                    router.push({
+                      pathname: "/interaction/[id]",
+                      params: { id: interaction.id, prospectId: id },
+                    })
+                  }
                 >
-                  <Text style={[styles.tagLabel, tag.color ? { color: tag.color } : {}]}>
-                    {tag.name}
-                  </Text>
-                </View>
+                  <View style={[
+                    styles.interactionIconWrap,
+                    interaction.direction === "outbound" && styles.interactionIconWrapOutbound,
+                  ]}>
+                    <Feather
+                      name={
+                        interaction.direction === "outbound"
+                          ? "send"
+                          : interaction.sourceType === "sms"
+                          ? "message-square"
+                          : interaction.sourceType === "voicemail"
+                          ? "mic"
+                          : "phone"
+                      }
+                      size={14}
+                      color={interaction.direction === "outbound" ? "#A3E4D7" : Colors.brand.tealLight}
+                    />
+                  </View>
+                  <View style={styles.interactionContent}>
+                    <View style={styles.interactionTopRow}>
+                      <View style={styles.interactionBadgeRow}>
+                        <Badge label={interaction.sourceType} value={interaction.sourceType} />
+                        {interaction.direction === "outbound" && (
+                          <View style={styles.outboundBadge}>
+                            <Text style={styles.outboundBadgeText}>Sent</Text>
+                          </View>
+                        )}
+                      </View>
+                      <Text style={styles.interactionTime}>
+                        {new Date(interaction.occurredAt).toLocaleDateString("en-US", {
+                          month: "short",
+                          day: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </Text>
+                    </View>
+                    {(interaction.summary ?? interaction.rawText ?? interaction.transcript) && (
+                      <Text style={styles.interactionText}>
+                        {interaction.summary ?? interaction.rawText ?? interaction.transcript}
+                      </Text>
+                    )}
+                    {interaction.category && (
+                      <Text style={styles.interactionCategory}>
+                        {interaction.category.replace(/_/g, " ")}
+                      </Text>
+                    )}
+                  </View>
+                </Pressable>
               ))}
             </View>
-          </View>
-        )}
+          )}
 
-        {/* Notes */}
-        <View style={styles.card}>
-          <SectionHeader title={`NOTES (${(notes ?? []).length})`} />
-          {(notes ?? []).map((note) => (
-            <View key={note.id} style={styles.noteRow}>
-              <Feather name="edit-3" size={13} color={Colors.dark.textMuted} />
-              <View style={styles.noteContent}>
-                <Text style={styles.noteBody}>{note.body}</Text>
-                <Text style={styles.noteTime}>
-                  {new Date(note.createdAt).toLocaleDateString("en-US", {
-                    month: "short",
-                    day: "numeric",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
-                </Text>
+          {/* Tags */}
+          {(tags ?? []).length > 0 && (
+            <View style={styles.card}>
+              <SectionHeader title="TAGS" />
+              <View style={styles.tagsRow}>
+                {tags!.map((tag) => (
+                  <View
+                    key={tag.id}
+                    style={[styles.tagChip, tag.color ? { backgroundColor: `${tag.color}22`, borderColor: `${tag.color}66` } : {}]}
+                  >
+                    <Text style={[styles.tagLabel, tag.color ? { color: tag.color } : {}]}>
+                      {tag.name}
+                    </Text>
+                  </View>
+                ))}
               </View>
             </View>
-          ))}
+          )}
 
-          <View style={styles.noteInputRow}>
-            <TextInput
-              ref={noteInputRef}
-              value={noteText}
-              onChangeText={setNoteText}
-              placeholder="Add a note..."
-              placeholderTextColor={Colors.dark.textMuted}
-              style={styles.noteInput}
-              multiline
-              maxLength={1000}
-            />
-            <Pressable
-              style={[
-                styles.noteSendBtn,
-                (!noteText.trim() || noteMutation.isPending) && styles.noteSendBtnDisabled,
-              ]}
-              onPress={() => {
-                if (noteText.trim()) noteMutation.mutate({ id, data: { body: noteText.trim() } });
-              }}
-              disabled={!noteText.trim() || noteMutation.isPending}
-            >
-              {noteMutation.isPending ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <Feather name="send" size={16} color="#fff" />
-              )}
-            </Pressable>
+          {/* Notes */}
+          <View style={styles.card}>
+            <SectionHeader title={`NOTES (${(notes ?? []).length})`} />
+            {(notes ?? []).map((note) => (
+              <View key={note.id} style={styles.noteRow}>
+                <Feather name="edit-3" size={13} color={Colors.dark.textMuted} />
+                <View style={styles.noteContent}>
+                  <Text style={styles.noteBody}>{note.body}</Text>
+                  <Text style={styles.noteTime}>
+                    {new Date(note.createdAt).toLocaleDateString("en-US", {
+                      month: "short",
+                      day: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </Text>
+                </View>
+              </View>
+            ))}
+
+            <View style={styles.noteInputRow}>
+              <TextInput
+                ref={noteInputRef}
+                value={noteText}
+                onChangeText={setNoteText}
+                placeholder="Add a note..."
+                placeholderTextColor={Colors.dark.textMuted}
+                style={styles.noteInput}
+                multiline
+                maxLength={1000}
+              />
+              <Pressable
+                style={[
+                  styles.noteSendBtn,
+                  (!noteText.trim() || noteMutation.isPending) && styles.noteSendBtnDisabled,
+                ]}
+                onPress={() => {
+                  if (noteText.trim()) noteMutation.mutate({ id, data: { body: noteText.trim() } });
+                }}
+                disabled={!noteText.trim() || noteMutation.isPending}
+              >
+                {noteMutation.isPending ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Feather name="send" size={16} color="#fff" />
+                )}
+              </Pressable>
+            </View>
           </View>
-        </View>
 
-        <View style={{ height: 40 }} />
-      </ScrollView>
-    </KeyboardAvoidingView>
+          <View style={{ height: 40 }} />
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </>
   );
 }
 
@@ -436,6 +601,35 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: "Inter_400Regular",
     color: Colors.dark.textMuted,
+  },
+  heroCtas: {
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 16,
+  },
+  ctaBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: Colors.brand.teal,
+    borderRadius: 12,
+    paddingVertical: 11,
+    paddingHorizontal: 24,
+    minWidth: 100,
+    justifyContent: "center",
+  },
+  ctaBtnOutline: {
+    backgroundColor: "#0A2020",
+    borderWidth: 1,
+    borderColor: Colors.brand.teal,
+  },
+  ctaBtnText: {
+    fontSize: 15,
+    fontFamily: "Inter_600SemiBold",
+    color: "#fff",
+  },
+  ctaBtnOutlineText: {
+    color: Colors.brand.tealLight,
   },
   card: {
     backgroundColor: Colors.dark.bgCard,
@@ -524,6 +718,27 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginTop: 2,
+  },
+  interactionIconWrapOutbound: {
+    backgroundColor: "#0A2030",
+  },
+  interactionBadgeRow: {
+    flexDirection: "row",
+    gap: 6,
+    alignItems: "center",
+  },
+  outboundBadge: {
+    backgroundColor: "#0A2030",
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderWidth: 1,
+    borderColor: "#3A7BD5",
+  },
+  outboundBadgeText: {
+    fontSize: 10,
+    fontFamily: "Inter_600SemiBold",
+    color: "#7AB8F5",
   },
   interactionContent: {
     flex: 1,
@@ -625,6 +840,96 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.dark.bgElevated,
     borderWidth: 1,
     borderColor: Colors.dark.border,
+  },
+});
+
+const composeStyles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: Colors.dark.bg,
+    paddingTop: Platform.OS === "ios" ? 0 : 16,
+  },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.dark.border,
+  },
+  cancelBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 4,
+    minWidth: 60,
+  },
+  cancelText: {
+    fontSize: 15,
+    fontFamily: "Inter_400Regular",
+    color: Colors.dark.textSecondary,
+  },
+  title: {
+    fontSize: 16,
+    fontFamily: "Inter_600SemiBold",
+    color: Colors.dark.text,
+  },
+  sendBtn: {
+    backgroundColor: Colors.brand.teal,
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 7,
+    minWidth: 60,
+    alignItems: "center",
+  },
+  sendBtnDisabled: {
+    backgroundColor: Colors.dark.bgElevated,
+    borderWidth: 1,
+    borderColor: Colors.dark.border,
+  },
+  sendText: {
+    fontSize: 14,
+    fontFamily: "Inter_600SemiBold",
+    color: "#fff",
+  },
+  toRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  toLabel: {
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+    color: Colors.dark.textMuted,
+  },
+  toName: {
+    fontSize: 14,
+    fontFamily: "Inter_600SemiBold",
+    color: Colors.dark.text,
+    flex: 1,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: Colors.dark.border,
+    marginHorizontal: 16,
+  },
+  input: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    fontSize: 15,
+    fontFamily: "Inter_400Regular",
+    color: Colors.dark.text,
+    textAlignVertical: "top",
+  },
+  charCount: {
+    fontSize: 11,
+    fontFamily: "Inter_400Regular",
+    color: Colors.dark.textMuted,
+    textAlign: "right",
+    paddingHorizontal: 16,
+    paddingBottom: 16,
   },
 });
 
