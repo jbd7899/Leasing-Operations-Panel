@@ -1,22 +1,33 @@
-import React from "react";
+import React, { useState, useCallback, useRef } from "react";
 import {
   View,
   Text,
-  FlatList,
+  ScrollView,
+  SectionList,
   StyleSheet,
   Pressable,
   Platform,
   Linking,
   RefreshControl,
+  ActivityIndicator,
+  Alert,
 } from "react-native";
-import { useListExports } from "@workspace/api-client-react";
+import {
+  useListProspects,
+  useListExports,
+  useCreateExport,
+  getListExportsQueryKey,
+  getListProspectsQueryKey,
+  CreateExportBodyFormat,
+} from "@workspace/api-client-react";
+import type { Prospect, ExportBatch } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Badge } from "@/components/ui/Badge";
-import type { ExportBatch } from "@workspace/api-client-react";
 
 function getDownloadUrl(exportId: string): string {
   const domain = process.env.EXPO_PUBLIC_DOMAIN;
@@ -32,6 +43,48 @@ function formatDate(dateStr: string) {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function ProspectQueueRow({
+  prospect,
+  selected,
+  onToggle,
+}: {
+  prospect: Prospect;
+  selected: boolean;
+  onToggle: () => void;
+}) {
+  const name = prospect.fullName || prospect.phonePrimary;
+  const initials = prospect.fullName
+    ? prospect.fullName.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase()
+    : prospect.phonePrimary.slice(-2);
+
+  return (
+    <Pressable
+      onPress={onToggle}
+      style={({ pressed }) => [
+        styles.queueRow,
+        selected && styles.queueRowSelected,
+        pressed && styles.queueRowPressed,
+      ]}
+    >
+      <View style={[styles.queueAvatar, selected && styles.queueAvatarSelected]}>
+        {selected ? (
+          <Feather name="check" size={16} color="#fff" />
+        ) : (
+          <Text style={styles.queueAvatarText}>{initials}</Text>
+        )}
+      </View>
+      <View style={styles.queueInfo}>
+        <Text style={styles.queueName} numberOfLines={1}>{name}</Text>
+        <Text style={styles.queuePhone}>{prospect.phonePrimary}</Text>
+        {prospect.latestSummary && (
+          <Text style={styles.queueSummary} numberOfLines={1}>{prospect.latestSummary}</Text>
+        )}
+      </View>
+      <Badge label={prospect.status} value={prospect.status} />
+    </Pressable>
+  );
 }
 
 function ExportRow({ batch }: { batch: ExportBatch }) {
@@ -50,12 +103,9 @@ function ExportRow({ batch }: { batch: ExportBatch }) {
           color={Colors.brand.tealLight}
         />
       </View>
-
       <View style={styles.exportInfo}>
         <View style={styles.exportTopRow}>
-          <Text style={styles.exportTitle}>
-            {batch.format.toUpperCase()} Export
-          </Text>
+          <Text style={styles.exportTitle}>{batch.format.toUpperCase()} Export</Text>
           <Badge label={batch.status} value={batch.status} />
         </View>
         <Text style={styles.exportMeta}>
@@ -65,7 +115,6 @@ function ExportRow({ batch }: { batch: ExportBatch }) {
           <Text style={styles.exportTarget}>{batch.targetSystem}</Text>
         )}
       </View>
-
       <Pressable
         onPress={handleDownload}
         style={({ pressed }) => [styles.downloadBtn, pressed && styles.downloadBtnPressed]}
@@ -81,10 +130,91 @@ export default function ExportsScreen() {
   const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === "web";
   const topPad = isWeb ? Math.max(insets.top, 67) : insets.top;
+  const queryClient = useQueryClient();
 
-  const { data, isLoading, isError, refetch, isFetching } = useListExports();
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isExporting, setIsExporting] = useState(false);
 
-  const exports: ExportBatch[] = (data?.exports ?? []).slice().reverse();
+  const { data: queueData, isLoading: queueLoading, refetch: refetchQueue, isFetching: queueFetching } =
+    useListProspects({ exportStatus: "pending" });
+
+  const { data: historyData, isLoading: historyLoading, refetch: refetchHistory, isFetching: historyFetching } =
+    useListExports();
+
+  const createExport = useCreateExport();
+
+  const pendingProspects = queueData?.prospects ?? [];
+  const exportHistory = (historyData?.exports ?? []).slice().reverse();
+
+  const allSelected = pendingProspects.length > 0 && pendingProspects.every((p) => selectedIds.has(p.id));
+
+  const toggleSelect = useCallback((id: string) => {
+    Haptics.selectionAsync();
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const toggleAll = useCallback(() => {
+    Haptics.selectionAsync();
+    if (allSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(pendingProspects.map((p) => p.id)));
+    }
+  }, [allSelected, pendingProspects]);
+
+  const handleExport = useCallback(
+    (format: "csv" | "json") => {
+      if (selectedIds.size === 0) return;
+      Alert.alert(
+        `Export as ${format.toUpperCase()}`,
+        `Export ${selectedIds.size} prospect${selectedIds.size !== 1 ? "s" : ""} to ${format.toUpperCase()}?`,
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Export",
+            onPress: async () => {
+              setIsExporting(true);
+              try {
+                await createExport.mutateAsync({
+                  data: {
+                    prospectIds: Array.from(selectedIds),
+                    format:
+                      format === "csv"
+                        ? CreateExportBodyFormat.csv
+                        : CreateExportBodyFormat.json,
+                    targetSystem: "AppFolio",
+                  },
+                });
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                setSelectedIds(new Set());
+                await Promise.all([
+                  queryClient.invalidateQueries({ queryKey: getListExportsQueryKey() }),
+                  queryClient.invalidateQueries({ queryKey: getListProspectsQueryKey() }),
+                ]);
+              } catch (err: unknown) {
+                Alert.alert("Export failed", String(err));
+              } finally {
+                setIsExporting(false);
+              }
+            },
+          },
+        ],
+      );
+    },
+    [selectedIds, createExport, queryClient],
+  );
+
+  const handleRefresh = useCallback(() => {
+    refetchQueue();
+    refetchHistory();
+  }, [refetchQueue, refetchHistory]);
+
+  const isRefreshing = (queueFetching && !queueLoading) || (historyFetching && !historyLoading);
 
   return (
     <View style={[styles.container, { paddingTop: topPad }]}>
@@ -93,55 +223,123 @@ export default function ExportsScreen() {
           <Text style={styles.screenTitle}>Exports</Text>
           <Text style={styles.screenSubtitle}>AppFolio-ready CSV & JSON</Text>
         </View>
-        <Pressable style={styles.refreshBtn} onPress={() => refetch()} disabled={isFetching}>
+        <Pressable style={styles.refreshBtn} onPress={handleRefresh} disabled={isRefreshing}>
           <Feather
             name="refresh-cw"
             size={18}
-            color={isFetching ? Colors.dark.textMuted : Colors.brand.tealLight}
+            color={isRefreshing ? Colors.dark.textMuted : Colors.brand.tealLight}
           />
         </Pressable>
       </View>
 
-      <View style={styles.infoCard}>
-        <Feather name="info" size={14} color={Colors.brand.tealLight} />
-        <Text style={styles.infoText}>
-          Select prospects in the Prospects tab and tap the export button to create a new export batch.
-        </Text>
-      </View>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={handleRefresh}
+            tintColor={Colors.brand.tealLight}
+          />
+        }
+      >
+        {/* Export Queue */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>EXPORT QUEUE</Text>
+            {pendingProspects.length > 0 && (
+              <Pressable onPress={toggleAll} style={styles.selectAllBtn}>
+                <Text style={styles.selectAllText}>
+                  {allSelected ? "Deselect All" : "Select All"}
+                </Text>
+              </Pressable>
+            )}
+          </View>
 
-      {isLoading ? (
-        <View style={styles.loadingWrap}>
-          <Feather name="loader" size={24} color={Colors.dark.textMuted} />
+          {queueLoading ? (
+            <ActivityIndicator size="small" color={Colors.brand.tealLight} style={{ marginVertical: 20 }} />
+          ) : pendingProspects.length === 0 ? (
+            <View style={styles.emptyQueue}>
+              <Feather name="check-circle" size={32} color={Colors.brand.tealLight} />
+              <Text style={styles.emptyQueueText}>No prospects pending export</Text>
+              <Text style={styles.emptyQueueSub}>New SMS/voice prospects will appear here</Text>
+            </View>
+          ) : (
+            <View style={styles.queueList}>
+              {pendingProspects.map((p) => (
+                <ProspectQueueRow
+                  key={p.id}
+                  prospect={p}
+                  selected={selectedIds.has(p.id)}
+                  onToggle={() => toggleSelect(p.id)}
+                />
+              ))}
+            </View>
+          )}
+
+          {selectedIds.size > 0 && (
+            <View style={styles.exportActions}>
+              <Text style={styles.selectedCount}>
+                {selectedIds.size} selected
+              </Text>
+              <View style={styles.exportBtns}>
+                <Pressable
+                  style={[styles.exportBtn, isExporting && styles.exportBtnDisabled]}
+                  onPress={() => handleExport("csv")}
+                  disabled={isExporting}
+                >
+                  {isExporting ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <>
+                      <Feather name="file-text" size={15} color="#fff" />
+                      <Text style={styles.exportBtnText}>CSV</Text>
+                    </>
+                  )}
+                </Pressable>
+                <Pressable
+                  style={[styles.exportBtn, styles.exportBtnJson, isExporting && styles.exportBtnDisabled]}
+                  onPress={() => handleExport("json")}
+                  disabled={isExporting}
+                >
+                  {isExporting ? (
+                    <ActivityIndicator size="small" color={Colors.brand.tealLight} />
+                  ) : (
+                    <>
+                      <Feather name="code" size={15} color={Colors.brand.tealLight} />
+                      <Text style={[styles.exportBtnText, styles.exportBtnTextJson]}>JSON</Text>
+                    </>
+                  )}
+                </Pressable>
+              </View>
+            </View>
+          )}
         </View>
-      ) : isError ? (
-        <EmptyState icon="wifi-off" title="Failed to load" subtitle="Pull to refresh" />
-      ) : (
-        <FlatList
-          data={exports}
-          keyExtractor={(b) => b.id}
-          renderItem={({ item }) => <ExportRow batch={item} />}
-          contentContainerStyle={[
-            styles.listContent,
-            exports.length === 0 && styles.listEmpty,
-          ]}
-          ListEmptyComponent={
-            <EmptyState
-              icon="upload"
-              title="No exports yet"
-              subtitle="Create your first export from the Prospects tab by selecting prospects and tapping the export button"
-            />
-          }
-          refreshControl={
-            <RefreshControl
-              refreshing={isFetching && !isLoading}
-              onRefresh={refetch}
-              tintColor={Colors.brand.tealLight}
-            />
-          }
-          showsVerticalScrollIndicator={false}
-          contentInsetAdjustmentBehavior="automatic"
-        />
-      )}
+
+        {/* Export History */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>EXPORT HISTORY</Text>
+          </View>
+
+          {historyLoading ? (
+            <ActivityIndicator size="small" color={Colors.brand.tealLight} style={{ marginVertical: 20 }} />
+          ) : exportHistory.length === 0 ? (
+            <View style={styles.emptyHistory}>
+              <Text style={styles.emptyHistoryText}>No exports yet</Text>
+            </View>
+          ) : (
+            <View style={styles.historyList}>
+              {exportHistory.map((batch) => (
+                <ExportRow key={batch.id} batch={batch} />
+              ))}
+            </View>
+          )}
+        </View>
+
+        <View style={{ height: 120 }} />
+      </ScrollView>
     </View>
   );
 }
@@ -150,6 +348,12 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.dark.bg,
+  },
+  scroll: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 40,
   },
   header: {
     flexDirection: "row",
@@ -181,37 +385,167 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginTop: 4,
   },
-  infoCard: {
+  section: {
+    marginHorizontal: 16,
+    marginBottom: 24,
+  },
+  sectionHeader: {
     flexDirection: "row",
-    gap: 10,
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 10,
+  },
+  sectionTitle: {
+    fontSize: 11,
+    fontFamily: "Inter_600SemiBold",
+    color: Colors.dark.textMuted,
+    letterSpacing: 1,
+  },
+  selectAllBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Colors.brand.teal,
+    backgroundColor: "#0A2020",
+  },
+  selectAllText: {
+    fontSize: 12,
+    fontFamily: "Inter_500Medium",
+    color: Colors.brand.tealLight,
+  },
+  queueList: {
+    gap: 8,
+  },
+  queueRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    backgroundColor: Colors.dark.bgCard,
+    borderRadius: 14,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: Colors.dark.border,
+  },
+  queueRowSelected: {
+    borderColor: Colors.brand.tealLight,
+    backgroundColor: "#0D2A2A",
+  },
+  queueRowPressed: {
+    opacity: 0.8,
+  },
+  queueAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: Colors.brand.navy,
+    borderWidth: 1,
+    borderColor: Colors.dark.borderLight,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  queueAvatarSelected: {
+    backgroundColor: Colors.brand.teal,
+    borderColor: Colors.brand.tealLight,
+  },
+  queueAvatarText: {
+    fontSize: 13,
+    fontFamily: "Inter_600SemiBold",
+    color: Colors.brand.tealLight,
+  },
+  queueInfo: {
+    flex: 1,
+    gap: 2,
+  },
+  queueName: {
+    fontSize: 14,
+    fontFamily: "Inter_600SemiBold",
+    color: Colors.dark.text,
+  },
+  queuePhone: {
+    fontSize: 12,
+    fontFamily: "Inter_400Regular",
+    color: Colors.dark.textSecondary,
+  },
+  queueSummary: {
+    fontSize: 11,
+    fontFamily: "Inter_400Regular",
+    color: Colors.dark.textMuted,
+    marginTop: 2,
+  },
+  emptyQueue: {
+    alignItems: "center",
+    paddingVertical: 32,
+    gap: 8,
+    backgroundColor: Colors.dark.bgCard,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Colors.dark.border,
+  },
+  emptyQueueText: {
+    fontSize: 15,
+    fontFamily: "Inter_600SemiBold",
+    color: Colors.dark.text,
+  },
+  emptyQueueSub: {
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+    color: Colors.dark.textMuted,
+    textAlign: "center",
+    paddingHorizontal: 24,
+  },
+  exportActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 12,
+    paddingHorizontal: 4,
+  },
+  selectedCount: {
+    fontSize: 13,
+    fontFamily: "Inter_500Medium",
+    color: Colors.dark.textSecondary,
+  },
+  exportBtns: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  exportBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: Colors.brand.teal,
+  },
+  exportBtnJson: {
     backgroundColor: "#0A2020",
     borderWidth: 1,
     borderColor: Colors.brand.teal,
-    borderRadius: 12,
-    marginHorizontal: 16,
-    marginBottom: 16,
-    padding: 12,
-    alignItems: "flex-start",
   },
-  infoText: {
-    flex: 1,
-    fontSize: 13,
-    fontFamily: "Inter_400Regular",
+  exportBtnDisabled: {
+    opacity: 0.6,
+  },
+  exportBtnText: {
+    fontSize: 14,
+    fontFamily: "Inter_600SemiBold",
+    color: "#fff",
+  },
+  exportBtnTextJson: {
     color: Colors.brand.tealLight,
-    lineHeight: 19,
   },
-  listContent: {
-    paddingHorizontal: 16,
-    paddingBottom: 120,
+  historyList: {
     gap: 8,
   },
-  listEmpty: {
-    flex: 1,
-  },
-  loadingWrap: {
-    flex: 1,
+  emptyHistory: {
+    paddingVertical: 16,
     alignItems: "center",
-    justifyContent: "center",
+  },
+  emptyHistoryText: {
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+    color: Colors.dark.textMuted,
   },
   exportRow: {
     flexDirection: "row",

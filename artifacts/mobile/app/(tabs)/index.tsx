@@ -3,12 +3,13 @@ import {
   View,
   Text,
   FlatList,
+  ScrollView,
   StyleSheet,
   RefreshControl,
   Platform,
   Pressable,
 } from "react-native";
-import { useGetInbox } from "@workspace/api-client-react";
+import { useGetInbox, useListProperties } from "@workspace/api-client-react";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
@@ -18,21 +19,56 @@ import { SkeletonLoader } from "@/components/ui/SkeletonLoader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SearchBar } from "@/components/ui/SearchBar";
 
-
-const FILTERS = [
+const SOURCE_FILTERS = [
   { label: "All", value: "" },
   { label: "SMS", value: "sms" },
   { label: "Voice", value: "voice" },
   { label: "Voicemail", value: "voicemail" },
 ];
 
+const STATUS_FILTERS = [
+  { label: "Any Status", value: "" },
+  { label: "New", value: "new" },
+  { label: "Contacted", value: "contacted" },
+  { label: "Qualified", value: "qualified" },
+  { label: "Disqualified", value: "disqualified" },
+];
+
+function FilterChip({
+  label,
+  active,
+  onPress,
+}: {
+  label: string;
+  active: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={[styles.filterChip, active && styles.filterChipActive]}
+    >
+      <Text style={[styles.filterLabel, active && styles.filterLabelActive]}>
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
 export default function InboxScreen() {
   const insets = useSafeAreaInsets();
   const [search, setSearch] = useState("");
   const [sourceFilter, setSourceFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [propertyFilter, setPropertyFilter] = useState("");
+
+  const { data: propertiesData } = useListProperties();
+  const properties = propertiesData?.properties ?? [];
 
   const inboxParams = {
     ...(sourceFilter ? { sourceType: sourceFilter } : {}),
+    ...(statusFilter ? { status: statusFilter } : {}),
+    ...(propertyFilter ? { propertyId: propertyFilter } : {}),
     ...(search ? { search } : {}),
   };
 
@@ -53,22 +89,39 @@ export default function InboxScreen() {
     });
   }, []);
 
+  const hasActiveFilters = !!(sourceFilter || statusFilter || propertyFilter || search);
+
   return (
     <View style={[styles.container, { paddingTop: topPad }]}>
       <View style={styles.header}>
         <View>
           <Text style={styles.screenTitle}>Inbox</Text>
           <Text style={styles.screenSubtitle}>
-            {data ? `${data.total} interactions` : "Loading..."}
+            {data ? `${data.total} interaction${data.total !== 1 ? "s" : ""}` : "Loading..."}
           </Text>
         </View>
-        <Pressable style={styles.refreshBtn} onPress={() => refetch()} disabled={isFetching}>
-          <Feather
-            name="refresh-cw"
-            size={18}
-            color={isFetching ? Colors.dark.textMuted : Colors.brand.tealLight}
-          />
-        </Pressable>
+        <View style={styles.headerRight}>
+          {hasActiveFilters && (
+            <Pressable
+              style={styles.clearBtn}
+              onPress={() => {
+                setSourceFilter("");
+                setStatusFilter("");
+                setPropertyFilter("");
+                setSearch("");
+              }}
+            >
+              <Text style={styles.clearBtnText}>Clear</Text>
+            </Pressable>
+          )}
+          <Pressable style={styles.refreshBtn} onPress={() => refetch()} disabled={isFetching}>
+            <Feather
+              name="refresh-cw"
+              size={18}
+              color={isFetching ? Colors.dark.textMuted : Colors.brand.tealLight}
+            />
+          </Pressable>
+        </View>
       </View>
 
       <View style={styles.searchRow}>
@@ -79,24 +132,60 @@ export default function InboxScreen() {
         />
       </View>
 
-      <View style={styles.filterRow}>
-        {FILTERS.map((f) => (
-          <Pressable
+      {/* Source Type Filters */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.filterRow}
+      >
+        {SOURCE_FILTERS.map((f) => (
+          <FilterChip
             key={f.value}
+            label={f.label}
+            active={sourceFilter === f.value}
             onPress={() => setSourceFilter(f.value)}
-            style={[styles.filterChip, sourceFilter === f.value && styles.filterChipActive]}
-          >
-            <Text
-              style={[
-                styles.filterLabel,
-                sourceFilter === f.value && styles.filterLabelActive,
-              ]}
-            >
-              {f.label}
-            </Text>
-          </Pressable>
+          />
         ))}
-      </View>
+      </ScrollView>
+
+      {/* Status Filters */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.filterRow}
+      >
+        {STATUS_FILTERS.map((f) => (
+          <FilterChip
+            key={f.value}
+            label={f.label}
+            active={statusFilter === f.value}
+            onPress={() => setStatusFilter(f.value)}
+          />
+        ))}
+      </ScrollView>
+
+      {/* Property Filters */}
+      {properties.length > 0 && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filterRow}
+        >
+          <FilterChip
+            label="All Properties"
+            active={propertyFilter === ""}
+            onPress={() => setPropertyFilter("")}
+          />
+          {properties.map((p) => (
+            <FilterChip
+              key={p.id}
+              label={p.name}
+              active={propertyFilter === p.id}
+              onPress={() => setPropertyFilter(p.id)}
+            />
+          ))}
+        </ScrollView>
+      )}
 
       {isLoading ? (
         <View style={styles.listContent}>
@@ -118,8 +207,12 @@ export default function InboxScreen() {
           ListEmptyComponent={
             <EmptyState
               icon="inbox"
-              title="No interactions"
-              subtitle="Incoming SMS and calls will appear here"
+              title={hasActiveFilters ? "No matching interactions" : "No interactions"}
+              subtitle={
+                hasActiveFilters
+                  ? "Try adjusting your filters"
+                  : "Incoming SMS and calls will appear here"
+              }
             />
           }
           refreshControl={
@@ -161,6 +254,25 @@ const styles = StyleSheet.create({
     color: Colors.dark.textMuted,
     marginTop: 2,
   },
+  headerRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 4,
+  },
+  clearBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: "#2A1A0A",
+    borderWidth: 1,
+    borderColor: "#664400",
+  },
+  clearBtnText: {
+    fontSize: 12,
+    fontFamily: "Inter_500Medium",
+    color: "#FCA84A",
+  },
   refreshBtn: {
     width: 40,
     height: 40,
@@ -170,17 +282,16 @@ const styles = StyleSheet.create({
     borderColor: Colors.dark.border,
     alignItems: "center",
     justifyContent: "center",
-    marginTop: 4,
   },
   searchRow: {
     paddingHorizontal: 16,
-    paddingBottom: 10,
+    paddingBottom: 8,
   },
   filterRow: {
     flexDirection: "row",
     gap: 8,
     paddingHorizontal: 16,
-    paddingBottom: 12,
+    paddingBottom: 8,
   },
   filterChip: {
     paddingHorizontal: 12,
