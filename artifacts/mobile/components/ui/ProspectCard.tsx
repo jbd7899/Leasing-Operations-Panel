@@ -1,9 +1,11 @@
-import React from "react";
+import React, { type ComponentProps } from "react";
 import { View, Text, StyleSheet, Pressable } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
 import { Badge } from "./Badge";
 import type { Prospect } from "@/constants/types";
+
+type FeatherIconName = ComponentProps<typeof Feather>["name"];
 
 interface ProspectCardProps {
   prospect: Prospect;
@@ -23,7 +25,7 @@ function formatPhone(phone: string) {
   return phone;
 }
 
-function sentimentIcon(sentiment?: string | null): { name: string; color: string } {
+function sentimentIcon(sentiment?: string | null): { name: FeatherIconName; color: string } {
   switch (sentiment) {
     case "positive": return { name: "trending-up", color: "#34D399" };
     case "negative": return { name: "trending-down", color: "#F87171" };
@@ -95,7 +97,7 @@ export function ProspectCard({ prospect, onPress, selected, onLongPress }: Prosp
             </View>
           )}
           <View style={[styles.metaChip, styles.sentimentChip]}>
-            <Feather name={sentiment.name as any} size={11} color={sentiment.color} />
+            <Feather name={sentiment.name} size={11} color={sentiment.color} />
           </View>
         </View>
       </View>

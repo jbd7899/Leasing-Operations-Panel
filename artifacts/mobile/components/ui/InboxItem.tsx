@@ -1,9 +1,11 @@
-import React from "react";
+import React, { type ComponentProps } from "react";
 import { View, Text, StyleSheet, Pressable } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
 import { Badge } from "./Badge";
 import type { InboxItem as InboxItemType } from "@/constants/types";
+
+type FeatherIconName = ComponentProps<typeof Feather>["name"];
 
 interface InboxItemProps {
   item: InboxItemType;
@@ -21,7 +23,7 @@ function timeAgo(dateStr: string): string {
   return `${days}d ago`;
 }
 
-const SOURCE_ICONS: Record<string, string> = {
+const SOURCE_ICONS: Record<string, FeatherIconName> = {
   sms: "message-square",
   voice: "phone",
   voicemail: "voicemail",
@@ -29,7 +31,7 @@ const SOURCE_ICONS: Record<string, string> = {
 
 export function InboxItem({ item, onPress }: InboxItemProps) {
   const { interaction, prospect, property } = item;
-  const sourceIcon = (SOURCE_ICONS[interaction.sourceType] ?? "activity") as any;
+  const sourceIcon: FeatherIconName = SOURCE_ICONS[interaction.sourceType] ?? "activity";
 
   return (
     <Pressable

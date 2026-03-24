@@ -27,11 +27,13 @@ function SectionHeader({ title }: { title: string }) {
   );
 }
 
-function InfoRow({ icon, label, value }: { icon: string; label: string; value?: string | null }) {
+type FeatherIconName = React.ComponentProps<typeof Feather>["name"];
+
+function InfoRow({ icon, label, value }: { icon: FeatherIconName; label: string; value?: string | null }) {
   if (!value) return null;
   return (
     <View style={infoStyles.row}>
-      <Feather name={icon as any} size={14} color={Colors.dark.textMuted} style={infoStyles.icon} />
+      <Feather name={icon} size={14} color={Colors.dark.textMuted} style={infoStyles.icon} />
       <Text style={infoStyles.label}>{label}</Text>
       <Text style={infoStyles.value}>{value}</Text>
     </View>
