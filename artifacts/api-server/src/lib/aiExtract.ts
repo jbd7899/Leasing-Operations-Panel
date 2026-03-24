@@ -37,6 +37,18 @@ export const extractionSchema = z.object({
 
 export type ProspectExtraction = z.infer<typeof extractionSchema>;
 
+export class ExtractionValidationError extends Error {
+  readonly rawContent: unknown;
+  readonly validationIssues: z.ZodIssue[];
+
+  constructor(issues: z.ZodIssue[], rawContent: unknown) {
+    super(`AI extraction response failed schema validation (${issues.length} issue(s))`);
+    this.name = "ExtractionValidationError";
+    this.rawContent = rawContent;
+    this.validationIssues = issues;
+  }
+}
+
 const JSON_SCHEMA = `{
   "firstName": string | null,
   "lastName": string | null,
@@ -133,17 +145,11 @@ export async function extractProspectData(
 
   const result = extractionSchema.safeParse(raw);
   if (!result.success) {
-    logger.warn({ issues: result.error.issues, raw }, "AI extraction response failed Zod validation — using raw with fallback");
-    const partial = raw as Record<string, unknown>;
-    return {
-      summary: String(partial["summary"] ?? "Extraction partially failed — review raw interaction"),
-      category: "general_question",
-      sentiment: "neutral",
-      urgency: "low",
-      confidence: 0.1,
-      suggestedStatus: null,
-      suggestedNextAction: null,
-    };
+    logger.warn(
+      { issues: result.error.issues, raw },
+      "AI extraction response failed Zod validation",
+    );
+    throw new ExtractionValidationError(result.error.issues, raw);
   }
 
   return result.data;

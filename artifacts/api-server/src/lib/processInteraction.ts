@@ -1,6 +1,6 @@
 import { db, interactionsTable, prospectsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
-import { extractProspectData } from "./aiExtract";
+import { extractProspectData, ExtractionValidationError } from "./aiExtract";
 import { logger } from "./logger";
 
 export async function processInteraction(interactionId: string): Promise<void> {
@@ -58,9 +58,19 @@ export async function processInteraction(interactionId: string): Promise<void> {
     );
   } catch (err) {
     logger.error({ err, interactionId }, "Failed to process interaction");
+
+    const rawContent =
+      err instanceof ExtractionValidationError ? err.rawContent : undefined;
+
     await db
       .update(interactionsTable)
-      .set({ extractionStatus: "failed", updatedAt: new Date() })
+      .set({
+        extractionStatus: "failed",
+        structuredExtractionJson: rawContent
+          ? ({ _extractionFailed: true, _raw: rawContent } as unknown as Record<string, unknown>)
+          : null,
+        updatedAt: new Date(),
+      })
       .where(eq(interactionsTable.id, interactionId));
   }
 }
