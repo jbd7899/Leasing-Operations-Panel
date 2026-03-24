@@ -1,29 +1,14 @@
 import { setBaseUrl, setAuthTokenGetter } from "@workspace/api-client-react";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as SecureStore from "expo-secure-store";
 
-const TOKEN_KEY = "session_token";
+export const AUTH_TOKEN_KEY = "auth_session_token";
 
 export function initApiClient() {
   const domain = process.env.EXPO_PUBLIC_DOMAIN;
   if (domain) {
     setBaseUrl(`https://${domain}`);
   }
-
-  setAuthTokenGetter(async () => {
-    return await AsyncStorage.getItem(TOKEN_KEY);
-  });
-}
-
-export async function saveToken(token: string) {
-  await AsyncStorage.setItem(TOKEN_KEY, token);
-}
-
-export async function clearToken() {
-  await AsyncStorage.removeItem(TOKEN_KEY);
-}
-
-export async function getToken(): Promise<string | null> {
-  return AsyncStorage.getItem(TOKEN_KEY);
+  setAuthTokenGetter(() => SecureStore.getItemAsync(AUTH_TOKEN_KEY));
 }
 
 const BASE = () => {
@@ -32,7 +17,7 @@ const BASE = () => {
 };
 
 async function authHeaders(): Promise<HeadersInit> {
-  const token = await getToken();
+  const token = await SecureStore.getItemAsync(AUTH_TOKEN_KEY);
   return {
     "Content-Type": "application/json",
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -45,7 +30,7 @@ async function apiFetch(path: string, options: RequestInit = {}) {
     ...options,
     headers: {
       ...headers,
-      ...(options.headers as Record<string, string> ?? {}),
+      ...((options.headers as Record<string, string>) ?? {}),
     },
     credentials: "include",
   });
@@ -62,17 +47,15 @@ export const api = {
     return res.json();
   },
   async post<T>(path: string, body: unknown): Promise<T> {
-    const res = await apiFetch(path, {
-      method: "POST",
-      body: JSON.stringify(body),
-    });
+    const res = await apiFetch(path, { method: "POST", body: JSON.stringify(body) });
     return res.json();
   },
   async patch<T>(path: string, body: unknown): Promise<T> {
-    const res = await apiFetch(path, {
-      method: "PATCH",
-      body: JSON.stringify(body),
-    });
+    const res = await apiFetch(path, { method: "PATCH", body: JSON.stringify(body) });
+    return res.json();
+  },
+  async del<T>(path: string): Promise<T> {
+    const res = await apiFetch(path, { method: "DELETE" });
     return res.json();
   },
 
@@ -109,6 +92,18 @@ export const api = {
 
   properties: {
     list: () => api.get<{ properties: import("../constants/types").Property[] }>("/properties"),
+    create: (body: { name: string; address1?: string; city?: string; state?: string; zip?: string }) =>
+      api.post<import("../constants/types").Property>("/properties", body),
+    update: (id: string, body: Partial<import("../constants/types").Property>) =>
+      api.patch<import("../constants/types").Property>(`/properties/${id}`, body),
+  },
+
+  twilioNumbers: {
+    list: () => api.get<{ twilioNumbers: import("../constants/types").TwilioNumber[] }>("/twilio-numbers"),
+  },
+
+  users: {
+    list: () => api.get<{ users: import("../constants/types").AccountUser[] }>("/users"),
   },
 
   tags: {
@@ -120,12 +115,19 @@ export const api = {
   exports: {
     create: (prospectIds: string[], format: "csv" | "json") =>
       api.post<import("../constants/types").ExportBatch>("/exports", { prospectIds, format }),
-    list: () =>
-      api.get<{ exports: import("../constants/types").ExportBatch[] }>("/exports"),
+    list: () => api.get<{ exports: import("../constants/types").ExportBatch[] }>("/exports"),
     downloadUrl: (id: string) => `${BASE()}/exports/${id}/download`,
   },
 
   auth: {
-    user: () => api.get<{ user: { id: string; email?: string | null; firstName?: string | null; lastName?: string | null } | null }>("/auth/user"),
+    user: () =>
+      api.get<{
+        user: {
+          id: string;
+          email?: string | null;
+          firstName?: string | null;
+          lastName?: string | null;
+        } | null;
+      }>("/auth/user"),
   },
 };

@@ -47,9 +47,13 @@ export default function InboxScreen() {
   const items: InboxItemType[] = data?.items ?? [];
 
   const handleItemPress = useCallback((item: InboxItemType) => {
-    if (item.prospect) {
-      router.push({ pathname: "/prospect/[id]", params: { id: item.prospect.id } });
-    }
+    router.push({
+      pathname: "/interaction/[id]",
+      params: {
+        id: item.interaction.id,
+        ...(item.prospect ? { prospectId: item.prospect.id } : {}),
+      },
+    });
   }, []);
 
   return (

@@ -91,6 +91,21 @@ Generated Zod schemas from the OpenAPI spec (e.g. `HealthCheckResponse`). Used b
 
 Generated React Query hooks and fetch client from the OpenAPI spec (e.g. `useHealthCheck`, `healthCheck`).
 
+### `artifacts/mobile` (`@workspace/mobile`)
+
+Expo React Native mobile app — MyRentCard Leasing Operations Panel. Uses file-based routing via expo-router.
+
+- Entry: `app/_layout.tsx` — Root layout with AuthProvider, QueryClientProvider, font loading, and Stack nav
+- Auth: `lib/auth.tsx` — Replit OIDC PKCE flow via expo-auth-session; token stored in expo-secure-store
+- API client: `lib/api.ts` — Custom fetch wrapper using expo-secure-store for Bearer token
+- Tabs: `app/(tabs)/` — index (Inbox), prospects, exports, settings
+- Screens: `app/prospect/[id].tsx` (detail), `app/interaction/[id].tsx` (review + AI apply), `app/export-modal.tsx`
+- Components: `components/ui/` — Badge, InboxItem, ProspectCard, SearchBar, SkeletonLoader, EmptyState
+
+Key packages: expo-auth-session, expo-secure-store, expo-crypto, @tanstack/react-query, expo-haptics
+
+Run: `pnpm --filter @workspace/mobile run dev`
+
 ### `scripts` (`@workspace/scripts`)
 
 Utility scripts package. Each script is a `.ts` file in `src/` with a corresponding npm script in `package.json`. Run scripts via `pnpm --filter @workspace/scripts run <script>`. Scripts can import any workspace package (e.g., `@workspace/db`) by adding it as a dependency in `scripts/package.json`.

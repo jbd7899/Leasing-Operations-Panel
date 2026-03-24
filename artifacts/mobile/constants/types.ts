@@ -65,6 +65,27 @@ export interface Property {
   updatedAt: string;
 }
 
+export interface TwilioNumber {
+  id: string;
+  accountId: string;
+  phoneNumber: string;
+  friendlyName?: string | null;
+  propertyId?: string | null;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AccountUser {
+  id: string;
+  email?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+  profileImageUrl?: string | null;
+  role?: string | null;
+  createdAt?: string;
+}
+
 export interface Tag {
   id: string;
   accountId: string;

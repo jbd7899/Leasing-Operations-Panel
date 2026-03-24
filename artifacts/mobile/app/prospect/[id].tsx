@@ -233,7 +233,16 @@ export default function ProspectDetailScreen() {
           <View style={styles.card}>
             <SectionHeader title={`INTERACTIONS (${interactions.length})`} />
             {interactions.map((interaction) => (
-              <View key={interaction.id} style={styles.interactionRow}>
+              <Pressable
+                key={interaction.id}
+                style={styles.interactionRow}
+                onPress={() =>
+                  router.push({
+                    pathname: "/interaction/[id]",
+                    params: { id: interaction.id, prospectId: id },
+                  })
+                }
+              >
                 <View style={styles.interactionIconWrap}>
                   <Feather
                     name={
@@ -270,7 +279,7 @@ export default function ProspectDetailScreen() {
                     </Text>
                   )}
                 </View>
-              </View>
+              </Pressable>
             ))}
           </View>
         )}
