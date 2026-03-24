@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Pressable } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
 import { Badge } from "./Badge";
-import type { Prospect } from "@/constants/types";
+import type { Prospect } from "@workspace/api-client-react";
 
 type FeatherIconName = ComponentProps<typeof Feather>["name"];
 

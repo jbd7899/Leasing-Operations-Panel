@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Pressable } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
 import { Badge } from "./Badge";
-import type { InboxItem as InboxItemType } from "@/constants/types";
+import type { InboxItem as InboxItemType } from "@workspace/api-client-react";
 
 type FeatherIconName = ComponentProps<typeof Feather>["name"];
 

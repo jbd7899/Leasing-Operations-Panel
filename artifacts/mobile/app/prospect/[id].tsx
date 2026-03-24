@@ -12,11 +12,20 @@ import {
   Platform,
 } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
-import { api } from "@/lib/api";
+import {
+  useGetProspect,
+  useUpdateProspect,
+  useAddProspectNote,
+  useCreateExport,
+  getGetProspectQueryKey,
+  getListProspectsQueryKey,
+  getListExportsQueryKey,
+  CreateExportBodyFormat,
+} from "@workspace/api-client-react";
 import { Badge } from "@/components/ui/Badge";
 
 const STATUS_OPTIONS = ["new", "contacted", "qualified", "disqualified", "archived"];
@@ -75,40 +84,41 @@ export default function ProspectDetailScreen() {
   const [noteText, setNoteText] = useState("");
   const noteInputRef = useRef<TextInput>(null);
 
-  const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ["prospect", id],
-    queryFn: () => api.prospects.get(id),
-    enabled: !!id,
+  const { data, isLoading, isError, refetch } = useGetProspect(id, {
+    query: { enabled: !!id, queryKey: getGetProspectQueryKey(id) },
   });
 
-  const statusMutation = useMutation({
-    mutationFn: (status: string) => api.prospects.update(id, { status }),
-    onSuccess: () => {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      queryClient.invalidateQueries({ queryKey: ["prospect", id] });
-      queryClient.invalidateQueries({ queryKey: ["prospects"] });
+  const statusMutation = useUpdateProspect({
+    mutation: {
+      onSuccess: () => {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        queryClient.invalidateQueries({ queryKey: getGetProspectQueryKey(id) });
+        queryClient.invalidateQueries({ queryKey: getListProspectsQueryKey() });
+      },
+      onError: (err) => Alert.alert("Error", String(err)),
     },
-    onError: (err) => Alert.alert("Error", String(err)),
   });
 
-  const noteMutation = useMutation({
-    mutationFn: (body: string) => api.prospects.addNote(id, body),
-    onSuccess: () => {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setNoteText("");
-      queryClient.invalidateQueries({ queryKey: ["prospect", id] });
+  const noteMutation = useAddProspectNote({
+    mutation: {
+      onSuccess: () => {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        setNoteText("");
+        queryClient.invalidateQueries({ queryKey: getGetProspectQueryKey(id) });
+      },
+      onError: (err) => Alert.alert("Error", String(err)),
     },
-    onError: (err) => Alert.alert("Error", String(err)),
   });
 
-  const exportMutation = useMutation({
-    mutationFn: () => api.exports.create([id], "csv"),
-    onSuccess: () => {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      queryClient.invalidateQueries({ queryKey: ["exports"] });
-      Alert.alert("Exported", "Prospect exported to CSV. View in Exports tab.");
+  const exportMutation = useCreateExport({
+    mutation: {
+      onSuccess: () => {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        queryClient.invalidateQueries({ queryKey: getListExportsQueryKey() });
+        Alert.alert("Exported", "Prospect exported to CSV. View in Exports tab.");
+      },
+      onError: (err) => Alert.alert("Error", String(err)),
     },
-    onError: (err) => Alert.alert("Error", String(err)),
   });
 
   if (isLoading) {
@@ -163,7 +173,7 @@ export default function ProspectDetailScreen() {
           <SectionHeader title="LEAD STATUS" />
           <StatusPicker
             currentStatus={prospect.status}
-            onSelect={(s) => statusMutation.mutate(s)}
+            onSelect={(s) => statusMutation.mutate({ id, data: { status: s } })}
             isUpdating={statusMutation.isPending}
           />
         </View>
@@ -214,7 +224,11 @@ export default function ProspectDetailScreen() {
           </View>
           <Pressable
             style={[styles.actionButton, exportMutation.isPending && styles.actionButtonDisabled]}
-            onPress={() => exportMutation.mutate()}
+            onPress={() =>
+              exportMutation.mutate({
+                data: { prospectIds: [id], format: CreateExportBodyFormat.csv },
+              })
+            }
             disabled={exportMutation.isPending}
           >
             {exportMutation.isPending ? (
@@ -229,10 +243,10 @@ export default function ProspectDetailScreen() {
         </View>
 
         {/* Interactions */}
-        {interactions.length > 0 && (
+        {(interactions ?? []).length > 0 && (
           <View style={styles.card}>
-            <SectionHeader title={`INTERACTIONS (${interactions.length})`} />
-            {interactions.map((interaction) => (
+            <SectionHeader title={`INTERACTIONS (${interactions!.length})`} />
+            {interactions!.map((interaction) => (
               <Pressable
                 key={interaction.id}
                 style={styles.interactionRow}
@@ -285,11 +299,11 @@ export default function ProspectDetailScreen() {
         )}
 
         {/* Tags */}
-        {tags.length > 0 && (
+        {(tags ?? []).length > 0 && (
           <View style={styles.card}>
             <SectionHeader title="TAGS" />
             <View style={styles.tagsRow}>
-              {tags.map((tag) => (
+              {tags!.map((tag) => (
                 <View
                   key={tag.id}
                   style={[styles.tagChip, tag.color ? { backgroundColor: `${tag.color}22`, borderColor: `${tag.color}66` } : {}]}
@@ -305,8 +319,8 @@ export default function ProspectDetailScreen() {
 
         {/* Notes */}
         <View style={styles.card}>
-          <SectionHeader title={`NOTES (${notes.length})`} />
-          {notes.map((note) => (
+          <SectionHeader title={`NOTES (${(notes ?? []).length})`} />
+          {(notes ?? []).map((note) => (
             <View key={note.id} style={styles.noteRow}>
               <Feather name="edit-3" size={13} color={Colors.dark.textMuted} />
               <View style={styles.noteContent}>
@@ -340,7 +354,7 @@ export default function ProspectDetailScreen() {
                 (!noteText.trim() || noteMutation.isPending) && styles.noteSendBtnDisabled,
               ]}
               onPress={() => {
-                if (noteText.trim()) noteMutation.mutate(noteText.trim());
+                if (noteText.trim()) noteMutation.mutate({ id, data: { body: noteText.trim() } });
               }}
               disabled={!noteText.trim() || noteMutation.isPending}
             >

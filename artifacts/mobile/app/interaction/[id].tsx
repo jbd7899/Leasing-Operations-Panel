@@ -13,13 +13,29 @@ import {
   Platform,
 } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
-import { api } from "@/lib/api";
+import {
+  useGetInteraction,
+  useGetProspect,
+  useListProperties,
+  useListTags,
+  useUpdateProspect,
+  useSetProspectTags,
+  useReviewInteraction,
+  useAddProspectNote,
+  useCreateExport,
+  getGetProspectQueryKey,
+  getGetInteractionQueryKey,
+  getGetInboxQueryKey,
+  getListProspectsQueryKey,
+  getListExportsQueryKey,
+  CreateExportBodyFormat,
+} from "@workspace/api-client-react";
+import type { Property } from "@workspace/api-client-react";
 import { Badge } from "@/components/ui/Badge";
-import type { Property } from "@/constants/types";
 
 const STATUS_OPTIONS = ["new", "contacted", "qualified", "disqualified", "archived"];
 const CATEGORY_OPTIONS = ["leasing_inquiry", "maintenance", "payment", "complaint", "general", "other"];
@@ -174,6 +190,7 @@ export default function InteractionScreen() {
   const [showPropertyPicker, setShowPropertyPicker] = useState(false);
   const [showTagPicker, setShowTagPicker] = useState(false);
   const [noteText, setNoteText] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
 
   const [form, setForm] = useState({
     firstName: "",
@@ -193,29 +210,20 @@ export default function InteractionScreen() {
     tagIds: [] as string[],
   });
 
-  const { data: interactionData, isLoading: iLoading, isError: iError } = useQuery({
-    queryKey: ["interaction", interactionId],
-    queryFn: () => api.interactions.get(interactionId),
-    enabled: !!interactionId,
-  });
+  const { data: interactionData, isLoading: iLoading, isError: iError } = useGetInteraction(
+    interactionId,
+    { query: { enabled: !!interactionId, queryKey: getGetInteractionQueryKey(interactionId) } },
+  );
 
   const effectivePId = params.prospectId ?? interactionData?.prospectId ?? undefined;
 
-  const { data: prospectData } = useQuery({
-    queryKey: ["prospect", effectivePId],
-    queryFn: () => api.prospects.get(effectivePId!),
-    enabled: !!effectivePId,
-  });
+  const { data: prospectData } = useGetProspect(
+    effectivePId!,
+    { query: { enabled: !!effectivePId, queryKey: getGetProspectQueryKey(effectivePId ?? "") } },
+  );
 
-  const { data: propertiesData } = useQuery({
-    queryKey: ["properties"],
-    queryFn: () => api.properties.list(),
-  });
-
-  const { data: tagsData } = useQuery({
-    queryKey: ["tags"],
-    queryFn: () => api.tags.list(),
-  });
+  const { data: propertiesData } = useListProperties();
+  const { data: tagsData } = useListTags();
 
   const interaction = interactionData;
   const prospect = prospectData?.prospect;
@@ -227,18 +235,18 @@ export default function InteractionScreen() {
     if (prospect) {
       const ext = interaction?.structuredExtractionJson as Record<string, unknown> | null;
       setForm({
-        firstName: (prospect.firstName ?? (ext?.firstName as string) ?? ""),
-        lastName: (prospect.lastName ?? (ext?.lastName as string) ?? ""),
-        email: (prospect.email ?? (ext?.email as string) ?? ""),
-        desiredBedrooms: (prospect.desiredBedrooms ?? (ext?.desiredBedrooms as string) ?? ""),
-        desiredMoveInDate: (prospect.desiredMoveInDate ?? (ext?.desiredMoveInDate as string) ?? ""),
-        budgetMin: (prospect.budgetMin ?? (ext?.budgetMin as string) ?? ""),
-        budgetMax: (prospect.budgetMax ?? (ext?.budgetMax as string) ?? ""),
-        pets: (prospect.pets ?? (ext?.pets as string) ?? ""),
-        voucherType: (prospect.voucherType ?? (ext?.voucherType as string) ?? ""),
-        employmentStatus: (prospect.employmentStatus ?? (ext?.employmentStatus as string) ?? ""),
-        monthlyIncome: (prospect.monthlyIncome ?? (ext?.monthlyIncome as string) ?? ""),
-        languagePreference: (prospect.languagePreference ?? (ext?.languagePreference as string) ?? ""),
+        firstName: prospect.firstName ?? (ext?.firstName as string) ?? "",
+        lastName: prospect.lastName ?? (ext?.lastName as string) ?? "",
+        email: prospect.email ?? (ext?.email as string) ?? "",
+        desiredBedrooms: prospect.desiredBedrooms ?? (ext?.desiredBedrooms as string) ?? "",
+        desiredMoveInDate: prospect.desiredMoveInDate ?? (ext?.desiredMoveInDate as string) ?? "",
+        budgetMin: prospect.budgetMin != null ? String(prospect.budgetMin) : ((ext?.budgetMin as string) ?? ""),
+        budgetMax: prospect.budgetMax != null ? String(prospect.budgetMax) : ((ext?.budgetMax as string) ?? ""),
+        pets: prospect.pets ?? (ext?.pets as string) ?? "",
+        voucherType: prospect.voucherType ?? (ext?.voucherType as string) ?? "",
+        employmentStatus: prospect.employmentStatus ?? (ext?.employmentStatus as string) ?? "",
+        monthlyIncome: prospect.monthlyIncome != null ? String(prospect.monthlyIncome) : ((ext?.monthlyIncome as string) ?? ""),
+        languagePreference: prospect.languagePreference ?? (ext?.languagePreference as string) ?? "",
         status: prospect.status ?? "new",
         propertyId: interaction?.propertyId ?? prospect.assignedPropertyId ?? "",
         tagIds: prospectTags.map((t) => t.id),
@@ -253,12 +261,12 @@ export default function InteractionScreen() {
           email: (ext.email as string) ?? prev.email,
           desiredBedrooms: (ext.desiredBedrooms as string) ?? prev.desiredBedrooms,
           desiredMoveInDate: (ext.desiredMoveInDate as string) ?? prev.desiredMoveInDate,
-          budgetMin: (ext.budgetMin as string) ?? prev.budgetMin,
-          budgetMax: (ext.budgetMax as string) ?? prev.budgetMax,
+          budgetMin: ext.budgetMin != null ? String(ext.budgetMin) : prev.budgetMin,
+          budgetMax: ext.budgetMax != null ? String(ext.budgetMax) : prev.budgetMax,
           pets: (ext.pets as string) ?? prev.pets,
           voucherType: (ext.voucherType as string) ?? prev.voucherType,
           employmentStatus: (ext.employmentStatus as string) ?? prev.employmentStatus,
-          monthlyIncome: (ext.monthlyIncome as string) ?? prev.monthlyIncome,
+          monthlyIncome: ext.monthlyIncome != null ? String(ext.monthlyIncome) : prev.monthlyIncome,
           languagePreference: (ext.languagePreference as string) ?? prev.languagePreference,
           propertyId: interaction.propertyId ?? "",
         }));
@@ -274,69 +282,79 @@ export default function InteractionScreen() {
     }));
   }, []);
 
-  const saveMutation = useMutation({
-    mutationFn: async () => {
-      const updates: Parameters<typeof api.prospects.update>[1] = {
-        firstName: form.firstName || undefined,
-        lastName: form.lastName || undefined,
-        email: form.email || undefined,
-        desiredBedrooms: form.desiredBedrooms || undefined,
-        desiredMoveInDate: form.desiredMoveInDate || undefined,
-        budgetMin: form.budgetMin || undefined,
-        budgetMax: form.budgetMax || undefined,
-        pets: form.pets || undefined,
-        voucherType: form.voucherType || undefined,
-        employmentStatus: form.employmentStatus || undefined,
-        monthlyIncome: form.monthlyIncome || undefined,
-        languagePreference: form.languagePreference || undefined,
-        status: form.status,
-        assignedPropertyId: form.propertyId || undefined,
-      };
+  const updateProspect = useUpdateProspect();
+  const setProspectTags = useSetProspectTags();
+  const reviewInteraction = useReviewInteraction();
 
-      if (effectivePId) {
-        await api.prospects.update(effectivePId, updates);
-        await api.prospects.setTags(effectivePId, form.tagIds);
-        await api.interactions.review(interactionId, {
-          propertyId: form.propertyId || undefined,
-        });
-      }
-    },
-    onSuccess: () => {
+  const handleSave = useCallback(async () => {
+    if (!effectivePId || isSaving) return;
+    setIsSaving(true);
+    try {
+      await updateProspect.mutateAsync({
+        id: effectivePId,
+        data: {
+          firstName: form.firstName || undefined,
+          lastName: form.lastName || undefined,
+          email: form.email || undefined,
+          desiredBedrooms: form.desiredBedrooms || undefined,
+          desiredMoveInDate: form.desiredMoveInDate || undefined,
+          budgetMin: form.budgetMin ? Number(form.budgetMin) : undefined,
+          budgetMax: form.budgetMax ? Number(form.budgetMax) : undefined,
+          pets: form.pets || undefined,
+          voucherType: form.voucherType || undefined,
+          employmentStatus: form.employmentStatus || undefined,
+          monthlyIncome: form.monthlyIncome ? Number(form.monthlyIncome) : undefined,
+          languagePreference: form.languagePreference || undefined,
+          status: form.status,
+          assignedPropertyId: form.propertyId || undefined,
+        },
+      });
+      await setProspectTags.mutateAsync({
+        id: effectivePId,
+        data: { tagIds: form.tagIds },
+      });
+      await reviewInteraction.mutateAsync({
+        id: interactionId,
+        data: { propertyId: form.propertyId || undefined },
+      });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      queryClient.invalidateQueries({ queryKey: ["prospect", effectivePId] });
-      queryClient.invalidateQueries({ queryKey: ["prospects"] });
-      queryClient.invalidateQueries({ queryKey: ["interaction", interactionId] });
-      queryClient.invalidateQueries({ queryKey: ["inbox"] });
+      queryClient.invalidateQueries({ queryKey: getGetProspectQueryKey(effectivePId) });
+      queryClient.invalidateQueries({ queryKey: getListProspectsQueryKey() });
+      queryClient.invalidateQueries({ queryKey: getGetInteractionQueryKey(interactionId) });
+      queryClient.invalidateQueries({ queryKey: getGetInboxQueryKey() });
       Alert.alert("Saved", "Prospect details have been updated.");
+    } catch (err) {
+      Alert.alert("Error", String(err));
+    } finally {
+      setIsSaving(false);
+    }
+  }, [effectivePId, isSaving, form, interactionId, updateProspect, setProspectTags, reviewInteraction, queryClient]);
+
+  const exportMutation = useCreateExport({
+    mutation: {
+      onSuccess: () => {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        queryClient.invalidateQueries({ queryKey: getListExportsQueryKey() });
+        if (effectivePId) {
+          queryClient.invalidateQueries({ queryKey: getGetProspectQueryKey(effectivePId) });
+        }
+        Alert.alert("Exported", "Prospect exported. View in Exports tab.");
+      },
+      onError: (err) => Alert.alert("Error", String(err)),
     },
-    onError: (err) => Alert.alert("Error", String(err)),
   });
 
-  const exportMutation = useMutation({
-    mutationFn: async () => {
-      if (!effectivePId) throw new Error("No prospect to export");
-      return api.exports.create([effectivePId], "csv");
+  const noteMutation = useAddProspectNote({
+    mutation: {
+      onSuccess: () => {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        setNoteText("");
+        if (effectivePId) {
+          queryClient.invalidateQueries({ queryKey: getGetProspectQueryKey(effectivePId) });
+        }
+      },
+      onError: (err) => Alert.alert("Error", String(err)),
     },
-    onSuccess: () => {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      queryClient.invalidateQueries({ queryKey: ["exports"] });
-      queryClient.invalidateQueries({ queryKey: ["prospect", effectivePId] });
-      Alert.alert("Exported", "Prospect exported. View in Exports tab.");
-    },
-    onError: (err) => Alert.alert("Error", String(err)),
-  });
-
-  const noteMutation = useMutation({
-    mutationFn: (body: string) => {
-      if (!effectivePId) throw new Error("No prospect for note");
-      return api.prospects.addNote(effectivePId, body);
-    },
-    onSuccess: () => {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setNoteText("");
-      queryClient.invalidateQueries({ queryKey: ["prospect", effectivePId] });
-    },
-    onError: (err) => Alert.alert("Error", String(err)),
   });
 
   if (iLoading) {
@@ -537,7 +555,11 @@ export default function InteractionScreen() {
               />
               <Pressable
                 style={[styles.noteSendBtn, (!noteText.trim() || noteMutation.isPending) && styles.noteSendBtnDisabled]}
-                onPress={() => { if (noteText.trim()) noteMutation.mutate(noteText.trim()); }}
+                onPress={() => {
+                  if (noteText.trim() && effectivePId) {
+                    noteMutation.mutate({ id: effectivePId, data: { body: noteText.trim() } });
+                  }
+                }}
                 disabled={!noteText.trim() || noteMutation.isPending}
               >
                 {noteMutation.isPending ? <ActivityIndicator size="small" color="#fff" /> : <Feather name="send" size={16} color="#fff" />}
@@ -559,11 +581,11 @@ export default function InteractionScreen() {
         {/* Action Buttons */}
         <View style={styles.actionsCard}>
           <Pressable
-            style={[styles.saveBtn, saveMutation.isPending && styles.actionDisabled]}
-            onPress={() => saveMutation.mutate()}
-            disabled={saveMutation.isPending || !effectivePId}
+            style={[styles.saveBtn, isSaving && styles.actionDisabled]}
+            onPress={handleSave}
+            disabled={isSaving || !effectivePId}
           >
-            {saveMutation.isPending ? (
+            {isSaving ? (
               <ActivityIndicator size="small" color="#fff" />
             ) : (
               <>
@@ -576,7 +598,11 @@ export default function InteractionScreen() {
           {effectivePId && (
             <Pressable
               style={[styles.exportBtn, exportMutation.isPending && styles.actionDisabled]}
-              onPress={() => exportMutation.mutate()}
+              onPress={() =>
+                exportMutation.mutate({
+                  data: { prospectIds: [effectivePId], format: CreateExportBodyFormat.csv },
+                })
+              }
               disabled={exportMutation.isPending}
             >
               {exportMutation.isPending ? (

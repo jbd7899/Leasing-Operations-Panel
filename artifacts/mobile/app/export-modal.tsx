@@ -8,11 +8,16 @@ import {
   Alert,
 } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
-import { api } from "@/lib/api";
+import {
+  useCreateExport,
+  CreateExportBodyFormat,
+  getListExportsQueryKey,
+  getListProspectsQueryKey,
+} from "@workspace/api-client-react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function ExportModal() {
@@ -23,17 +28,18 @@ export default function ExportModal() {
   const prospectIds: string[] = rawIds ? JSON.parse(rawIds) : [];
   const [format, setFormat] = useState<"csv" | "json">("csv");
 
-  const mutation = useMutation({
-    mutationFn: () => api.exports.create(prospectIds, format),
-    onSuccess: async () => {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      await queryClient.invalidateQueries({ queryKey: ["exports"] });
-      await queryClient.invalidateQueries({ queryKey: ["prospects"] });
-      router.dismissAll();
-    },
-    onError: (err) => {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert("Export failed", String(err));
+  const mutation = useCreateExport({
+    mutation: {
+      onSuccess: async () => {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        await queryClient.invalidateQueries({ queryKey: getListExportsQueryKey() });
+        await queryClient.invalidateQueries({ queryKey: getListProspectsQueryKey() });
+        router.dismissAll();
+      },
+      onError: (err) => {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        Alert.alert("Export failed", String(err));
+      },
     },
   });
 
@@ -95,7 +101,14 @@ export default function ExportModal() {
 
         <Pressable
           style={[styles.exportBtn, mutation.isPending && styles.exportBtnDisabled]}
-          onPress={() => mutation.mutate()}
+          onPress={() =>
+            mutation.mutate({
+              data: {
+                prospectIds,
+                format: format === "csv" ? CreateExportBodyFormat.csv : CreateExportBodyFormat.json,
+              },
+            })
+          }
           disabled={mutation.isPending}
         >
           {mutation.isPending ? (

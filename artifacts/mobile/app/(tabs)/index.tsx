@@ -8,17 +8,16 @@ import {
   Platform,
   Pressable,
 } from "react-native";
-import { useQuery } from "@tanstack/react-query";
+import { useGetInbox } from "@workspace/api-client-react";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
-import { api } from "@/lib/api";
 import { InboxItem } from "@/components/ui/InboxItem";
 import { SkeletonLoader } from "@/components/ui/SkeletonLoader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SearchBar } from "@/components/ui/SearchBar";
-import type { InboxItem as InboxItemType } from "@/constants/types";
+
 
 const FILTERS = [
   { label: "All", value: "" },
@@ -32,21 +31,19 @@ export default function InboxScreen() {
   const [search, setSearch] = useState("");
   const [sourceFilter, setSourceFilter] = useState("");
 
-  const params: Record<string, string> = {};
-  if (sourceFilter) params.sourceType = sourceFilter;
-  if (search) params.search = search;
+  const inboxParams = {
+    ...(sourceFilter ? { sourceType: sourceFilter } : {}),
+    ...(search ? { search } : {}),
+  };
 
-  const { data, isLoading, isError, refetch, isFetching } = useQuery({
-    queryKey: ["inbox", params],
-    queryFn: () => api.inbox.list(params),
-  });
+  const { data, isLoading, isError, refetch, isFetching } = useGetInbox(inboxParams);
 
   const isWeb = Platform.OS === "web";
   const topPad = isWeb ? Math.max(insets.top, 67) : insets.top;
 
-  const items: InboxItemType[] = data?.items ?? [];
+  const items = data?.items ?? [];
 
-  const handleItemPress = useCallback((item: InboxItemType) => {
+  const handleItemPress = useCallback((item: (typeof items)[0]) => {
     router.push({
       pathname: "/interaction/[id]",
       params: {

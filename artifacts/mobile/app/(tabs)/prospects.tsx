@@ -10,17 +10,16 @@ import {
   Alert,
 } from "react-native";
 import * as Haptics from "expo-haptics";
-import { useQuery } from "@tanstack/react-query";
+import { useListProspects } from "@workspace/api-client-react";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
-import { api } from "@/lib/api";
 import { ProspectCard } from "@/components/ui/ProspectCard";
 import { SkeletonLoader } from "@/components/ui/SkeletonLoader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SearchBar } from "@/components/ui/SearchBar";
-import type { Prospect } from "@/constants/types";
+import type { Prospect } from "@workspace/api-client-react";
 
 const STATUS_FILTERS = [
   { label: "All", value: "" },
@@ -37,14 +36,12 @@ export default function ProspectsScreen() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const isSelecting = selectedIds.size > 0;
 
-  const params: Record<string, string> = {};
-  if (statusFilter) params.status = statusFilter;
-  if (search) params.search = search;
+  const listParams = {
+    ...(statusFilter ? { status: statusFilter } : {}),
+    ...(search ? { search } : {}),
+  };
 
-  const { data, isLoading, isError, refetch, isFetching } = useQuery({
-    queryKey: ["prospects", params],
-    queryFn: () => api.prospects.list(params),
-  });
+  const { data, isLoading, isError, refetch, isFetching } = useListProspects(listParams);
 
   const isWeb = Platform.OS === "web";
   const topPad = isWeb ? Math.max(insets.top, 67) : insets.top;
@@ -188,12 +185,15 @@ export default function ProspectsScreen() {
               selected={selectedIds.has(item.id)}
             />
           )}
-          contentContainerStyle={[styles.listContent, prospects.length === 0 && styles.listEmpty]}
+          contentContainerStyle={[
+            styles.listContent,
+            prospects.length === 0 && styles.listEmpty,
+          ]}
           ListEmptyComponent={
             <EmptyState
               icon="users"
               title="No prospects"
-              subtitle="Prospects appear here after interactions are processed"
+              subtitle="Prospects from incoming calls and SMS will appear here"
             />
           }
           refreshControl={
@@ -235,34 +235,6 @@ const styles = StyleSheet.create({
     color: Colors.dark.textMuted,
     marginTop: 2,
   },
-  selectionActions: {
-    flexDirection: "row",
-    gap: 8,
-    alignItems: "center",
-  },
-  actionBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
-    backgroundColor: Colors.dark.bgCard,
-    borderWidth: 1,
-    borderColor: Colors.dark.border,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  exportBtn: {
-    flexDirection: "row",
-    gap: 4,
-    paddingHorizontal: 12,
-    width: "auto",
-    backgroundColor: Colors.brand.teal,
-    borderColor: Colors.brand.tealLight,
-  },
-  exportBtnText: {
-    fontSize: 14,
-    fontFamily: "Inter_600SemiBold",
-    color: "#fff",
-  },
   refreshBtn: {
     width: 40,
     height: 40,
@@ -274,20 +246,49 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginTop: 4,
   },
+  selectionActions: {
+    flexDirection: "row",
+    gap: 8,
+    alignItems: "center",
+  },
+  actionBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: Colors.dark.bgCard,
+    borderWidth: 1,
+    borderColor: Colors.dark.border,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  exportBtn: {
+    flexDirection: "row",
+    width: "auto",
+    paddingHorizontal: 14,
+    gap: 6,
+    backgroundColor: Colors.brand.teal,
+    borderColor: Colors.brand.teal,
+  },
+  exportBtnText: {
+    fontSize: 14,
+    fontFamily: "Inter_600SemiBold",
+    color: "#fff",
+  },
   selectionBanner: {
     flexDirection: "row",
-    alignItems: "center",
     gap: 8,
-    backgroundColor: "#0A2020",
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: Colors.brand.teal,
-    paddingHorizontal: 16,
+    alignItems: "center",
+    marginHorizontal: 16,
+    marginBottom: 10,
+    paddingHorizontal: 12,
     paddingVertical: 8,
-    marginBottom: 4,
+    backgroundColor: "#0A2020",
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Colors.brand.teal + "44",
   },
   selectionBannerText: {
-    fontSize: 12,
+    fontSize: 13,
     fontFamily: "Inter_400Regular",
     color: Colors.brand.tealLight,
   },
@@ -297,10 +298,9 @@ const styles = StyleSheet.create({
   },
   filterRow: {
     flexDirection: "row",
-    gap: 6,
+    gap: 8,
     paddingHorizontal: 16,
     paddingBottom: 12,
-    flexWrap: "wrap",
   },
   filterChip: {
     paddingHorizontal: 12,

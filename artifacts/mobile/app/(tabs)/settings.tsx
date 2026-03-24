@@ -12,13 +12,21 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Colors from "@/constants/colors";
-import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import type { Property, TwilioNumber, AccountUser } from "@/constants/types";
+import {
+  useListProperties,
+  useListTwilioNumbers,
+  useListUsers,
+  useCreateProperty,
+  getListPropertiesQueryKey,
+  getListTwilioNumbersQueryKey,
+  getListUsersQueryKey,
+} from "@workspace/api-client-react";
+import type { Property, TwilioNumber, AccountUser } from "@workspace/api-client-react";
 
 function SectionHeader({ title }: { title: string }) {
   return <Text style={styles.sectionHeader}>{title}</Text>;
@@ -66,18 +74,18 @@ function AddPropertyModal({
   const [city, setCity] = useState("");
   const [state, setState] = useState("");
 
-  const createMutation = useMutation({
-    mutationFn: () =>
-      api.properties.create({ name: name.trim(), address1: address.trim() || undefined, city: city.trim() || undefined, state: state.trim() || undefined }),
-    onSuccess: () => {
-      onCreated();
-      onClose();
-      setName("");
-      setAddress("");
-      setCity("");
-      setState("");
+  const createMutation = useCreateProperty({
+    mutation: {
+      onSuccess: () => {
+        onCreated();
+        onClose();
+        setName("");
+        setAddress("");
+        setCity("");
+        setState("");
+      },
+      onError: (err: unknown) => Alert.alert("Error", String(err)),
     },
-    onError: (err) => Alert.alert("Error", String(err)),
   });
 
   return (
@@ -137,7 +145,16 @@ function AddPropertyModal({
             </Pressable>
             <Pressable
               style={[modalStyles.saveBtn, (!name.trim() || createMutation.isPending) && modalStyles.saveBtnDisabled]}
-              onPress={() => createMutation.mutate()}
+              onPress={() =>
+                createMutation.mutate({
+                  data: {
+                    name: name.trim(),
+                    address1: address.trim() || undefined,
+                    city: city.trim() || undefined,
+                    state: state.trim() || undefined,
+                  },
+                })
+              }
               disabled={!name.trim() || createMutation.isPending}
             >
               {createMutation.isPending ? (
@@ -192,9 +209,9 @@ function TwilioNumberCard({ number }: { number: TwilioNumber }) {
           <Text style={styles.twilioFriendly}>{number.friendlyName}</Text>
         )}
       </View>
-      <View style={[styles.twilioStatus, number.status === "active" ? styles.twilioStatusActive : {}]}>
-        <Text style={[styles.twilioStatusText, number.status === "active" ? styles.twilioStatusTextActive : {}]}>
-          {number.status}
+      <View style={[styles.twilioStatus, number.isActive ? styles.twilioStatusActive : {}]}>
+        <Text style={[styles.twilioStatusText, number.isActive ? styles.twilioStatusTextActive : {}]}>
+          {number.isActive ? "active" : "inactive"}
         </Text>
       </View>
     </View>
@@ -202,11 +219,8 @@ function TwilioNumberCard({ number }: { number: TwilioNumber }) {
 }
 
 function UserCard({ user }: { user: AccountUser }) {
-  const initials = [user.firstName, user.lastName]
-    .filter(Boolean)
-    .map((s) => s![0])
-    .join("")
-    .toUpperCase() || (user.email?.[0]?.toUpperCase() ?? "?");
+  const displayName = user.name || user.email || "Unknown";
+  const initials = displayName[0]?.toUpperCase() ?? "?";
 
   return (
     <View style={styles.userCard}>
@@ -214,9 +228,7 @@ function UserCard({ user }: { user: AccountUser }) {
         <Text style={styles.userAvatarText}>{initials}</Text>
       </View>
       <View style={styles.userInfo}>
-        <Text style={styles.userName}>
-          {[user.firstName, user.lastName].filter(Boolean).join(" ") || user.email || "Unknown"}
-        </Text>
+        <Text style={styles.userName}>{displayName}</Text>
         {user.email && (
           <Text style={styles.userEmail}>{user.email}</Text>
         )}
@@ -239,21 +251,14 @@ export default function SettingsScreen() {
   const [twilioExpanded, setTwilioExpanded] = useState(false);
   const [usersExpanded, setUsersExpanded] = useState(false);
 
-  const { data: propertiesData, isLoading: propertiesLoading } = useQuery({
-    queryKey: ["properties"],
-    queryFn: () => api.properties.list(),
+  const { data: propertiesData, isLoading: propertiesLoading } = useListProperties();
+
+  const { data: twilioData, isLoading: twilioLoading } = useListTwilioNumbers({
+    query: { enabled: twilioExpanded, queryKey: getListTwilioNumbersQueryKey() },
   });
 
-  const { data: twilioData, isLoading: twilioLoading } = useQuery({
-    queryKey: ["twilio-numbers"],
-    queryFn: () => api.twilioNumbers.list(),
-    enabled: twilioExpanded,
-  });
-
-  const { data: usersData, isLoading: usersLoading } = useQuery({
-    queryKey: ["users"],
-    queryFn: () => api.users.list(),
-    enabled: usersExpanded,
+  const { data: usersData, isLoading: usersLoading } = useListUsers({
+    query: { enabled: usersExpanded, queryKey: getListUsersQueryKey() },
   });
 
   const isWeb = Platform.OS === "web";
@@ -406,7 +411,7 @@ export default function SettingsScreen() {
         visible={showAddProperty}
         onClose={() => setShowAddProperty(false)}
         onCreated={() => {
-          queryClient.invalidateQueries({ queryKey: ["properties"] });
+          queryClient.invalidateQueries({ queryKey: getListPropertiesQueryKey() });
         }}
       />
     </View>

@@ -9,15 +9,20 @@ import {
   Linking,
   RefreshControl,
 } from "react-native";
-import { useQuery } from "@tanstack/react-query";
+import { useListExports } from "@workspace/api-client-react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
-import { api } from "@/lib/api";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Badge } from "@/components/ui/Badge";
-import type { ExportBatch } from "@/constants/types";
+import type { ExportBatch } from "@workspace/api-client-react";
+
+function getDownloadUrl(exportId: string): string {
+  const domain = process.env.EXPO_PUBLIC_DOMAIN;
+  const base = domain ? `https://${domain}/api` : "http://localhost:8080/api";
+  return `${base}/exports/${exportId}/download`;
+}
 
 function formatDate(dateStr: string) {
   return new Date(dateStr).toLocaleDateString("en-US", {
@@ -32,7 +37,7 @@ function formatDate(dateStr: string) {
 function ExportRow({ batch }: { batch: ExportBatch }) {
   const handleDownload = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const url = api.exports.downloadUrl(batch.id);
+    const url = getDownloadUrl(batch.id);
     await Linking.openURL(url);
   };
 
@@ -77,10 +82,7 @@ export default function ExportsScreen() {
   const isWeb = Platform.OS === "web";
   const topPad = isWeb ? Math.max(insets.top, 67) : insets.top;
 
-  const { data, isLoading, isError, refetch, isFetching } = useQuery({
-    queryKey: ["exports"],
-    queryFn: () => api.exports.list(),
-  });
+  const { data, isLoading, isError, refetch, isFetching } = useListExports();
 
   const exports: ExportBatch[] = (data?.exports ?? []).slice().reverse();
 
