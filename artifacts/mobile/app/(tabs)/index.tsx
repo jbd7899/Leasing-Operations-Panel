@@ -3,11 +3,12 @@ import {
   View,
   Text,
   FlatList,
-  ScrollView,
   StyleSheet,
   RefreshControl,
   Platform,
   Pressable,
+  Modal,
+  ScrollView,
 } from "react-native";
 import { useGetInbox, useListProperties } from "@workspace/api-client-react";
 import { router } from "expo-router";
@@ -55,12 +56,82 @@ function FilterChip({
   );
 }
 
+function PropertyBottomSheet({
+  visible,
+  onClose,
+  properties,
+  propertyFilter,
+  onSelectProperty,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  properties: { id: string; name: string }[];
+  propertyFilter: string;
+  onSelectProperty: (id: string) => void;
+}) {
+  const insets = useSafeAreaInsets();
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      onRequestClose={onClose}
+    >
+      <Pressable style={sheetStyles.backdrop} onPress={onClose} />
+      <View style={[sheetStyles.sheet, { paddingBottom: Math.max(insets.bottom, 24) }]}>
+        <View style={sheetStyles.handle} />
+        <View style={sheetStyles.header}>
+          <Text style={sheetStyles.title}>Filter by Property</Text>
+          <Pressable onPress={onClose} style={sheetStyles.closeBtn}>
+            <Feather name="x" size={18} color={Colors.dark.textMuted} />
+          </Pressable>
+        </View>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={sheetStyles.list}
+        >
+          <Pressable
+            style={[sheetStyles.propertyRow, propertyFilter === "" && sheetStyles.propertyRowActive]}
+            onPress={() => { onSelectProperty(""); onClose(); }}
+          >
+            <View style={sheetStyles.propertyCheck}>
+              {propertyFilter === "" && (
+                <Feather name="check" size={14} color={Colors.brand.tealLight} />
+              )}
+            </View>
+            <Text style={[sheetStyles.propertyName, propertyFilter === "" && sheetStyles.propertyNameActive]}>
+              All Properties
+            </Text>
+          </Pressable>
+          {properties.map((p) => (
+            <Pressable
+              key={p.id}
+              style={[sheetStyles.propertyRow, propertyFilter === p.id && sheetStyles.propertyRowActive]}
+              onPress={() => { onSelectProperty(p.id); onClose(); }}
+            >
+              <View style={sheetStyles.propertyCheck}>
+                {propertyFilter === p.id && (
+                  <Feather name="check" size={14} color={Colors.brand.tealLight} />
+                )}
+              </View>
+              <Text style={[sheetStyles.propertyName, propertyFilter === p.id && sheetStyles.propertyNameActive]}>
+                {p.name}
+              </Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+      </View>
+    </Modal>
+  );
+}
+
 export default function InboxScreen() {
   const insets = useSafeAreaInsets();
   const [search, setSearch] = useState("");
   const [sourceFilter, setSourceFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [propertyFilter, setPropertyFilter] = useState("");
+  const [propertySheetOpen, setPropertySheetOpen] = useState(false);
 
   const { data: propertiesData } = useListProperties();
   const properties = propertiesData?.properties ?? [];
@@ -99,102 +170,101 @@ export default function InboxScreen() {
   }, []);
 
   const hasActiveFilters = !!(sourceFilter || statusFilter || propertyFilter || search);
+  const secondaryFilterCount = (propertyFilter ? 1 : 0);
+
+  const handleClearAll = useCallback(() => {
+    setSourceFilter("");
+    setStatusFilter("");
+    setPropertyFilter("");
+    setSearch("");
+  }, []);
 
   return (
     <View style={[styles.container, { paddingTop: topPad }]}>
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.screenTitle}>Inbox</Text>
-          <Text style={styles.screenSubtitle}>
-            {data ? `${data.total} interaction${data.total !== 1 ? "s" : ""}` : "Loading..."}
-          </Text>
+      <PropertyBottomSheet
+        visible={propertySheetOpen}
+        onClose={() => setPropertySheetOpen(false)}
+        properties={properties}
+        propertyFilter={propertyFilter}
+        onSelectProperty={setPropertyFilter}
+      />
+
+      <View style={styles.stickyHeader}>
+        <View style={styles.titleRow}>
+          <View>
+            <Text style={styles.screenTitle}>Inbox</Text>
+            <Text style={styles.screenSubtitle}>
+              {data ? `${data.total} interaction${data.total !== 1 ? "s" : ""}` : "Loading..."}
+            </Text>
+          </View>
+          <View style={styles.headerRight}>
+            {hasActiveFilters && (
+              <Pressable style={styles.clearBtn} onPress={handleClearAll}>
+                <Text style={styles.clearBtnText}>Clear</Text>
+              </Pressable>
+            )}
+            <Pressable style={styles.refreshBtn} onPress={() => refetch()} disabled={isFetching}>
+              <Feather
+                name="refresh-cw"
+                size={18}
+                color={isFetching ? Colors.dark.textMuted : Colors.brand.tealLight}
+              />
+            </Pressable>
+          </View>
         </View>
-        <View style={styles.headerRight}>
-          {hasActiveFilters && (
+
+        <View style={styles.searchRow}>
+          <SearchBar
+            value={search}
+            onChangeText={setSearch}
+            placeholder="Search by name or number..."
+          />
+        </View>
+
+        <View style={styles.filterBarRow}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.filterChips}
+          >
+            {SOURCE_FILTERS.filter((f) => f.value !== "").map((f) => (
+              <FilterChip
+                key={f.value}
+                label={f.label}
+                active={sourceFilter === f.value}
+                onPress={() => setSourceFilter(sourceFilter === f.value ? "" : f.value)}
+              />
+            ))}
+            <View style={styles.filterDivider} />
+            {STATUS_FILTERS.filter((f) => f.value !== "").map((f) => (
+              <FilterChip
+                key={f.value}
+                label={f.label}
+                active={statusFilter === f.value}
+                onPress={() => setStatusFilter(statusFilter === f.value ? "" : f.value)}
+              />
+            ))}
+          </ScrollView>
+
+          {properties.length > 0 && (
             <Pressable
-              style={styles.clearBtn}
-              onPress={() => {
-                setSourceFilter("");
-                setStatusFilter("");
-                setPropertyFilter("");
-                setSearch("");
-              }}
+              style={[styles.filterIconBtn, secondaryFilterCount > 0 && styles.filterIconBtnActive]}
+              onPress={() => setPropertySheetOpen(true)}
             >
-              <Text style={styles.clearBtnText}>Clear</Text>
+              <Feather
+                name="sliders"
+                size={15}
+                color={secondaryFilterCount > 0 ? Colors.brand.tealLight : Colors.dark.textSecondary}
+              />
+              {secondaryFilterCount > 0 && (
+                <View style={styles.filterBadge}>
+                  <Text style={styles.filterBadgeText}>{secondaryFilterCount}</Text>
+                </View>
+              )}
             </Pressable>
           )}
-          <Pressable style={styles.refreshBtn} onPress={() => refetch()} disabled={isFetching}>
-            <Feather
-              name="refresh-cw"
-              size={18}
-              color={isFetching ? Colors.dark.textMuted : Colors.brand.tealLight}
-            />
-          </Pressable>
         </View>
       </View>
-
-      <View style={styles.searchRow}>
-        <SearchBar
-          value={search}
-          onChangeText={setSearch}
-          placeholder="Search by name or number..."
-        />
-      </View>
-
-      {/* Source Type Filters */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.filterRow}
-      >
-        {SOURCE_FILTERS.map((f) => (
-          <FilterChip
-            key={f.value}
-            label={f.label}
-            active={sourceFilter === f.value}
-            onPress={() => setSourceFilter(f.value)}
-          />
-        ))}
-      </ScrollView>
-
-      {/* Status Filters */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.filterRow}
-      >
-        {STATUS_FILTERS.map((f) => (
-          <FilterChip
-            key={f.value}
-            label={f.label}
-            active={statusFilter === f.value}
-            onPress={() => setStatusFilter(f.value)}
-          />
-        ))}
-      </ScrollView>
-
-      {/* Property Filters */}
-      {properties.length > 0 && (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filterRow}
-        >
-          <FilterChip
-            label="All Properties"
-            active={propertyFilter === ""}
-            onPress={() => setPropertyFilter("")}
-          />
-          {properties.map((p) => (
-            <FilterChip
-              key={p.id}
-              label={p.name}
-              active={propertyFilter === p.id}
-              onPress={() => setPropertyFilter(p.id)}
-            />
-          ))}
-        </ScrollView>
-      )}
 
       {isLoading ? (
         <View style={styles.listContent}>
@@ -248,7 +318,18 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.dark.bg,
   },
-  header: {
+  stickyHeader: {
+    backgroundColor: Colors.dark.bg,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.dark.border,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.18,
+    shadowRadius: 6,
+    elevation: 4,
+    zIndex: 10,
+  },
+  titleRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
@@ -298,13 +379,25 @@ const styles = StyleSheet.create({
   },
   searchRow: {
     paddingHorizontal: 16,
-    paddingBottom: 8,
+    paddingBottom: 10,
   },
-  filterRow: {
+  filterBarRow: {
     flexDirection: "row",
+    alignItems: "center",
+    paddingBottom: 12,
     gap: 8,
+  },
+  filterChips: {
+    flexDirection: "row",
+    gap: 6,
     paddingHorizontal: 16,
-    paddingBottom: 8,
+    alignItems: "center",
+  },
+  filterDivider: {
+    width: 1,
+    height: 20,
+    backgroundColor: Colors.dark.border,
+    marginHorizontal: 4,
   },
   filterChip: {
     paddingHorizontal: 12,
@@ -315,8 +408,8 @@ const styles = StyleSheet.create({
     borderColor: Colors.dark.border,
   },
   filterChipActive: {
-    backgroundColor: "#0D2A2A",
-    borderColor: Colors.brand.tealLight,
+    backgroundColor: Colors.brand.teal,
+    borderColor: Colors.brand.teal,
   },
   filterLabel: {
     fontSize: 13,
@@ -324,13 +417,132 @@ const styles = StyleSheet.create({
     color: Colors.dark.textSecondary,
   },
   filterLabelActive: {
-    color: Colors.brand.tealLight,
+    color: "#fff",
+    fontFamily: "Inter_600SemiBold",
+  },
+  filterIconBtn: {
+    width: 36,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: Colors.dark.bgCard,
+    borderWidth: 1,
+    borderColor: Colors.dark.border,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 16,
+    position: "relative",
+  },
+  filterIconBtnActive: {
+    borderColor: Colors.brand.tealLight,
+    backgroundColor: "#0D2A2A",
+  },
+  filterBadge: {
+    position: "absolute",
+    top: -5,
+    right: -5,
+    backgroundColor: Colors.brand.teal,
+    borderRadius: 8,
+    minWidth: 16,
+    height: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 3,
+  },
+  filterBadgeText: {
+    fontSize: 10,
+    fontFamily: "Inter_700Bold",
+    color: "#fff",
   },
   listContent: {
     paddingHorizontal: 16,
+    paddingTop: 8,
     paddingBottom: 120,
   },
   listEmpty: {
     flex: 1,
+  },
+});
+
+const sheetStyles = StyleSheet.create({
+  backdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.55)",
+  },
+  sheet: {
+    backgroundColor: Colors.dark.bgCard,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderColor: Colors.dark.border,
+    maxHeight: "70%",
+  },
+  handle: {
+    width: 36,
+    height: 4,
+    backgroundColor: Colors.dark.border,
+    borderRadius: 2,
+    alignSelf: "center",
+    marginBottom: 12,
+  },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 20,
+    paddingBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.dark.border,
+  },
+  title: {
+    fontSize: 16,
+    fontFamily: "Inter_600SemiBold",
+    color: Colors.dark.text,
+  },
+  closeBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: Colors.dark.bgElevated,
+    borderWidth: 1,
+    borderColor: Colors.dark.border,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  list: {
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    gap: 2,
+  },
+  propertyRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+  },
+  propertyRowActive: {
+    backgroundColor: "#0D2A2A",
+  },
+  propertyCheck: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 1.5,
+    borderColor: Colors.dark.border,
+    backgroundColor: Colors.dark.bgElevated,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  propertyName: {
+    fontSize: 15,
+    fontFamily: "Inter_400Regular",
+    color: Colors.dark.textSecondary,
+    flex: 1,
+  },
+  propertyNameActive: {
+    color: Colors.brand.tealLight,
+    fontFamily: "Inter_600SemiBold",
   },
 });
