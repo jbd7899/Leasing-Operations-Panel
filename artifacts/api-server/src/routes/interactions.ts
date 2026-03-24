@@ -111,8 +111,12 @@ router.post("/interactions/send-sms", async (req: Request, res: Response) => {
     const [found] = await db
       .select()
       .from(twilioNumbersTable)
-      .where(and(eq(twilioNumbersTable.id, fromTwilioNumberId), eq(twilioNumbersTable.accountId, accountId)));
-    if (!found) { res.status(400).json({ error: "Twilio number not found" }); return; }
+      .where(and(
+        eq(twilioNumbersTable.id, fromTwilioNumberId),
+        eq(twilioNumbersTable.accountId, accountId),
+        eq(twilioNumbersTable.isActive, true),
+      ));
+    if (!found) { res.status(400).json({ error: "Twilio number not found or is not active" }); return; }
     twilioNumber = found;
   } else {
     const numbers = await db
