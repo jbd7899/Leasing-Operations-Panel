@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, varchar, timestamp, numeric, index } from "drizzle-orm/pg-core";
+import { pgTable, varchar, timestamp, numeric, index, unique } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { accountsTable } from "./accounts";
@@ -33,6 +33,7 @@ export const prospectsTable = pgTable("prospects", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 }, (table) => [
+  unique("uq_prospects_account_phone").on(table.accountId, table.phonePrimary),
   index("idx_prospects_account_id").on(table.accountId),
   index("idx_prospects_phone_primary").on(table.phonePrimary),
   index("idx_prospects_status").on(table.status),
