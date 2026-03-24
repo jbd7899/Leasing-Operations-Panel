@@ -7,7 +7,7 @@ import {
 } from "@workspace/db";
 import { eq, count } from "drizzle-orm";
 
-const SEED_MARKER_EMAIL = "__seed__agent@myrentcard.internal";
+const DEMO_AGENT_EMAIL = "jordan.rivera@myrentcard.demo";
 
 const PROPERTIES = [
   {
@@ -403,26 +403,31 @@ function interactionsFor(prospect: ProspectSeed): InteractionSeed[] {
 async function main() {
   const ownerEmailEnv = process.env["SEED_OWNER_EMAIL"];
 
-  const allOwners = await db
-    .select()
-    .from(accountUsersTable)
-    .where(eq(accountUsersTable.role, "owner"))
-    .limit(10);
-
-  if (allOwners.length === 0) {
-    console.error(
-      "❌ No owner accounts found. Sign in to the app first to create your account, then run the seed script.",
-    );
-    process.exit(1);
-  }
-
-  const targetOwner = ownerEmailEnv
-    ? allOwners.find((u) => u.email === ownerEmailEnv) ?? allOwners[0]
-    : allOwners[0];
-
-  if (!targetOwner) {
-    console.error("❌ Could not find a target account.");
-    process.exit(1);
+  let targetOwner;
+  if (ownerEmailEnv) {
+    const matches = await db
+      .select()
+      .from(accountUsersTable)
+      .where(eq(accountUsersTable.email, ownerEmailEnv))
+      .limit(1);
+    targetOwner = matches[0];
+    if (!targetOwner) {
+      console.error(`❌ No account user found with email "${ownerEmailEnv}". Check the SEED_OWNER_EMAIL value.`);
+      process.exit(1);
+    }
+  } else {
+    const owners = await db
+      .select()
+      .from(accountUsersTable)
+      .where(eq(accountUsersTable.role, "owner"))
+      .limit(1);
+    targetOwner = owners[0];
+    if (!targetOwner) {
+      console.error(
+        "❌ No owner accounts found. Sign in to the app first to create your account, then run the seed script.",
+      );
+      process.exit(1);
+    }
   }
 
   const accountId = targetOwner.accountId;
@@ -525,17 +530,17 @@ async function main() {
   console.log(`   ✓ ${prospectsCreated} prospects created`);
   console.log(`   ✓ ${interactionsCreated} interactions created`);
 
-  const existingSeed = await db
+  const existingDemoAgent = await db
     .select()
     .from(accountUsersTable)
-    .where(eq(accountUsersTable.email, SEED_MARKER_EMAIL))
+    .where(eq(accountUsersTable.email, DEMO_AGENT_EMAIL))
     .limit(1);
 
-  if (existingSeed.length === 0) {
+  if (existingDemoAgent.length === 0) {
     await db.insert(accountUsersTable).values({
       accountId,
       name: "Jordan Rivera (Demo Agent)",
-      email: "jordan.rivera@myrentcard.demo",
+      email: DEMO_AGENT_EMAIL,
       role: "agent",
     });
     console.log("   ✓ 1 demo team member created");
