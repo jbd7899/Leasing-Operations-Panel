@@ -3,11 +3,17 @@ import twilio from "twilio";
 import { logger } from "../lib/logger";
 
 const AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN;
+const IS_DEV = process.env.NODE_ENV === "development";
 
 export function validateTwilioSignature(req: Request, res: Response, next: NextFunction) {
   if (!AUTH_TOKEN) {
-    logger.warn("TWILIO_AUTH_TOKEN not set — skipping signature validation (dev mode)");
-    next();
+    if (IS_DEV) {
+      logger.warn("TWILIO_AUTH_TOKEN not set — skipping signature validation (dev mode only)");
+      next();
+      return;
+    }
+    logger.error("TWILIO_AUTH_TOKEN not configured — rejecting webhook (fail-closed)");
+    res.status(403).json({ error: "Webhook authentication not configured" });
     return;
   }
 

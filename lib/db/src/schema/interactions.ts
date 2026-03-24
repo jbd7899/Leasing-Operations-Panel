@@ -15,6 +15,7 @@ export const interactionsTable = pgTable("interactions", {
   direction: varchar("direction", { length: 20 }).notNull().default("inbound"),
   twilioMessageSid: varchar("twilio_message_sid", { length: 100 }).unique(),
   twilioCallSid: varchar("twilio_call_sid", { length: 100 }).unique(),
+  prospectMatchConfidence: varchar("prospect_match_confidence", { length: 30 }),
   parentThreadKey: varchar("parent_thread_key", { length: 255 }),
   fromNumber: varchar("from_number", { length: 30 }).notNull(),
   toNumber: varchar("to_number", { length: 30 }).notNull(),

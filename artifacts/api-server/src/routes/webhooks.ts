@@ -28,18 +28,20 @@ async function findTwilioNumber(toNumber: string) {
   return record ?? null;
 }
 
+type MatchConfidence = "exact" | "new";
+
 async function findOrCreateProspectShell(
   accountId: string,
   fromNumber: string,
   propertyId: string | null,
-): Promise<{ id: string; isNew: boolean }> {
+): Promise<{ id: string; confidence: MatchConfidence }> {
   const [existing] = await db
     .select({ id: prospectsTable.id })
     .from(prospectsTable)
     .where(and(eq(prospectsTable.accountId, accountId), eq(prospectsTable.phonePrimary, fromNumber)))
     .limit(1);
 
-  if (existing) return { id: existing.id, isNew: false };
+  if (existing) return { id: existing.id, confidence: "exact" };
 
   const [created] = await db
     .insert(prospectsTable)
@@ -53,7 +55,7 @@ async function findOrCreateProspectShell(
     .onConflictDoNothing()
     .returning({ id: prospectsTable.id });
 
-  if (created) return { id: created.id, isNew: true };
+  if (created) return { id: created.id, confidence: "new" };
 
   const [raceWinner] = await db
     .select({ id: prospectsTable.id })
@@ -61,7 +63,7 @@ async function findOrCreateProspectShell(
     .where(and(eq(prospectsTable.accountId, accountId), eq(prospectsTable.phonePrimary, fromNumber)))
     .limit(1);
 
-  return { id: raceWinner!.id, isNew: false };
+  return { id: raceWinner!.id, confidence: "exact" };
 }
 
 router.post(
@@ -90,7 +92,7 @@ router.post(
           return;
         }
 
-        const { id: prospectId } = await findOrCreateProspectShell(
+        const { id: prospectId, confidence } = await findOrCreateProspectShell(
           twilioNumber.accountId,
           fromNorm,
           twilioNumber.propertyId ?? null,
@@ -102,6 +104,7 @@ router.post(
             accountId: twilioNumber.accountId,
             propertyId: twilioNumber.propertyId ?? null,
             prospectId,
+            prospectMatchConfidence: confidence,
             sourceType: "sms",
             direction: "inbound",
             twilioMessageSid: MessageSid,
@@ -154,7 +157,7 @@ router.post(
           return;
         }
 
-        const { id: prospectId } = await findOrCreateProspectShell(
+        const { id: prospectId, confidence } = await findOrCreateProspectShell(
           twilioNumber.accountId,
           fromNorm,
           twilioNumber.propertyId ?? null,
@@ -166,6 +169,7 @@ router.post(
             accountId: twilioNumber.accountId,
             propertyId: twilioNumber.propertyId ?? null,
             prospectId,
+            prospectMatchConfidence: confidence,
             sourceType: "voice",
             direction: "inbound",
             twilioCallSid: CallSid,
