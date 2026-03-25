@@ -230,6 +230,9 @@ importers:
 
   artifacts/mobile:
     dependencies:
+      '@twilio/voice-react-native-sdk':
+        specifier: ^1.7.0
+        version: 1.7.0(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
       expo-auth-session:
         specifier: ^7.0.10
         version: 7.0.10(expo@54.0.33)(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
@@ -2328,6 +2331,15 @@ packages:
     resolution: {integrity: sha512-0Lu6y5t+tvlTJMTO7oh5NSpJfpg/5D41LlThfepTixPYkJ0sE2Jj0m0f6yYqujBwIXlId87e234+MxG3D3g7kg==}
     peerDependencies:
       react: ^18 || ^19
+
+  '@twilio/voice-errors@1.8.0':
+    resolution: {integrity: sha512-Mh3CCCNOZ+OCFNv90ibml1VrsXiJy/1+/FP6382tUQuqZztndp41eqnJhsnM44UBkMAtlvVUSd1HuK8iCdHM/A==}
+
+  '@twilio/voice-react-native-sdk@1.7.0':
+    resolution: {integrity: sha512-okuASZJffRZHRN7ayxhhK7UI86quKsXQTSm8G92Tmru1RPBqf0ek3jITCf90dRiOoFD3VxpdpcFFePZ3xEMNQw==}
+    peerDependencies:
+      react: '*'
+      react-native: '*'
 
   '@types/babel__core@7.20.5':
     resolution: {integrity: sha512-qoQprZvz5wQFJwMDqeseRXWv3rqMvhgpbXFfVyWhbx9X47POIA6i/+dXefEmZKoAgOaTdaIgNSMqMIU61yRyzA==}
@@ -8230,6 +8242,15 @@ snapshots:
     dependencies:
       '@tanstack/query-core': 5.90.20
       react: 19.1.0
+
+  '@twilio/voice-errors@1.8.0': {}
+
+  '@twilio/voice-react-native-sdk@1.7.0(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)':
+    dependencies:
+      '@twilio/voice-errors': 1.8.0
+      eventemitter3: 4.0.7
+      react: 19.1.0
+      react-native: 0.81.5(@babel/core@7.29.0)(@types/react@19.1.17)(react@19.1.0)
 
   '@types/babel__core@7.20.5':
     dependencies:

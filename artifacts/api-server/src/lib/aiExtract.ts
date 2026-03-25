@@ -112,15 +112,27 @@ Extract prospect data from this call note:
 ${text}`;
 }
 
-function buildPrompt(text: string, sourceType: "sms" | "voice" | "voicemail"): string {
+function callTranscriptPrompt(text: string): string {
+  return `${BASE_SYSTEM}
+
+SOURCE TYPE: Outbound call transcript
+CONTEXT: Automated transcription of a recorded outbound call between a leasing agent and a prospective renter. May contain both sides of the conversation. Transcription may have errors — be charitable when interpreting unclear words.
+
+Extract prospect data from this call transcript:
+
+${text}`;
+}
+
+function buildPrompt(text: string, sourceType: "sms" | "voice" | "voicemail" | "call"): string {
   if (sourceType === "sms") return smsPrompt(text);
   if (sourceType === "voicemail") return voicemailPrompt(text);
+  if (sourceType === "call") return callTranscriptPrompt(text);
   return callNotePrompt(text);
 }
 
 export async function extractProspectData(
   text: string,
-  sourceType: "sms" | "voice" | "voicemail",
+  sourceType: "sms" | "voice" | "voicemail" | "call",
 ): Promise<ProspectExtraction> {
   const prompt = buildPrompt(text, sourceType);
 

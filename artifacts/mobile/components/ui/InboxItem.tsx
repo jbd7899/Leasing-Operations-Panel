@@ -1,9 +1,11 @@
 import React, { type ComponentProps } from "react";
-import { View, Text, StyleSheet, Pressable, Linking, Alert } from "react-native";
+import { View, Text, StyleSheet, Pressable } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
 import { Badge } from "./Badge";
 import type { InboxItem as InboxItemType } from "@workspace/api-client-react";
+import { useListTwilioNumbers } from "@workspace/api-client-react";
+import { useTwilioCall } from "@/contexts/TwilioCallContext";
 
 type FeatherIconName = ComponentProps<typeof Feather>["name"];
 
@@ -27,25 +29,35 @@ const SOURCE_ICONS: Record<string, FeatherIconName> = {
   sms: "message-square",
   voice: "phone",
   voicemail: "voicemail",
+  call: "phone-call",
 };
-
-function handleCall(phone: string) {
-  const url = `tel:${phone}`;
-  Linking.canOpenURL(url).then((supported) => {
-    if (supported) {
-      Linking.openURL(url);
-    } else {
-      Alert.alert("Cannot Call", "Your device does not support phone calls.");
-    }
-  });
-}
 
 export function InboxItem({ item, onPress }: InboxItemProps) {
   const { interaction, prospect, property, messageCount } = item;
+  const { startCall } = useTwilioCall();
+
+  const { data: twilioNumbersData } = useListTwilioNumbers({
+    query: {
+      select: (d) => ({
+        ...d,
+        twilioNumbers: d.twilioNumbers.filter((n) => n.isActive),
+      }),
+      staleTime: 60_000,
+    },
+  });
+
+  const primaryTwilioNumber = twilioNumbersData?.twilioNumbers[0]?.phoneNumber ?? null;
+
   const sourceIcon: FeatherIconName = SOURCE_ICONS[interaction.sourceType] ?? "activity";
   const phoneNumber = prospect?.phonePrimary ?? interaction.fromNumber;
   const canCall = !!phoneNumber;
   const showMessageBadge = typeof messageCount === "number" && messageCount > 1;
+
+  const handleCall = () => {
+    if (!phoneNumber) return;
+    const name = prospect?.fullName ?? phoneNumber;
+    startCall(name, phoneNumber, primaryTwilioNumber);
+  };
 
   return (
     <Pressable
@@ -89,15 +101,22 @@ export function InboxItem({ item, onPress }: InboxItemProps) {
         {canCall && (
           <View style={styles.quickActions}>
             <Pressable
-              style={styles.quickAction}
+              style={[styles.quickAction, !primaryTwilioNumber && styles.quickActionDisabled]}
               onPress={(e) => {
                 e.stopPropagation?.();
-                handleCall(phoneNumber);
+                handleCall();
               }}
               hitSlop={8}
+              disabled={!primaryTwilioNumber}
             >
-              <Feather name="phone" size={14} color={Colors.brand.tealLight} />
-              <Text style={styles.quickActionLabel}>Call</Text>
+              <Feather
+                name="phone"
+                size={14}
+                color={primaryTwilioNumber ? Colors.brand.tealLight : Colors.dark.textMuted}
+              />
+              <Text style={[styles.quickActionLabel, !primaryTwilioNumber && styles.quickActionLabelDisabled]}>
+                Call
+              </Text>
             </Pressable>
           </View>
         )}
@@ -203,9 +222,15 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#164444",
   },
+  quickActionDisabled: {
+    opacity: 0.5,
+  },
   quickActionLabel: {
     fontSize: 12,
     fontFamily: "Inter_500Medium",
     color: Colors.brand.tealLight,
+  },
+  quickActionLabelDisabled: {
+    color: Colors.dark.textMuted,
   },
 });

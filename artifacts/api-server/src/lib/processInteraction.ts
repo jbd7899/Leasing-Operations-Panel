@@ -138,7 +138,7 @@ export async function processInteraction(interactionId: string): Promise<void> {
     return;
   }
 
-  const sourceType = interaction.sourceType as "sms" | "voice" | "voicemail";
+  const sourceType = interaction.sourceType as "sms" | "voice" | "voicemail" | "call";
 
   try {
     await db

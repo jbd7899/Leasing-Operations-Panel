@@ -14,12 +14,14 @@ import internalRouter from "./internal";
 import analyticsRouter from "./analytics";
 import settingsRouter from "./settings";
 import legalRouter from "./legal";
+import voiceRouter from "./voice";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
 router.use(authRouter);
 router.use(webhooksRouter);
+router.use(voiceRouter);
 router.use(internalRouter);
 router.use(legalRouter);
 router.use(propertiesRouter);

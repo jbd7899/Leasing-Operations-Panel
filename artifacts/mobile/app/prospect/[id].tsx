@@ -10,7 +10,6 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
-  Linking,
 } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
 import { useQueryClient } from "@tanstack/react-query";
@@ -34,6 +33,7 @@ import {
 } from "@workspace/api-client-react";
 import type { ProspectDetail, TwilioNumber, ProspectConflict } from "@workspace/api-client-react";
 import { Badge } from "@/components/ui/Badge";
+import { useTwilioCall } from "@/contexts/TwilioCallContext";
 
 const STATUS_OPTIONS = ["new", "contacted", "qualified", "disqualified", "archived"];
 
@@ -88,6 +88,7 @@ function StatusPicker({ currentStatus, onSelect, isUpdating }: {
 export default function ProspectDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const queryClient = useQueryClient();
+  const { startCall } = useTwilioCall();
   const [noteText, setNoteText] = useState("");
   const [selectedTwilioNumberId, setSelectedTwilioNumberId] = useState<string | null>(null);
   const [customValues, setCustomValues] = useState<Record<string, string>>({});
@@ -256,14 +257,9 @@ export default function ProspectDetailScreen() {
   });
 
   const handleCall = (phone: string) => {
-    const url = `tel:${phone}`;
-    Linking.canOpenURL(url).then((supported) => {
-      if (supported) {
-        Linking.openURL(url);
-      } else {
-        Alert.alert("Cannot Open Phone", "Your device does not support phone calls.");
-      }
-    });
+    const prospectName = data?.prospect?.fullName ?? phone;
+    const callerNumber = selectedNumber?.phoneNumber ?? activeTwilioNumbers[0]?.phoneNumber ?? null;
+    startCall(prospectName, phone, callerNumber);
   };
 
   const handleSendMessage = () => {
@@ -331,7 +327,7 @@ export default function ProspectDetailScreen() {
         </View>
         <View style={styles.compactHeaderRight}>
           <Badge label={prospect.status} value={prospect.status} />
-          {hasPhone && (
+          {hasPhone && activeTwilioNumbers.length > 0 && (
             <Pressable
               style={styles.callIconBtn}
               onPress={() => handleCall(prospect.phonePrimary)}
@@ -576,12 +572,16 @@ export default function ProspectDetailScreen() {
                   ]}>
                     <Feather
                       name={
-                        isOutbound
+                        isOutbound && interaction.sourceType === "call"
+                          ? "phone-call"
+                          : isOutbound
                           ? "send"
                           : interaction.sourceType === "sms"
                           ? "message-square"
                           : interaction.sourceType === "voicemail"
                           ? "mic"
+                          : interaction.sourceType === "call"
+                          ? "phone-call"
                           : "phone"
                       }
                       size={14}
@@ -595,7 +595,7 @@ export default function ProspectDetailScreen() {
                         {isOutbound && (
                           <View style={styles.outboundBadge}>
                             <Text style={styles.outboundBadgeText}>
-                              {isOptimistic ? "Sending…" : "Sent"}
+                              {isOptimistic ? "Sending…" : interaction.sourceType === "call" ? "Called" : "Sent"}
                             </Text>
                           </View>
                         )}

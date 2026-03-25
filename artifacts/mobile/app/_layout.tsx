@@ -25,6 +25,8 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { initApiClient } from "@/lib/api";
 import { AuthProvider, useAuth } from "@/lib/auth";
 import Colors from "@/constants/colors";
+import { TwilioCallProvider } from "@/contexts/TwilioCallContext";
+import { CallScreen } from "@/components/call/CallScreen";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -152,7 +154,10 @@ export default function RootLayout() {
           <GestureHandlerRootView style={{ flex: 1 }}>
             <KeyboardProvider>
               <AuthProvider>
-                <RootLayoutNav />
+                <TwilioCallProvider>
+                  <RootLayoutNav />
+                  <CallScreen />
+                </TwilioCallProvider>
               </AuthProvider>
             </KeyboardProvider>
           </GestureHandlerRootView>
