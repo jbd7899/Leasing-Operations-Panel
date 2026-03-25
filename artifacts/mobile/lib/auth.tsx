@@ -51,6 +51,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const discovery = AuthSession.useAutoDiscovery(ISSUER_URL);
 
   const apiBase = getApiBaseUrl();
+  if (Platform.OS !== "web" && !apiBase) {
+    console.error(
+      "[Auth] EXPO_PUBLIC_DOMAIN is not set. Native OAuth will fail with invalid_request. " +
+        "Ensure EXPO_PUBLIC_DOMAIN is configured in eas.json for all native build profiles.",
+    );
+  }
   const redirectUri =
     Platform.OS !== "web" && apiBase
       ? `${apiBase}/api/mobile-auth/callback`
