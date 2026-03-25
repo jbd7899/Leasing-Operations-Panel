@@ -1,10 +1,13 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react";
 import { Platform } from "react-native";
+import * as AuthSession from "expo-auth-session";
 import * as WebBrowser from "expo-web-browser";
 import * as storage from "@/lib/storage";
 
+WebBrowser.maybeCompleteAuthSession();
+
 const AUTH_TOKEN_KEY = "auth_session_token";
-const MOBILE_AUTH_CALLBACK = "mobile://auth-callback";
+const ISSUER_URL = process.env.EXPO_PUBLIC_ISSUER_URL ?? "https://replit.com/oidc";
 
 interface User {
   id: string;
@@ -37,9 +40,30 @@ function getApiBaseUrl(): string {
   return "";
 }
 
+function getClientId(): string {
+  return process.env.EXPO_PUBLIC_REPL_ID || "";
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  const discovery = AuthSession.useAutoDiscovery(ISSUER_URL);
+
+  const redirectUri = AuthSession.makeRedirectUri({
+    scheme: "mobile",
+    path: "auth-callback",
+  });
+
+  const [request, response, promptAsync] = AuthSession.useAuthRequest(
+    {
+      clientId: getClientId(),
+      scopes: ["openid", "email", "profile", "offline_access"],
+      redirectUri,
+      prompt: AuthSession.Prompt.Login,
+    },
+    discovery,
+  );
 
   const fetchUser = useCallback(async () => {
     try {
@@ -82,36 +106,62 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     fetchUser();
   }, [fetchUser]);
 
+  useEffect(() => {
+    if (Platform.OS === "web") return;
+    if (response?.type !== "success" || !request?.codeVerifier) return;
+
+    const { code, state } = response.params;
+
+    (async () => {
+      try {
+        const apiBase = getApiBaseUrl();
+        if (!apiBase) {
+          console.error("API base URL is not configured.");
+          return;
+        }
+
+        const exchangeRes = await fetch(`${apiBase}/api/mobile-auth/token-exchange`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            code,
+            code_verifier: request.codeVerifier,
+            redirect_uri: redirectUri,
+            state,
+          }),
+        });
+
+        if (!exchangeRes.ok) {
+          console.error("Token exchange failed:", exchangeRes.status);
+          setIsLoading(false);
+          return;
+        }
+
+        const data = await exchangeRes.json();
+        if (data.token) {
+          await storage.setItem(AUTH_TOKEN_KEY, data.token);
+          setIsLoading(true);
+          await fetchUser();
+        }
+      } catch (err) {
+        console.error("Token exchange error:", err);
+        setIsLoading(false);
+      }
+    })();
+  }, [response, request, redirectUri, fetchUser]);
+
   const login = useCallback(async () => {
     if (Platform.OS === "web") {
       const apiBase = getApiBaseUrl();
       window.location.href = `${apiBase}/api/login`;
       return;
     }
-
     try {
-      const apiBase = getApiBaseUrl();
-      if (!apiBase) {
-        console.error("API base URL is not configured.");
-        return;
-      }
-
-      const startUrl = `${apiBase}/api/mobile-auth/start?return_uri=${encodeURIComponent(MOBILE_AUTH_CALLBACK)}`;
-      const result = await WebBrowser.openAuthSessionAsync(startUrl, MOBILE_AUTH_CALLBACK);
-
-      if (result.type === "success") {
-        const url = new URL(result.url);
-        const token = url.searchParams.get("token");
-        if (token) {
-          await storage.setItem(AUTH_TOKEN_KEY, token);
-          setIsLoading(true);
-          await fetchUser();
-        }
-      }
+      await promptAsync();
     } catch (err) {
       console.error("Login error:", err);
     }
-  }, [fetchUser]);
+  }, [promptAsync]);
 
   const logout = useCallback(async () => {
     if (Platform.OS === "web") {
