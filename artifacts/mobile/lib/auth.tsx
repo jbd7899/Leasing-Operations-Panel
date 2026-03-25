@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react";
 import { Platform } from "react-native";
+import Constants from "expo-constants";
 import * as AuthSession from "expo-auth-session";
 import * as WebBrowser from "expo-web-browser";
 import * as storage from "@/lib/storage";
@@ -44,16 +45,21 @@ function getClientId(): string {
   return process.env.EXPO_PUBLIC_REPL_ID || "";
 }
 
+function isExpoGo(): boolean {
+  return Constants.appOwnership === "expo";
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   const discovery = AuthSession.useAutoDiscovery(ISSUER_URL);
 
-  const redirectUri = AuthSession.makeRedirectUri({
-    scheme: "mobile",
-    path: "auth-callback",
-  });
+  const redirectUri = AuthSession.makeRedirectUri(
+    isExpoGo()
+      ? {}
+      : { scheme: "mobile", path: "auth-callback" },
+  );
 
   const [request, response, promptAsync] = AuthSession.useAuthRequest(
     {
