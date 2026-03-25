@@ -10,7 +10,6 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
-  Modal,
   Linking,
 } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
@@ -23,6 +22,7 @@ import {
   useUpdateProspect,
   useAddProspectNote,
   useListTwilioNumbers,
+  useListProperties,
   getGetProspectQueryKey,
   getListProspectsQueryKey,
   useSendSms,
@@ -85,169 +85,19 @@ function StatusPicker({ currentStatus, onSelect, isUpdating }: {
   );
 }
 
-function ComposeModal({
-  visible,
-  onClose,
-  prospectName,
-  onSend,
-  isSending,
-  twilioNumbers,
-  selectedNumberId,
-  onSelectNumber,
-  aiDraft,
-  isLoadingDraft,
-}: {
-  visible: boolean;
-  onClose: () => void;
-  prospectName: string;
-  onSend: (text: string) => void;
-  isSending: boolean;
-  twilioNumbers: TwilioNumber[];
-  selectedNumberId: string | null;
-  onSelectNumber: (id: string) => void;
-  aiDraft?: string;
-  isLoadingDraft?: boolean;
-}) {
-  const [messageText, setMessageText] = useState("");
-  const [draftApplied, setDraftApplied] = useState(false);
-  const multipleNumbers = twilioNumbers.length > 1;
-
-  useEffect(() => {
-    if (visible && aiDraft && !draftApplied) {
-      setMessageText(aiDraft);
-      setDraftApplied(true);
-    }
-    if (!visible) {
-      setDraftApplied(false);
-    }
-  }, [visible, aiDraft, draftApplied]);
-
-  const handleSend = () => {
-    if (messageText.trim()) {
-      onSend(messageText.trim());
-    }
-  };
-
-  const handleClose = () => {
-    setMessageText("");
-    setDraftApplied(false);
-    onClose();
-  };
-
-  const selectedNumber = twilioNumbers.find((n) => n.id === selectedNumberId) ?? twilioNumbers[0];
-
-  return (
-    <Modal
-      visible={visible}
-      animationType={Platform.OS === "web" ? "fade" : "slide"}
-      presentationStyle={Platform.OS === "web" ? "overFullScreen" : "pageSheet"}
-      onRequestClose={handleClose}
-    >
-      <KeyboardAvoidingView
-        style={composeStyles.container}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-      >
-        <View style={composeStyles.header}>
-          <Pressable onPress={handleClose} style={composeStyles.cancelBtn}>
-            <Text style={composeStyles.cancelText}>Cancel</Text>
-          </Pressable>
-          <Text style={composeStyles.title}>New Message</Text>
-          <Pressable
-            onPress={handleSend}
-            style={[composeStyles.sendBtn, (!messageText.trim() || isSending || !selectedNumber) && composeStyles.sendBtnDisabled]}
-            disabled={!messageText.trim() || isSending || !selectedNumber}
-          >
-            {isSending ? (
-              <ActivityIndicator size="small" color="#fff" />
-            ) : (
-              <Text style={composeStyles.sendText}>Send</Text>
-            )}
-          </Pressable>
-        </View>
-
-        <View style={composeStyles.toRow}>
-          <Feather name="message-square" size={16} color={Colors.brand.tealLight} />
-          <Text style={composeStyles.toLabel}>To:</Text>
-          <Text style={composeStyles.toName}>{prospectName}</Text>
-        </View>
-
-        {twilioNumbers.length === 0 ? (
-          <View style={composeStyles.noNumberWarn}>
-            <Feather name="alert-triangle" size={16} color="#FCA84A" />
-            <Text style={composeStyles.noNumberWarnText}>
-              No Twilio numbers configured. Add one in Settings.
-            </Text>
-          </View>
-        ) : multipleNumbers ? (
-          <View style={composeStyles.fromRow}>
-            <Feather name="phone-outgoing" size={15} color={Colors.dark.textMuted} />
-            <Text style={composeStyles.fromLabel}>From:</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={composeStyles.numberChips}>
-              {twilioNumbers.map((n) => (
-                <Pressable
-                  key={n.id}
-                  style={[composeStyles.numberChip, selectedNumberId === n.id && composeStyles.numberChipActive]}
-                  onPress={() => onSelectNumber(n.id)}
-                >
-                  <Text style={[composeStyles.numberChipText, selectedNumberId === n.id && composeStyles.numberChipTextActive]}>
-                    {n.friendlyName ?? n.phoneNumber}
-                  </Text>
-                </Pressable>
-              ))}
-            </ScrollView>
-          </View>
-        ) : selectedNumber ? (
-          <View style={composeStyles.fromRowSingle}>
-            <Feather name="phone-outgoing" size={15} color={Colors.dark.textMuted} />
-            <Text style={composeStyles.fromLabel}>From:</Text>
-            <Text style={composeStyles.fromValue}>{selectedNumber.friendlyName ?? selectedNumber.phoneNumber}</Text>
-          </View>
-        ) : null}
-
-        <View style={composeStyles.divider} />
-
-        {isLoadingDraft ? (
-          <View style={composeStyles.draftLoading}>
-            <ActivityIndicator size="small" color={Colors.brand.tealLight} />
-            <Text style={composeStyles.draftLoadingText}>Generating AI draft…</Text>
-          </View>
-        ) : null}
-
-        {aiDraft && messageText === aiDraft && !isLoadingDraft ? (
-          <View style={composeStyles.draftBadge}>
-            <Feather name="cpu" size={11} color={Colors.brand.tealLight} />
-            <Text style={composeStyles.draftBadgeText}>AI Draft</Text>
-          </View>
-        ) : null}
-
-        <TextInput
-          value={messageText}
-          onChangeText={setMessageText}
-          placeholder={isLoadingDraft ? "" : "Type your message..."}
-          placeholderTextColor={Colors.dark.textMuted}
-          style={composeStyles.input}
-          multiline
-          autoFocus={!isLoadingDraft}
-          maxLength={1600}
-          editable={!isLoadingDraft}
-        />
-
-        <Text style={composeStyles.charCount}>{messageText.length}/1600</Text>
-      </KeyboardAvoidingView>
-    </Modal>
-  );
-}
-
 export default function ProspectDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const queryClient = useQueryClient();
   const [noteText, setNoteText] = useState("");
-  const [composeVisible, setComposeVisible] = useState(false);
   const [selectedTwilioNumberId, setSelectedTwilioNumberId] = useState<string | null>(null);
   const [customValues, setCustomValues] = useState<Record<string, string>>({});
   const [editingField, setEditingField] = useState<string | null>(null);
   const [aiDraftText, setAiDraftText] = useState<string | undefined>(undefined);
+  const [composeText, setComposeText] = useState("");
+  const aiDraftAppliedRef = useRef(false);
+  const scrollViewRef = useRef<ScrollView>(null);
   const noteInputRef = useRef<TextInput>(null);
+  const composeInputRef = useRef<TextInput>(null);
 
   const { data, isLoading, isError, refetch } = useGetProspect(id, {
     query: { enabled: !!id, queryKey: getGetProspectQueryKey(id) },
@@ -264,13 +114,20 @@ export default function ProspectDetailScreen() {
 
   const activeTwilioNumbers = twilioNumbersData?.twilioNumbers ?? [];
 
+  const { data: propertiesData } = useListProperties();
+
   const { data: accountSettingsData } = useGetAccountSettings();
   const aiAssistEnabled = accountSettingsData?.aiAssistEnabled ?? false;
 
   const aiDraftMutation = useGenerateAiDraft({
     mutation: {
-      onSuccess: (data) => {
-        setAiDraftText(data.draft || undefined);
+      onSuccess: (result) => {
+        const draft = result.draft || undefined;
+        setAiDraftText(draft);
+        if (draft && !aiDraftAppliedRef.current) {
+          setComposeText(draft);
+          aiDraftAppliedRef.current = true;
+        }
       },
       onError: () => {
         setAiDraftText(undefined);
@@ -278,13 +135,11 @@ export default function ProspectDetailScreen() {
     },
   });
 
-  function openCompose() {
-    setAiDraftText(undefined);
-    setComposeVisible(true);
-    if (aiAssistEnabled && id) {
+  useEffect(() => {
+    if (aiAssistEnabled && id && data) {
       aiDraftMutation.mutate({ prospectId: id });
     }
-  }
+  }, [aiAssistEnabled, id, data?.prospect?.id]);
 
   const statusMutation = useUpdateProspect({
     mutation: {
@@ -387,7 +242,9 @@ export default function ProspectDetailScreen() {
       },
       onSuccess: (interaction) => {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        setComposeVisible(false);
+        setComposeText("");
+        setAiDraftText(undefined);
+        aiDraftAppliedRef.current = false;
         const previous = queryClient.getQueryData<ProspectDetail>(getGetProspectQueryKey(id));
         if (previous) {
           queryClient.setQueryData<ProspectDetail>(getGetProspectQueryKey(id), {
@@ -399,6 +256,9 @@ export default function ProspectDetailScreen() {
         } else {
           queryClient.invalidateQueries({ queryKey: getGetProspectQueryKey(id) });
         }
+        setTimeout(() => {
+          scrollViewRef.current?.scrollToEnd({ animated: true });
+        }, 200);
       },
     },
   });
@@ -414,7 +274,9 @@ export default function ProspectDetailScreen() {
     });
   };
 
-  const handleSendMessage = (text: string) => {
+  const handleSendMessage = () => {
+    const text = composeText.trim();
+    if (!text) return;
     const fromId = selectedTwilioNumberId ?? activeTwilioNumbers[0]?.id;
     smsMutation.mutate({
       prospectId: id,
@@ -422,6 +284,10 @@ export default function ProspectDetailScreen() {
       ...(fromId ? { fromTwilioNumberId: fromId } : {}),
     });
   };
+
+  const selectedNumber = activeTwilioNumbers.find((n) => n.id === selectedTwilioNumberId) ?? activeTwilioNumbers[0];
+  const isLoadingDraft = aiAssistEnabled && aiDraftMutation.isPending;
+  const showAiDraftBadge = isLoadingDraft || (aiDraftText && composeText === aiDraftText);
 
   if (isLoading) {
     return (
@@ -446,431 +312,583 @@ export default function ProspectDetailScreen() {
   const { prospect, interactions, notes, tags } = data;
   const name = prospect.fullName ?? prospect.phonePrimary;
   const hasPhone = !!prospect.phonePrimary;
+  const assignedPropertyName = prospect.assignedPropertyId
+    ? (propertiesData?.properties ?? []).find((p) => p.id === prospect.assignedPropertyId)?.name ?? null
+    : null;
 
   return (
-    <>
-      <ComposeModal
-        visible={composeVisible}
-        onClose={() => setComposeVisible(false)}
-        prospectName={name}
-        onSend={handleSendMessage}
-        isSending={smsMutation.isPending}
-        twilioNumbers={activeTwilioNumbers}
-        selectedNumberId={selectedTwilioNumberId ?? activeTwilioNumbers[0]?.id ?? null}
-        onSelectNumber={setSelectedTwilioNumberId}
-        aiDraft={aiDraftText}
-        isLoadingDraft={aiAssistEnabled && aiDraftMutation.isPending}
-      />
-
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        keyboardVerticalOffset={88}
-      >
-        <ScrollView
-          style={styles.container}
-          contentContainerStyle={styles.content}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
-          {/* Hero */}
-          <View style={styles.hero}>
-            <View style={styles.avatarLg}>
-              <Text style={styles.avatarLgText}>
-                {name.split(" ").map((w: string) => w[0]).slice(0, 2).join("").toUpperCase()}
-              </Text>
-            </View>
-            <Text style={styles.heroName}>{name}</Text>
-            <Text style={styles.heroPhone}>{prospect.phonePrimary}</Text>
-            {prospect.email && <Text style={styles.heroEmail}>{prospect.email}</Text>}
-
-            {/* Call & Message action buttons */}
-            {hasPhone && (
-              <View style={styles.heroCtas}>
-                <Pressable
-                  style={styles.ctaBtn}
-                  onPress={() => handleCall(prospect.phonePrimary)}
-                >
-                  <Feather name="phone" size={18} color="#fff" />
-                  <Text style={styles.ctaBtnText}>Call</Text>
-                </Pressable>
-                <Pressable
-                  style={[styles.ctaBtn, styles.ctaBtnOutline]}
-                  onPress={openCompose}
-                >
-                  <Feather name="message-square" size={18} color={Colors.brand.tealLight} />
-                  <Text style={[styles.ctaBtnText, styles.ctaBtnOutlineText]}>Message</Text>
-                </Pressable>
-              </View>
+    <KeyboardAvoidingView
+      style={styles.root}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 88 : 0}
+    >
+      {/* Compact Sticky Header */}
+      <View style={styles.compactHeader}>
+        <View style={styles.compactHeaderLeft}>
+          <View style={styles.avatarSm}>
+            <Text style={styles.avatarSmText}>
+              {name.split(" ").map((w: string) => w[0]).slice(0, 2).join("").toUpperCase()}
+            </Text>
+          </View>
+          <View style={styles.compactHeaderInfo}>
+            <Text style={styles.compactName} numberOfLines={1}>{name}</Text>
+            {assignedPropertyName && (
+              <Text style={styles.compactProperty} numberOfLines={1}>{assignedPropertyName}</Text>
             )}
           </View>
-
-          {/* Status */}
-          <View style={styles.card}>
-            <SectionHeader title="LEAD STATUS" />
-            <StatusPicker
-              currentStatus={prospect.status}
-              onSelect={(s) => statusMutation.mutate({ id, data: { status: s } })}
-              isUpdating={statusMutation.isPending}
-            />
-          </View>
-
-          {/* AI Summary */}
-          {prospect.latestSummary && (
-            <View style={styles.card}>
-              <View style={styles.cardHeaderRow}>
-                <SectionHeader title="AI SUMMARY" />
-                {prospect.latestSentiment && (
-                  <Badge label={prospect.latestSentiment} value={prospect.latestSentiment} />
-                )}
-              </View>
-              <Text style={styles.summaryText}>{prospect.latestSummary}</Text>
-            </View>
+        </View>
+        <View style={styles.compactHeaderRight}>
+          <Badge label={prospect.status} value={prospect.status} />
+          {hasPhone && (
+            <Pressable
+              style={styles.callIconBtn}
+              onPress={() => handleCall(prospect.phonePrimary)}
+            >
+              <Feather name="phone" size={16} color={Colors.brand.tealLight} />
+            </Pressable>
           )}
+        </View>
+      </View>
 
-          {/* Data Conflicts */}
-          {conflicts.length > 0 && (
-            <View style={[styles.card, conflictStyles.conflictCard]}>
-              <View style={styles.cardHeaderRow}>
-                <View style={conflictStyles.headerLeft}>
-                  <Feather name="alert-circle" size={14} color="#FCA84A" />
-                  <SectionHeader title="DATA CONFLICTS" />
-                </View>
-                <View style={conflictStyles.countBadge}>
-                  <Text style={conflictStyles.countText}>{conflicts.length}</Text>
-                </View>
-              </View>
-              <Text style={conflictStyles.description}>
-                The AI extracted values that differ from what's saved. Choose which is correct.
-              </Text>
-              {conflicts.map((conflict) => {
-                const isEditing = editingField === conflict.fieldName;
-                const isPending = resolveMutation.isPending &&
-                  (resolveMutation.variables as { fieldName: string })?.fieldName === conflict.fieldName;
-                return (
-                  <View key={conflict.id} style={conflictStyles.conflictRow}>
-                    <Text style={conflictStyles.fieldLabel}>
-                      {conflict.fieldName.replace(/([A-Z])/g, " $1").trim()}
-                    </Text>
-                    <View style={conflictStyles.valuesRow}>
-                      <Pressable
-                        style={conflictStyles.valueOption}
-                        onPress={() => {
-                          if (!isPending) {
-                            resolveMutation.mutate({
-                              prospectId: id,
-                              fieldName: conflict.fieldName,
-                              chosenValue: conflict.existingValue ?? "",
-                            });
-                          }
-                        }}
-                        disabled={isPending}
-                      >
-                        <Text style={conflictStyles.valueOptionLabel}>Keep existing</Text>
-                        <Text style={conflictStyles.valueOptionValue} numberOfLines={1}>
-                          {conflict.existingValue ?? "(empty)"}
-                        </Text>
-                      </Pressable>
-                      <Pressable
-                        style={[conflictStyles.valueOption, conflictStyles.valueOptionNew]}
-                        onPress={() => {
-                          if (!isPending) {
-                            resolveMutation.mutate({
-                              prospectId: id,
-                              fieldName: conflict.fieldName,
-                              chosenValue: conflict.extractedValue,
-                            });
-                          }
-                        }}
-                        disabled={isPending}
-                      >
-                        <Text style={[conflictStyles.valueOptionLabel, conflictStyles.valueOptionLabelNew]}>
-                          Use AI value
-                        </Text>
-                        <Text style={[conflictStyles.valueOptionValue, conflictStyles.valueOptionValueNew]} numberOfLines={1}>
-                          {conflict.extractedValue}
-                        </Text>
-                      </Pressable>
-                    </View>
-                    {isEditing ? (
-                      <View style={conflictStyles.customRow}>
-                        <TextInput
-                          value={customValues[conflict.fieldName] ?? ""}
-                          onChangeText={(t) =>
-                            setCustomValues((prev) => ({ ...prev, [conflict.fieldName]: t }))
-                          }
-                          placeholder="Enter custom value..."
-                          placeholderTextColor={Colors.dark.textMuted}
-                          style={conflictStyles.customInput}
-                          autoFocus
-                        />
-                        <Pressable
-                          style={conflictStyles.customSaveBtn}
-                          onPress={() => {
-                            const val = customValues[conflict.fieldName]?.trim();
-                            if (val) {
-                              resolveMutation.mutate({
-                                prospectId: id,
-                                fieldName: conflict.fieldName,
-                                chosenValue: val,
-                              });
-                            }
-                          }}
-                          disabled={isPending || !customValues[conflict.fieldName]?.trim()}
-                        >
-                          {isPending ? (
-                            <ActivityIndicator size="small" color="#fff" />
-                          ) : (
-                            <Text style={conflictStyles.customSaveText}>Save</Text>
-                          )}
-                        </Pressable>
-                        <Pressable
-                          style={conflictStyles.customCancelBtn}
-                          onPress={() => setEditingField(null)}
-                        >
-                          <Feather name="x" size={16} color={Colors.dark.textMuted} />
-                        </Pressable>
-                      </View>
-                    ) : (
-                      <Pressable
-                        style={conflictStyles.customEditBtn}
-                        onPress={() => {
-                          setEditingField(conflict.fieldName);
-                          setCustomValues((prev) => ({ ...prev, [conflict.fieldName]: "" }));
-                        }}
-                      >
-                        <Feather name="edit-2" size={12} color={Colors.dark.textMuted} />
-                        <Text style={conflictStyles.customEditText}>Enter custom value</Text>
-                      </Pressable>
-                    )}
-                    {isPending && !isEditing && (
-                      <ActivityIndicator
-                        size="small"
-                        color={Colors.brand.tealLight}
-                        style={conflictStyles.loadingIndicator}
-                      />
-                    )}
-                  </View>
-                );
-              })}
-            </View>
-          )}
-
-          {/* Leasing Details */}
-          <View style={styles.card}>
-            <SectionHeader title="LEASING DETAILS" />
-            <InfoRow icon="home" label="Bedrooms" value={prospect.desiredBedrooms} />
-            <InfoRow icon="calendar" label="Move-in" value={prospect.desiredMoveInDate} />
-            <InfoRow
-              icon="dollar-sign"
-              label="Budget"
-              value={
-                prospect.budgetMin || prospect.budgetMax
-                  ? `$${prospect.budgetMin ?? "?"} – $${prospect.budgetMax ?? "?"}`
-                  : null
-              }
-            />
-            <InfoRow icon="heart" label="Pets" value={prospect.pets} />
-            <InfoRow icon="shield" label="Voucher" value={prospect.voucherType} />
-            <InfoRow icon="briefcase" label="Employment" value={prospect.employmentStatus} />
-            <InfoRow
-              icon="trending-up"
-              label="Income"
-              value={prospect.monthlyIncome ? `$${prospect.monthlyIncome}/mo` : null}
-            />
-            <InfoRow icon="globe" label="Language" value={prospect.languagePreference} />
-          </View>
-
-          {/* Export Status */}
+      {/* Scrollable Content */}
+      <ScrollView
+        ref={scrollViewRef}
+        style={styles.scrollArea}
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        onContentSizeChange={() => {
+          scrollViewRef.current?.scrollToEnd({ animated: false });
+        }}
+      >
+        {/* AI Summary */}
+        {prospect.latestSummary && (
           <View style={styles.card}>
             <View style={styles.cardHeaderRow}>
-              <SectionHeader title="EXPORT" />
-              <Badge label={prospect.exportStatus} value={prospect.exportStatus} />
+              <SectionHeader title="AI SUMMARY" />
+              {prospect.latestSentiment && (
+                <Badge label={prospect.latestSentiment} value={prospect.latestSentiment} />
+              )}
             </View>
-            {prospect.exportStatus !== "pending" && (
-              <Pressable
-                style={[styles.actionButtonOutline, statusMutation.isPending && styles.actionButtonDisabled]}
-                onPress={() =>
-                  statusMutation.mutate({ id, data: { exportStatus: "pending" } })
-                }
-                disabled={statusMutation.isPending}
-              >
-                {statusMutation.isPending ? (
-                  <ActivityIndicator size="small" color={Colors.brand.tealLight} />
-                ) : (
-                  <>
-                    <Feather name="clock" size={16} color={Colors.brand.tealLight} />
-                    <Text style={styles.actionButtonOutlineText}>Mark Export-Ready</Text>
-                  </>
-                )}
-              </Pressable>
-            )}
-            {prospect.exportStatus === "pending" && (
-              <View style={styles.pendingBadge}>
-                <Feather name="check-circle" size={14} color={Colors.brand.tealLight} />
-                <Text style={styles.pendingBadgeText}>In Export Queue — use the Exports tab to batch export</Text>
-              </View>
-            )}
+            <Text style={styles.summaryText}>{prospect.latestSummary}</Text>
           </View>
+        )}
 
-          {/* Interactions */}
-          {(interactions ?? []).length > 0 && (
-            <View style={styles.card}>
-              <SectionHeader title={`INTERACTIONS (${interactions!.length})`} />
-              {interactions!.map((interaction) => {
-                const isOptimistic = interaction.id.startsWith("optimistic-");
-                const isOutbound = interaction.direction === "outbound";
-                return (
-                  <Pressable
-                    key={interaction.id}
-                    style={styles.interactionRow}
-                    onPress={() => {
-                      if (isOptimistic) return;
-                      router.push({
-                        pathname: "/interaction/[id]",
-                        params: { id: interaction.id, prospectId: id },
-                      });
-                    }}
-                  >
-                    <View style={[
-                      styles.interactionIconWrap,
-                      isOutbound && styles.interactionIconWrapOutbound,
-                    ]}>
-                      <Feather
-                        name={
-                          isOutbound
-                            ? "send"
-                            : interaction.sourceType === "sms"
-                            ? "message-square"
-                            : interaction.sourceType === "voicemail"
-                            ? "mic"
-                            : "phone"
-                        }
-                        size={14}
-                        color={isOutbound ? "#A3E4D7" : Colors.brand.tealLight}
-                      />
-                    </View>
-                    <View style={styles.interactionContent}>
-                      <View style={styles.interactionTopRow}>
-                        <View style={styles.interactionBadgeRow}>
-                          <Badge label={interaction.sourceType} value={interaction.sourceType} />
-                          {isOutbound && (
-                            <View style={styles.outboundBadge}>
-                              <Text style={styles.outboundBadgeText}>
-                                {isOptimistic ? "Sending…" : "Sent"}
-                              </Text>
-                            </View>
-                          )}
-                        </View>
-                        <Text style={styles.interactionTime}>
-                          {new Date(interaction.occurredAt).toLocaleDateString("en-US", {
-                            month: "short",
-                            day: "numeric",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </Text>
-                      </View>
-                      {(interaction.summary ?? interaction.rawText ?? interaction.transcript) && (
-                        <Text style={[styles.interactionText, isOptimistic && styles.interactionTextOptimistic]}>
-                          {interaction.summary ?? interaction.rawText ?? interaction.transcript}
-                        </Text>
-                      )}
-                      {interaction.category && !isOutbound && (
-                        <Text style={styles.interactionCategory}>
-                          {interaction.category.replace(/_/g, " ")}
-                        </Text>
-                      )}
-                    </View>
-                  </Pressable>
-                );
-              })}
-            </View>
-          )}
-
-          {/* Tags */}
-          {(tags ?? []).length > 0 && (
-            <View style={styles.card}>
-              <SectionHeader title="TAGS" />
-              <View style={styles.tagsRow}>
-                {tags!.map((tag) => (
-                  <View
-                    key={tag.id}
-                    style={[styles.tagChip, tag.color ? { backgroundColor: `${tag.color}22`, borderColor: `${tag.color}66` } : {}]}
-                  >
-                    <Text style={[styles.tagLabel, tag.color ? { color: tag.color } : {}]}>
-                      {tag.name}
-                    </Text>
-                  </View>
-                ))}
+        {/* Data Conflicts */}
+        {conflicts.length > 0 && (
+          <View style={[styles.card, conflictStyles.conflictCard]}>
+            <View style={styles.cardHeaderRow}>
+              <View style={conflictStyles.headerLeft}>
+                <Feather name="alert-circle" size={14} color="#FCA84A" />
+                <SectionHeader title="DATA CONFLICTS" />
+              </View>
+              <View style={conflictStyles.countBadge}>
+                <Text style={conflictStyles.countText}>{conflicts.length}</Text>
               </View>
             </View>
-          )}
+            <Text style={conflictStyles.description}>
+              The AI extracted values that differ from what's saved. Choose which is correct.
+            </Text>
+            {conflicts.map((conflict) => {
+              const isEditing = editingField === conflict.fieldName;
+              const isPending = resolveMutation.isPending &&
+                (resolveMutation.variables as { fieldName: string })?.fieldName === conflict.fieldName;
+              return (
+                <View key={conflict.id} style={conflictStyles.conflictRow}>
+                  <Text style={conflictStyles.fieldLabel}>
+                    {conflict.fieldName.replace(/([A-Z])/g, " $1").trim()}
+                  </Text>
+                  <View style={conflictStyles.valuesRow}>
+                    <Pressable
+                      style={conflictStyles.valueOption}
+                      onPress={() => {
+                        if (!isPending) {
+                          resolveMutation.mutate({
+                            prospectId: id,
+                            fieldName: conflict.fieldName,
+                            chosenValue: conflict.existingValue ?? "",
+                          });
+                        }
+                      }}
+                      disabled={isPending}
+                    >
+                      <Text style={conflictStyles.valueOptionLabel}>Keep existing</Text>
+                      <Text style={conflictStyles.valueOptionValue} numberOfLines={1}>
+                        {conflict.existingValue ?? "(empty)"}
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      style={[conflictStyles.valueOption, conflictStyles.valueOptionNew]}
+                      onPress={() => {
+                        if (!isPending) {
+                          resolveMutation.mutate({
+                            prospectId: id,
+                            fieldName: conflict.fieldName,
+                            chosenValue: conflict.extractedValue,
+                          });
+                        }
+                      }}
+                      disabled={isPending}
+                    >
+                      <Text style={[conflictStyles.valueOptionLabel, conflictStyles.valueOptionLabelNew]}>
+                        Use AI value
+                      </Text>
+                      <Text style={[conflictStyles.valueOptionValue, conflictStyles.valueOptionValueNew]} numberOfLines={1}>
+                        {conflict.extractedValue}
+                      </Text>
+                    </Pressable>
+                  </View>
+                  {isEditing ? (
+                    <View style={conflictStyles.customRow}>
+                      <TextInput
+                        value={customValues[conflict.fieldName] ?? ""}
+                        onChangeText={(t) =>
+                          setCustomValues((prev) => ({ ...prev, [conflict.fieldName]: t }))
+                        }
+                        placeholder="Enter custom value..."
+                        placeholderTextColor={Colors.dark.textMuted}
+                        style={conflictStyles.customInput}
+                        autoFocus
+                      />
+                      <Pressable
+                        style={conflictStyles.customSaveBtn}
+                        onPress={() => {
+                          const val = customValues[conflict.fieldName]?.trim();
+                          if (val) {
+                            resolveMutation.mutate({
+                              prospectId: id,
+                              fieldName: conflict.fieldName,
+                              chosenValue: val,
+                            });
+                          }
+                        }}
+                        disabled={isPending || !customValues[conflict.fieldName]?.trim()}
+                      >
+                        {isPending ? (
+                          <ActivityIndicator size="small" color="#fff" />
+                        ) : (
+                          <Text style={conflictStyles.customSaveText}>Save</Text>
+                        )}
+                      </Pressable>
+                      <Pressable
+                        style={conflictStyles.customCancelBtn}
+                        onPress={() => setEditingField(null)}
+                      >
+                        <Feather name="x" size={16} color={Colors.dark.textMuted} />
+                      </Pressable>
+                    </View>
+                  ) : (
+                    <Pressable
+                      style={conflictStyles.customEditBtn}
+                      onPress={() => {
+                        setEditingField(conflict.fieldName);
+                        setCustomValues((prev) => ({ ...prev, [conflict.fieldName]: "" }));
+                      }}
+                    >
+                      <Feather name="edit-2" size={12} color={Colors.dark.textMuted} />
+                      <Text style={conflictStyles.customEditText}>Enter custom value</Text>
+                    </Pressable>
+                  )}
+                  {isPending && !isEditing && (
+                    <ActivityIndicator
+                      size="small"
+                      color={Colors.brand.tealLight}
+                      style={conflictStyles.loadingIndicator}
+                    />
+                  )}
+                </View>
+              );
+            })}
+          </View>
+        )}
 
-          {/* Notes */}
+        {/* Leasing Details */}
+        <View style={styles.card}>
+          <SectionHeader title="LEASING DETAILS" />
+          <InfoRow icon="home" label="Bedrooms" value={prospect.desiredBedrooms} />
+          <InfoRow icon="calendar" label="Move-in" value={prospect.desiredMoveInDate} />
+          <InfoRow
+            icon="dollar-sign"
+            label="Budget"
+            value={
+              prospect.budgetMin || prospect.budgetMax
+                ? `$${prospect.budgetMin ?? "?"} – $${prospect.budgetMax ?? "?"}`
+                : null
+            }
+          />
+          <InfoRow icon="heart" label="Pets" value={prospect.pets} />
+          <InfoRow icon="shield" label="Voucher" value={prospect.voucherType} />
+          <InfoRow icon="briefcase" label="Employment" value={prospect.employmentStatus} />
+          <InfoRow
+            icon="trending-up"
+            label="Income"
+            value={prospect.monthlyIncome ? `$${prospect.monthlyIncome}/mo` : null}
+          />
+          <InfoRow icon="globe" label="Language" value={prospect.languagePreference} />
+        </View>
+
+        {/* Export Status */}
+        <View style={styles.card}>
+          <View style={styles.cardHeaderRow}>
+            <SectionHeader title="EXPORT" />
+            <Badge label={prospect.exportStatus} value={prospect.exportStatus} />
+          </View>
+          {prospect.exportStatus !== "pending" && (
+            <Pressable
+              style={[styles.actionButtonOutline, statusMutation.isPending && styles.actionButtonDisabled]}
+              onPress={() =>
+                statusMutation.mutate({ id, data: { exportStatus: "pending" } })
+              }
+              disabled={statusMutation.isPending}
+            >
+              {statusMutation.isPending ? (
+                <ActivityIndicator size="small" color={Colors.brand.tealLight} />
+              ) : (
+                <>
+                  <Feather name="clock" size={16} color={Colors.brand.tealLight} />
+                  <Text style={styles.actionButtonOutlineText}>Mark Export-Ready</Text>
+                </>
+              )}
+            </Pressable>
+          )}
+          {prospect.exportStatus === "pending" && (
+            <View style={styles.pendingBadge}>
+              <Feather name="check-circle" size={14} color={Colors.brand.tealLight} />
+              <Text style={styles.pendingBadgeText}>In Export Queue — use the Exports tab to batch export</Text>
+            </View>
+          )}
+        </View>
+
+        {/* Interactions / Timeline */}
+        {(interactions ?? []).length > 0 && (
           <View style={styles.card}>
-            <SectionHeader title={`NOTES (${(notes ?? []).length})`} />
-            {(notes ?? []).map((note) => (
-              <View key={note.id} style={styles.noteRow}>
-                <Feather name="edit-3" size={13} color={Colors.dark.textMuted} />
-                <View style={styles.noteContent}>
-                  <Text style={styles.noteBody}>{note.body}</Text>
-                  <Text style={styles.noteTime}>
-                    {new Date(note.createdAt).toLocaleDateString("en-US", {
-                      month: "short",
-                      day: "numeric",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
+            <SectionHeader title={`INTERACTIONS (${interactions!.length})`} />
+            {interactions!.map((interaction) => {
+              const isOptimistic = interaction.id.startsWith("optimistic-");
+              const isOutbound = interaction.direction === "outbound";
+              return (
+                <Pressable
+                  key={interaction.id}
+                  style={styles.interactionRow}
+                  onPress={() => {
+                    if (isOptimistic) return;
+                    router.push({
+                      pathname: "/interaction/[id]",
+                      params: { id: interaction.id, prospectId: id },
+                    });
+                  }}
+                >
+                  <View style={[
+                    styles.interactionIconWrap,
+                    isOutbound && styles.interactionIconWrapOutbound,
+                  ]}>
+                    <Feather
+                      name={
+                        isOutbound
+                          ? "send"
+                          : interaction.sourceType === "sms"
+                          ? "message-square"
+                          : interaction.sourceType === "voicemail"
+                          ? "mic"
+                          : "phone"
+                      }
+                      size={14}
+                      color={isOutbound ? "#A3E4D7" : Colors.brand.tealLight}
+                    />
+                  </View>
+                  <View style={styles.interactionContent}>
+                    <View style={styles.interactionTopRow}>
+                      <View style={styles.interactionBadgeRow}>
+                        <Badge label={interaction.sourceType} value={interaction.sourceType} />
+                        {isOutbound && (
+                          <View style={styles.outboundBadge}>
+                            <Text style={styles.outboundBadgeText}>
+                              {isOptimistic ? "Sending…" : "Sent"}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                      <Text style={styles.interactionTime}>
+                        {new Date(interaction.occurredAt).toLocaleDateString("en-US", {
+                          month: "short",
+                          day: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </Text>
+                    </View>
+                    {(interaction.summary ?? interaction.rawText ?? interaction.transcript) && (
+                      <Text style={[styles.interactionText, isOptimistic && styles.interactionTextOptimistic]}>
+                        {interaction.summary ?? interaction.rawText ?? interaction.transcript}
+                      </Text>
+                    )}
+                    {interaction.category && !isOutbound && (
+                      <Text style={styles.interactionCategory}>
+                        {interaction.category.replace(/_/g, " ")}
+                      </Text>
+                    )}
+                  </View>
+                </Pressable>
+              );
+            })}
+          </View>
+        )}
+
+        {/* Tags */}
+        {(tags ?? []).length > 0 && (
+          <View style={styles.card}>
+            <SectionHeader title="TAGS" />
+            <View style={styles.tagsRow}>
+              {tags!.map((tag) => (
+                <View
+                  key={tag.id}
+                  style={[styles.tagChip, tag.color ? { backgroundColor: `${tag.color}22`, borderColor: `${tag.color}66` } : {}]}
+                >
+                  <Text style={[styles.tagLabel, tag.color ? { color: tag.color } : {}]}>
+                    {tag.name}
                   </Text>
                 </View>
-              </View>
-            ))}
-
-            <View style={styles.noteInputRow}>
-              <TextInput
-                ref={noteInputRef}
-                value={noteText}
-                onChangeText={setNoteText}
-                placeholder="Add a note..."
-                placeholderTextColor={Colors.dark.textMuted}
-                style={styles.noteInput}
-                multiline
-                maxLength={1000}
-              />
-              <Pressable
-                style={[
-                  styles.noteSendBtn,
-                  (!noteText.trim() || noteMutation.isPending) && styles.noteSendBtnDisabled,
-                ]}
-                onPress={() => {
-                  if (noteText.trim()) noteMutation.mutate({ id, data: { body: noteText.trim() } });
-                }}
-                disabled={!noteText.trim() || noteMutation.isPending}
-              >
-                {noteMutation.isPending ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <Feather name="send" size={16} color="#fff" />
-                )}
-              </Pressable>
+              ))}
             </View>
           </View>
+        )}
 
-          <View style={{ height: 40 }} />
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </>
+        {/* Notes */}
+        <View style={styles.card}>
+          <SectionHeader title={`NOTES (${(notes ?? []).length})`} />
+          {(notes ?? []).map((note) => (
+            <View key={note.id} style={styles.noteRow}>
+              <Feather name="edit-3" size={13} color={Colors.dark.textMuted} />
+              <View style={styles.noteContent}>
+                <Text style={styles.noteBody}>{note.body}</Text>
+                <Text style={styles.noteTime}>
+                  {new Date(note.createdAt).toLocaleDateString("en-US", {
+                    month: "short",
+                    day: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </Text>
+              </View>
+            </View>
+          ))}
+
+          <View style={styles.noteInputRow}>
+            <TextInput
+              ref={noteInputRef}
+              value={noteText}
+              onChangeText={setNoteText}
+              placeholder="Add a note..."
+              placeholderTextColor={Colors.dark.textMuted}
+              style={styles.noteInput}
+              multiline
+              maxLength={1000}
+            />
+            <Pressable
+              style={[
+                styles.noteSendBtn,
+                (!noteText.trim() || noteMutation.isPending) && styles.noteSendBtnDisabled,
+              ]}
+              onPress={() => {
+                if (noteText.trim()) noteMutation.mutate({ id, data: { body: noteText.trim() } });
+              }}
+              disabled={!noteText.trim() || noteMutation.isPending}
+            >
+              {noteMutation.isPending ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Feather name="send" size={16} color="#fff" />
+              )}
+            </Pressable>
+          </View>
+        </View>
+
+        <View style={{ height: 16 }} />
+      </ScrollView>
+
+      {/* Pinned Compose Bar */}
+      <View style={composeBarStyles.container}>
+        {/* Status Picker Row */}
+        <View style={composeBarStyles.statusRow}>
+          <Text style={composeBarStyles.statusLabel}>Status:</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={composeBarStyles.statusChips}>
+            {STATUS_OPTIONS.map((s) => (
+              <Pressable
+                key={s}
+                style={[composeBarStyles.statusChip, s === prospect.status && composeBarStyles.statusChipActive]}
+                onPress={() => statusMutation.mutate({ id, data: { status: s } })}
+                disabled={statusMutation.isPending || s === prospect.status}
+              >
+                {statusMutation.isPending && s === prospect.status ? (
+                  <ActivityIndicator size="small" color={Colors.brand.tealLight} />
+                ) : (
+                  <Text style={[composeBarStyles.statusChipLabel, s === prospect.status && composeBarStyles.statusChipLabelActive]}>
+                    {s}
+                  </Text>
+                )}
+              </Pressable>
+            ))}
+          </ScrollView>
+        </View>
+
+        {/* From number selector */}
+        {activeTwilioNumbers.length === 0 ? (
+          <View style={composeBarStyles.noNumberWarn}>
+            <Feather name="alert-triangle" size={13} color="#FCA84A" />
+            <Text style={composeBarStyles.noNumberWarnText}>No Twilio numbers configured</Text>
+          </View>
+        ) : activeTwilioNumbers.length > 1 ? (
+          <View style={composeBarStyles.fromRow}>
+            <Feather name="phone-outgoing" size={13} color={Colors.dark.textMuted} />
+            <Text style={composeBarStyles.fromLabel}>From:</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={composeBarStyles.numberChips}>
+              {activeTwilioNumbers.map((n) => (
+                <Pressable
+                  key={n.id}
+                  style={[composeBarStyles.numberChip, (selectedTwilioNumberId ?? activeTwilioNumbers[0]?.id) === n.id && composeBarStyles.numberChipActive]}
+                  onPress={() => setSelectedTwilioNumberId(n.id)}
+                >
+                  <Text style={[composeBarStyles.numberChipText, (selectedTwilioNumberId ?? activeTwilioNumbers[0]?.id) === n.id && composeBarStyles.numberChipTextActive]}>
+                    {n.friendlyName ?? n.phoneNumber}
+                  </Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
+        ) : selectedNumber ? (
+          <View style={composeBarStyles.fromRowSingle}>
+            <Feather name="phone-outgoing" size={13} color={Colors.dark.textMuted} />
+            <Text style={composeBarStyles.fromLabel}>From:</Text>
+            <Text style={composeBarStyles.fromValue}>{selectedNumber.friendlyName ?? selectedNumber.phoneNumber}</Text>
+          </View>
+        ) : null}
+
+        {/* AI Draft badge */}
+        {showAiDraftBadge ? (
+          <View style={composeBarStyles.aiBadgeRow}>
+            {isLoadingDraft ? (
+              <>
+                <ActivityIndicator size="small" color={Colors.brand.tealLight} />
+                <Text style={composeBarStyles.aiBadgeText}>Generating AI draft…</Text>
+              </>
+            ) : (
+              <>
+                <Feather name="cpu" size={11} color={Colors.brand.tealLight} />
+                <Text style={composeBarStyles.aiBadgeText}>AI Draft</Text>
+              </>
+            )}
+          </View>
+        ) : null}
+
+        {/* Input row */}
+        <View style={composeBarStyles.inputRow}>
+          <TextInput
+            ref={composeInputRef}
+            value={composeText}
+            onChangeText={setComposeText}
+            placeholder={isLoadingDraft ? "Generating AI draft…" : "Type a message…"}
+            placeholderTextColor={Colors.dark.textMuted}
+            style={composeBarStyles.input}
+            multiline
+            maxLength={1600}
+            editable={!isLoadingDraft}
+            autoFocus
+          />
+          <Pressable
+            style={[
+              composeBarStyles.sendBtn,
+              (!composeText.trim() || smsMutation.isPending || !selectedNumber || activeTwilioNumbers.length === 0) && composeBarStyles.sendBtnDisabled,
+            ]}
+            onPress={handleSendMessage}
+            disabled={!composeText.trim() || smsMutation.isPending || !selectedNumber || activeTwilioNumbers.length === 0}
+          >
+            {smsMutation.isPending ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Feather name="send" size={18} color="#fff" />
+            )}
+          </Pressable>
+        </View>
+
+        <Text style={composeBarStyles.charCount}>{composeText.length}/1600</Text>
+      </View>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1 },
-  container: {
+  root: {
     flex: 1,
     backgroundColor: Colors.dark.bg,
   },
-  content: {
+  compactHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: Colors.dark.bgCard,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.dark.border,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    gap: 10,
+  },
+  compactHeaderLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    flex: 1,
+    minWidth: 0,
+  },
+  avatarSm: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#0D2A2A",
+    borderWidth: 1.5,
+    borderColor: Colors.brand.teal,
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+  avatarSmText: {
+    fontSize: 13,
+    fontFamily: "Inter_700Bold",
+    color: Colors.brand.tealLight,
+  },
+  compactHeaderInfo: {
+    flex: 1,
+    minWidth: 0,
+  },
+  compactName: {
+    fontSize: 15,
+    fontFamily: "Inter_600SemiBold",
+    color: Colors.dark.text,
+  },
+  compactProperty: {
+    fontSize: 12,
+    fontFamily: "Inter_400Regular",
+    color: Colors.dark.textMuted,
+  },
+  compactHeaderRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    flexShrink: 0,
+  },
+  callIconBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: "#0A2020",
+    borderWidth: 1,
+    borderColor: Colors.brand.teal,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  scrollArea: {
+    flex: 1,
+  },
+  scrollContent: {
     padding: 16,
     gap: 12,
   },
@@ -897,72 +915,6 @@ const styles = StyleSheet.create({
   retryText: {
     fontSize: 14,
     fontFamily: "Inter_600SemiBold",
-    color: Colors.brand.tealLight,
-  },
-  hero: {
-    alignItems: "center",
-    gap: 6,
-    paddingVertical: 20,
-  },
-  avatarLg: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: "#0D2A2A",
-    borderWidth: 2,
-    borderColor: Colors.brand.teal,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 6,
-  },
-  avatarLgText: {
-    fontSize: 24,
-    fontFamily: "Inter_700Bold",
-    color: Colors.brand.tealLight,
-  },
-  heroName: {
-    fontSize: 24,
-    fontFamily: "Inter_700Bold",
-    color: Colors.dark.text,
-    textAlign: "center",
-  },
-  heroPhone: {
-    fontSize: 15,
-    fontFamily: "Inter_400Regular",
-    color: Colors.dark.textSecondary,
-  },
-  heroEmail: {
-    fontSize: 13,
-    fontFamily: "Inter_400Regular",
-    color: Colors.dark.textMuted,
-  },
-  heroCtas: {
-    flexDirection: "row",
-    gap: 12,
-    marginTop: 16,
-  },
-  ctaBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    backgroundColor: Colors.brand.teal,
-    borderRadius: 12,
-    paddingVertical: 11,
-    paddingHorizontal: 24,
-    minWidth: 100,
-    justifyContent: "center",
-  },
-  ctaBtnOutline: {
-    backgroundColor: "#0A2020",
-    borderWidth: 1,
-    borderColor: Colors.brand.teal,
-  },
-  ctaBtnText: {
-    fontSize: 15,
-    fontFamily: "Inter_600SemiBold",
-    color: "#fff",
-  },
-  ctaBtnOutlineText: {
     color: Colors.brand.tealLight,
   },
   card: {
@@ -1160,195 +1112,158 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   noteSendBtnDisabled: {
-    backgroundColor: Colors.dark.bgElevated,
-    borderWidth: 1,
-    borderColor: Colors.dark.border,
+    opacity: 0.4,
   },
 });
 
-const composeStyles = StyleSheet.create({
+const composeBarStyles = StyleSheet.create({
   container: {
-    flex: 1,
-    backgroundColor: Colors.dark.bg,
-    paddingTop: Platform.OS === "ios" ? 0 : 16,
+    backgroundColor: Colors.dark.bgCard,
+    borderTopWidth: 1,
+    borderTopColor: Colors.dark.border,
+    paddingHorizontal: 14,
+    paddingTop: 10,
+    paddingBottom: Platform.OS === "ios" ? 28 : 12,
+    gap: 8,
   },
-  header: {
+  statusRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.dark.border,
+    gap: 6,
   },
-  cancelBtn: {
-    paddingVertical: 6,
-    paddingHorizontal: 4,
-    minWidth: 60,
+  statusLabel: {
+    fontSize: 11,
+    fontFamily: "Inter_500Medium",
+    color: Colors.dark.textMuted,
+    flexShrink: 0,
   },
-  cancelText: {
-    fontSize: 15,
-    fontFamily: "Inter_400Regular",
-    color: Colors.dark.textSecondary,
+  statusChips: {
+    flexDirection: "row",
+    gap: 6,
   },
-  title: {
-    fontSize: 16,
-    fontFamily: "Inter_600SemiBold",
-    color: Colors.dark.text,
-  },
-  sendBtn: {
-    backgroundColor: Colors.brand.teal,
-    borderRadius: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 7,
-    minWidth: 60,
-    alignItems: "center",
-  },
-  sendBtnDisabled: {
+  statusChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
     backgroundColor: Colors.dark.bgElevated,
     borderWidth: 1,
     borderColor: Colors.dark.border,
   },
-  sendText: {
-    fontSize: 14,
-    fontFamily: "Inter_600SemiBold",
-    color: "#fff",
+  statusChipActive: {
+    backgroundColor: "#0A2020",
+    borderColor: Colors.brand.teal,
   },
-  toRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-  },
-  toLabel: {
-    fontSize: 13,
-    fontFamily: "Inter_400Regular",
-    color: Colors.dark.textMuted,
-  },
-  toName: {
-    fontSize: 14,
-    fontFamily: "Inter_600SemiBold",
-    color: Colors.dark.text,
-    flex: 1,
-  },
-  fromRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingBottom: 10,
-  },
-  fromRowSingle: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingBottom: 10,
-  },
-  fromLabel: {
-    fontSize: 13,
-    fontFamily: "Inter_400Regular",
-    color: Colors.dark.textMuted,
-    marginRight: 2,
-  },
-  fromValue: {
-    fontSize: 13,
+  statusChipLabel: {
+    fontSize: 11,
     fontFamily: "Inter_500Medium",
-    color: Colors.dark.textSecondary,
+    color: Colors.dark.textMuted,
+    textTransform: "capitalize",
   },
-  numberChips: {
-    flexDirection: "row",
-    gap: 8,
-    paddingRight: 16,
-  },
-  numberChip: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
-    backgroundColor: Colors.dark.bgCard,
-    borderWidth: 1,
-    borderColor: Colors.dark.border,
-  },
-  numberChipActive: {
-    backgroundColor: "#0D2A2A",
-    borderColor: Colors.brand.tealLight,
-  },
-  numberChipText: {
-    fontSize: 12,
-    fontFamily: "Inter_500Medium",
-    color: Colors.dark.textSecondary,
-  },
-  numberChipTextActive: {
+  statusChipLabelActive: {
     color: Colors.brand.tealLight,
   },
   noNumberWarn: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    backgroundColor: "#2A1A0A",
-    borderRadius: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    marginHorizontal: 16,
-    borderWidth: 1,
-    borderColor: "#664400",
+    gap: 6,
+    paddingHorizontal: 2,
   },
   noNumberWarnText: {
-    flex: 1,
-    fontSize: 13,
+    fontSize: 12,
     fontFamily: "Inter_400Regular",
     color: "#FCA84A",
-    lineHeight: 18,
   },
-  divider: {
-    height: 1,
-    backgroundColor: Colors.dark.border,
-    marginHorizontal: 16,
+  fromRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
   },
-  input: {
-    flex: 1,
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    fontSize: 15,
-    fontFamily: "Inter_400Regular",
-    color: Colors.dark.text,
-    textAlignVertical: "top",
+  fromLabel: {
+    fontSize: 11,
+    fontFamily: "Inter_500Medium",
+    color: Colors.dark.textMuted,
+    flexShrink: 0,
   },
-  charCount: {
+  numberChips: {
+    flexDirection: "row",
+    gap: 6,
+  },
+  numberChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    backgroundColor: Colors.dark.bgElevated,
+    borderWidth: 1,
+    borderColor: Colors.dark.border,
+  },
+  numberChipActive: {
+    backgroundColor: "#0A2020",
+    borderColor: Colors.brand.teal,
+  },
+  numberChipText: {
+    fontSize: 11,
+    fontFamily: "Inter_500Medium",
+    color: Colors.dark.textMuted,
+  },
+  numberChipTextActive: {
+    color: Colors.brand.tealLight,
+  },
+  fromRowSingle: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  fromValue: {
     fontSize: 11,
     fontFamily: "Inter_400Regular",
-    color: Colors.dark.textMuted,
-    textAlign: "right",
-    paddingHorizontal: 16,
-    paddingBottom: 16,
+    color: Colors.dark.textSecondary,
   },
-  draftLoading: {
+  aiBadgeRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingTop: 14,
-    paddingBottom: 4,
+    gap: 5,
+    paddingHorizontal: 2,
   },
-  draftLoadingText: {
-    fontSize: 13,
-    fontFamily: "Inter_400Regular",
-    color: Colors.dark.textMuted,
-  },
-  draftBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 2,
-  },
-  draftBadgeText: {
+  aiBadgeText: {
     fontSize: 11,
     fontFamily: "Inter_500Medium",
     color: Colors.brand.tealLight,
-    letterSpacing: 0.3,
+  },
+  inputRow: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    gap: 10,
+  },
+  input: {
+    flex: 1,
+    backgroundColor: Colors.dark.bgInput,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    fontSize: 14,
+    fontFamily: "Inter_400Regular",
+    color: Colors.dark.text,
+    borderWidth: 1,
+    borderColor: Colors.dark.border,
+    minHeight: 44,
+    maxHeight: 120,
+  },
+  sendBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: Colors.brand.teal,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  sendBtnDisabled: {
+    opacity: 0.4,
+  },
+  charCount: {
+    fontSize: 10,
+    fontFamily: "Inter_400Regular",
+    color: Colors.dark.textMuted,
+    textAlign: "right",
   },
 });
 
@@ -1361,70 +1276,66 @@ const sectionStyles = StyleSheet.create({
   },
 });
 
-const statusStyles = StyleSheet.create({
-  container: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  chip: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: Colors.dark.bgElevated,
-    borderWidth: 1,
-    borderColor: Colors.dark.border,
-    minHeight: 36,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  chipActive: {
-    backgroundColor: "#0D2A2A",
-    borderColor: Colors.brand.tealLight,
-  },
-  chipLabel: {
-    fontSize: 13,
-    fontFamily: "Inter_500Medium",
-    color: Colors.dark.textSecondary,
-    textTransform: "capitalize",
-  },
-  chipLabelActive: {
-    color: Colors.brand.tealLight,
-    fontFamily: "Inter_600SemiBold",
-  },
-});
-
 const infoStyles = StyleSheet.create({
   row: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    paddingVertical: 5,
-    borderTopWidth: 1,
-    borderTopColor: Colors.dark.border,
+    paddingVertical: 3,
   },
   icon: {
-    width: 18,
+    width: 16,
   },
   label: {
     fontSize: 13,
-    fontFamily: "Inter_400Regular",
+    fontFamily: "Inter_500Medium",
     color: Colors.dark.textMuted,
     width: 90,
   },
   value: {
     flex: 1,
     fontSize: 13,
+    fontFamily: "Inter_400Regular",
+    color: Colors.dark.textSecondary,
+  },
+});
+
+const statusStyles = StyleSheet.create({
+  container: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+  },
+  chip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 10,
+    backgroundColor: Colors.dark.bgElevated,
+    borderWidth: 1,
+    borderColor: Colors.dark.border,
+    minHeight: 32,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  chipActive: {
+    backgroundColor: "#0A2020",
+    borderColor: Colors.brand.teal,
+  },
+  chipLabel: {
+    fontSize: 12,
     fontFamily: "Inter_500Medium",
-    color: Colors.dark.text,
-    textAlign: "right",
+    color: Colors.dark.textMuted,
+    textTransform: "capitalize",
+  },
+  chipLabelActive: {
+    color: Colors.brand.tealLight,
   },
 });
 
 const conflictStyles = StyleSheet.create({
   conflictCard: {
-    borderColor: "#664400",
-    backgroundColor: "#1A0E00",
+    borderColor: "#7A4A00",
+    backgroundColor: "#1A1200",
   },
   headerLeft: {
     flexDirection: "row",
@@ -1432,36 +1343,35 @@ const conflictStyles = StyleSheet.create({
     gap: 6,
   },
   countBadge: {
-    backgroundColor: "#FCA84A22",
+    backgroundColor: "#7A4A00",
     borderRadius: 10,
-    paddingHorizontal: 8,
+    paddingHorizontal: 7,
     paddingVertical: 2,
-    borderWidth: 1,
-    borderColor: "#664400",
+    minWidth: 22,
+    alignItems: "center",
   },
   countText: {
-    fontSize: 12,
-    fontFamily: "Inter_600SemiBold",
-    color: "#FCA84A",
+    fontSize: 11,
+    fontFamily: "Inter_700Bold",
+    color: "#FCD34D",
   },
   description: {
     fontSize: 12,
     fontFamily: "Inter_400Regular",
-    color: Colors.dark.textSecondary,
+    color: Colors.dark.textMuted,
     lineHeight: 17,
   },
   conflictRow: {
-    gap: 8,
-    paddingTop: 10,
     borderTopWidth: 1,
-    borderTopColor: "#664400",
+    borderTopColor: Colors.dark.border,
+    paddingTop: 10,
+    gap: 8,
   },
   fieldLabel: {
     fontSize: 12,
     fontFamily: "Inter_600SemiBold",
-    color: "#FCA84A",
+    color: Colors.dark.textSecondary,
     textTransform: "capitalize",
-    letterSpacing: 0.3,
   },
   valuesRow: {
     flexDirection: "row",
@@ -1477,43 +1387,26 @@ const conflictStyles = StyleSheet.create({
     borderColor: Colors.dark.border,
   },
   valueOptionNew: {
-    backgroundColor: "#0D2A2A",
     borderColor: Colors.brand.teal,
+    backgroundColor: "#0A1A1A",
   },
   valueOptionLabel: {
     fontSize: 10,
     fontFamily: "Inter_600SemiBold",
     color: Colors.dark.textMuted,
     textTransform: "uppercase",
-    letterSpacing: 0.4,
+    letterSpacing: 0.5,
   },
   valueOptionLabelNew: {
     color: Colors.brand.tealLight,
   },
   valueOptionValue: {
     fontSize: 13,
-    fontFamily: "Inter_500Medium",
-    color: Colors.dark.text,
+    fontFamily: "Inter_400Regular",
+    color: Colors.dark.textSecondary,
   },
   valueOptionValueNew: {
     color: Colors.dark.text,
-  },
-  customEditBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    alignSelf: "flex-start",
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: 8,
-    backgroundColor: Colors.dark.bgElevated,
-    borderWidth: 1,
-    borderColor: Colors.dark.border,
-  },
-  customEditText: {
-    fontSize: 11,
-    fontFamily: "Inter_400Regular",
-    color: Colors.dark.textMuted,
   },
   customRow: {
     flexDirection: "row",
@@ -1555,6 +1448,23 @@ const conflictStyles = StyleSheet.create({
     borderColor: Colors.dark.border,
     alignItems: "center",
     justifyContent: "center",
+  },
+  customEditBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    alignSelf: "flex-start",
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    backgroundColor: Colors.dark.bgElevated,
+    borderWidth: 1,
+    borderColor: Colors.dark.border,
+  },
+  customEditText: {
+    fontSize: 11,
+    fontFamily: "Inter_400Regular",
+    color: Colors.dark.textMuted,
   },
   loadingIndicator: {
     alignSelf: "center",
