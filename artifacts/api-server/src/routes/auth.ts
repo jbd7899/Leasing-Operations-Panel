@@ -2,8 +2,6 @@ import * as oidc from "openid-client";
 import { Router, type IRouter, type Request, type Response } from "express";
 import {
   GetCurrentAuthUserResponse,
-  ExchangeMobileAuthorizationCodeBody,
-  ExchangeMobileAuthorizationCodeResponse,
   LogoutMobileSessionResponse,
 } from "@workspace/api-zod";
 import { db, usersTable, accountsTable, accountUsersTable } from "@workspace/db";
@@ -22,6 +20,20 @@ import {
 import type { SessionUser } from "../lib/types";
 
 const OIDC_COOKIE_TTL = 10 * 60 * 1000;
+const MOBILE_STATE_TTL = 10 * 60 * 1000;
+
+// In-memory store for mobile PKCE state, keyed by the OIDC `state` parameter.
+// Entries expire after MOBILE_STATE_TTL ms. Cleanup runs every 60 s.
+const mobileStateStore = new Map<
+  string,
+  { codeVerifier: string; nonce: string; expiresAt: number }
+>();
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, entry] of mobileStateStore) {
+    if (entry.expiresAt < now) mobileStateStore.delete(key);
+  }
+}, 60_000).unref();
 
 const router: IRouter = Router();
 
@@ -163,6 +175,38 @@ router.get("/login", async (req: Request, res: Response) => {
   res.redirect(redirectTo.href);
 });
 
+// Mobile auth entry point: generates server-side PKCE, stores state, redirects
+// to Replit OIDC. The app opens this URL in WebBrowser.openAuthSessionAsync with
+// callbackURLScheme = "myrentcard" so ASWebAuthenticationSession closes when it
+// sees the final myrentcard:// redirect.
+router.get("/mobile-auth/start", async (req: Request, res: Response) => {
+  const config = await getOidcConfig();
+  const callbackUrl = `${getOrigin(req)}/api/callback`;
+
+  const state = oidc.randomState();
+  const nonce = oidc.randomNonce();
+  const codeVerifier = oidc.randomPKCECodeVerifier();
+  const codeChallenge = await oidc.calculatePKCECodeChallenge(codeVerifier);
+
+  mobileStateStore.set(state, {
+    codeVerifier,
+    nonce,
+    expiresAt: Date.now() + MOBILE_STATE_TTL,
+  });
+
+  const redirectTo = oidc.buildAuthorizationUrl(config, {
+    redirect_uri: callbackUrl,
+    scope: "openid email profile offline_access",
+    code_challenge: codeChallenge,
+    code_challenge_method: "S256",
+    prompt: "login",
+    state,
+    nonce,
+  });
+
+  res.redirect(redirectTo.href);
+});
+
 // Query params are not validated because the OIDC provider may include
 // parameters not expressed in the schema.
 router.get("/callback", async (req: Request, res: Response) => {
@@ -173,29 +217,72 @@ router.get("/callback", async (req: Request, res: Response) => {
   const nonce = req.cookies?.nonce;
   const expectedState = req.cookies?.state;
 
-  // Mobile passthrough: ASWebAuthenticationSession has an isolated cookie store,
-  // so none of the server-set PKCE cookies are present. Detect this by checking
-  // that a code (or error) arrived but neither code_verifier nor state cookies exist.
-  // The app will complete the PKCE exchange via /api/mobile-auth/token-exchange.
+  // Mobile flow: ASWebAuthenticationSession has an isolated cookie store so none
+  // of the server-set PKCE cookies are present. Complete the exchange server-side
+  // using the stored PKCE state, then redirect to the app with a session token.
   if (!codeVerifier && !expectedState) {
-    if (req.query.code) {
-      const params = new URLSearchParams();
-      params.set("code", req.query.code as string);
-      if (req.query.state) params.set("state", req.query.state as string);
-      if (req.query.iss) params.set("iss", req.query.iss as string);
-      res.redirect(`myrentcard://auth-callback?${params.toString()}`);
-      return;
-    }
     if (req.query.error) {
       const params = new URLSearchParams();
       params.set("error", req.query.error as string);
       if (req.query.error_description) {
         params.set("error_description", req.query.error_description as string);
       }
-      if (req.query.state) params.set("state", req.query.state as string);
       res.redirect(`myrentcard://auth-callback?${params.toString()}`);
       return;
     }
+
+    if (req.query.code && req.query.state) {
+      const code = req.query.code as string;
+      const state = req.query.state as string;
+
+      const stored = mobileStateStore.get(state);
+      if (!stored || stored.expiresAt < Date.now()) {
+        mobileStateStore.delete(state);
+        res.redirect("myrentcard://auth-callback?error=expired_state");
+        return;
+      }
+      mobileStateStore.delete(state);
+
+      try {
+        const currentUrl = new URL(
+          `${callbackUrl}?${new URL(req.url, `http://${req.headers.host}`).searchParams}`,
+        );
+        const tokens = await oidc.authorizationCodeGrant(config, currentUrl, {
+          pkceCodeVerifier: stored.codeVerifier,
+          expectedNonce: stored.nonce,
+          expectedState: state,
+          idTokenExpected: true,
+        });
+
+        const claims = tokens.claims();
+        if (!claims) {
+          res.redirect("myrentcard://auth-callback?error=no_claims");
+          return;
+        }
+
+        const dbUser = await upsertUser(claims as unknown as Record<string, unknown>);
+        const displayName = [dbUser.firstName, dbUser.lastName].filter(Boolean).join(" ") || null;
+        const { accountId, role } = await ensureAccountForUser(dbUser.id, displayName);
+
+        const now = Math.floor(Date.now() / 1000);
+        const sessionData: SessionData = {
+          user: buildSessionUser(dbUser, accountId, role),
+          access_token: tokens.access_token,
+          refresh_token: tokens.refresh_token,
+          expires_at: tokens.expiresIn() ? now + tokens.expiresIn()! : claims.exp,
+        };
+
+        const sid = await createSession(sessionData);
+        res.redirect(`myrentcard://auth-callback?token=${encodeURIComponent(sid)}`);
+      } catch (err) {
+        req.log.error({ err }, "Mobile OIDC exchange error");
+        res.redirect("myrentcard://auth-callback?error=auth_failed");
+      }
+      return;
+    }
+
+    res.redirect("/api/login");
+    return;
   }
 
   if (!codeVerifier || !expectedState) {
@@ -264,59 +351,6 @@ router.get("/logout", async (req: Request, res: Response) => {
 
   res.redirect(endSessionUrl.href);
 });
-
-router.post(
-  "/mobile-auth/token-exchange",
-  async (req: Request, res: Response) => {
-    const parsed = ExchangeMobileAuthorizationCodeBody.safeParse(req.body);
-    if (!parsed.success) {
-      res.status(400).json({ error: "Missing or invalid required parameters" });
-      return;
-    }
-
-    const { code, code_verifier, redirect_uri, state, nonce } = parsed.data;
-
-    try {
-      const config = await getOidcConfig();
-
-      const callbackUrl = new URL(redirect_uri);
-      callbackUrl.searchParams.set("code", code);
-      callbackUrl.searchParams.set("state", state);
-      callbackUrl.searchParams.set("iss", ISSUER_URL);
-
-      const tokens = await oidc.authorizationCodeGrant(config, callbackUrl, {
-        pkceCodeVerifier: code_verifier,
-        expectedNonce: nonce ?? undefined,
-        expectedState: state,
-        idTokenExpected: true,
-      });
-
-      const claims = tokens.claims();
-      if (!claims) {
-        res.status(401).json({ error: "No claims in ID token" });
-        return;
-      }
-
-      const dbUser = await upsertUser(claims as unknown as Record<string, unknown>);
-      const displayName = [dbUser.firstName, dbUser.lastName].filter(Boolean).join(" ") || null;
-      const { accountId, role } = await ensureAccountForUser(dbUser.id, displayName);
-
-      const now = Math.floor(Date.now() / 1000);
-      const sessionData: SessionData = {
-        user: buildSessionUser(dbUser, accountId, role),
-        access_token: tokens.access_token,
-        refresh_token: tokens.refresh_token,
-        expires_at: tokens.expiresIn() ? now + tokens.expiresIn()! : claims.exp,
-      };
-
-      const sid = await createSession(sessionData);
-      res.json(ExchangeMobileAuthorizationCodeResponse.parse({ token: sid }));
-    } catch (err) {
-      req.log.error({ err }, "Mobile token exchange error");
-      res.status(500).json({ error: "Token exchange failed" });
-    }
-  },
-);
 
 router.post("/mobile-auth/logout", async (req: Request, res: Response) => {
   const sid = getSessionId(req);
