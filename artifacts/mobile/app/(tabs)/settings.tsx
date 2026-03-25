@@ -11,6 +11,7 @@ import {
   Modal,
   KeyboardAvoidingView,
   Platform,
+  Switch,
 } from "react-native";
 import * as Clipboard from "expo-clipboard";
 import { useQueryClient } from "@tanstack/react-query";
@@ -897,12 +898,36 @@ export default function SettingsScreen() {
   const [propertiesExpanded, setPropertiesExpanded] = useState(true);
   const [twilioExpanded, setTwilioExpanded] = useState(false);
   const [usersExpanded, setUsersExpanded] = useState(false);
+  const [aiAssistToggle, setAiAssistToggle] = useState<boolean | null>(null);
 
   const { data: authUserData } = useGetCurrentAuthUser();
   const currentRole = authUserData?.user?.role ?? null;
   const isAdminOrOwner = currentRole === "owner" || currentRole === "admin";
 
   const { data: accountSettingsData } = useGetAccountSettings();
+
+  useEffect(() => {
+    if (accountSettingsData?.aiAssistEnabled !== undefined && aiAssistToggle === null) {
+      setAiAssistToggle(accountSettingsData.aiAssistEnabled ?? false);
+    }
+  }, [accountSettingsData?.aiAssistEnabled]);
+
+  const updateSettingsMutation = useUpdateAccountSettings({
+    mutation: {
+      onSuccess: (data) => {
+        queryClient.setQueryData(getGetAccountSettingsQueryKey(), data);
+      },
+      onError: (_err, _vars) => {
+        setAiAssistToggle(accountSettingsData?.aiAssistEnabled ?? false);
+        Alert.alert("Error", "Failed to update AI Assist setting.");
+      },
+    },
+  });
+
+  function handleAiAssistToggle(value: boolean) {
+    setAiAssistToggle(value);
+    updateSettingsMutation.mutate({ data: { aiAssistEnabled: value } });
+  }
 
   const { data: propertiesData, isLoading: propertiesLoading } = useListProperties();
 
@@ -1138,6 +1163,37 @@ export default function SettingsScreen() {
                 </Pressable>
               )}
             </>
+          )}
+        </View>
+
+        {/* AI Assist */}
+        <View style={styles.card}>
+          <SectionHeader title="AI ASSIST" />
+          <View style={aiAssistStyles.row}>
+            <View style={aiAssistStyles.iconWrap}>
+              <Feather name="cpu" size={16} color={Colors.brand.tealLight} />
+            </View>
+            <View style={aiAssistStyles.info}>
+              <Text style={aiAssistStyles.label}>Draft Reply Suggestions</Text>
+              <Text style={aiAssistStyles.desc}>
+                AI pre-fills a suggested reply when you open the compose window
+              </Text>
+            </View>
+            <Switch
+              value={aiAssistToggle ?? false}
+              onValueChange={handleAiAssistToggle}
+              trackColor={{ false: Colors.dark.bgElevated, true: Colors.brand.teal }}
+              thumbColor={aiAssistToggle ? Colors.brand.tealLight : Colors.dark.textMuted}
+              disabled={updateSettingsMutation.isPending || aiAssistToggle === null}
+            />
+          </View>
+          {aiAssistToggle && (
+            <View style={aiAssistStyles.hint}>
+              <Feather name="info" size={12} color={Colors.dark.textMuted} />
+              <Text style={aiAssistStyles.hintText}>
+                AI drafts are suggestions only — you always review and send manually.
+              </Text>
+            </View>
           )}
         </View>
 
@@ -1872,5 +1928,53 @@ const integrationStyles = StyleSheet.create({
   },
   webhookCopiedText: {
     color: Colors.brand.tealLight,
+  },
+});
+
+const aiAssistStyles = StyleSheet.create({
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingTop: 8,
+  },
+  iconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: "#0D2A2A",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  info: {
+    flex: 1,
+    gap: 3,
+  },
+  label: {
+    fontSize: 14,
+    fontFamily: "Inter_600SemiBold",
+    color: Colors.dark.text,
+  },
+  desc: {
+    fontSize: 12,
+    fontFamily: "Inter_400Regular",
+    color: Colors.dark.textSecondary,
+    lineHeight: 17,
+  },
+  hint: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    marginTop: 4,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: Colors.dark.border,
+  },
+  hintText: {
+    flex: 1,
+    fontSize: 12,
+    fontFamily: "Inter_400Regular",
+    color: Colors.dark.textMuted,
+    lineHeight: 17,
   },
 });

@@ -1,10 +1,11 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { db, interactionsTable, prospectsTable, propertiesTable, twilioNumbersTable } from "@workspace/db";
-import { eq, and } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
 import { logger } from "../lib/logger";
 import { processInteraction } from "../lib/processInteraction";
 import { normalizePhoneE164, findOrCreateProspectShell } from "../lib/prospectShell";
 import { getTwilioClientForAccount } from "./settings";
+import { openai } from "@workspace/integrations-openai-ai-server";
 
 const router: IRouter = Router();
 
@@ -278,6 +279,79 @@ router.post("/interactions/send-sms", async (req: Request, res: Response) => {
     .returning();
 
   res.status(201).json(interaction);
+});
+
+router.post("/interactions/ai-draft", async (req: Request, res: Response) => {
+  if (!requireAuth(req, res)) return;
+  const { accountId } = req.user!;
+
+  const { prospectId } = req.body as { prospectId: string };
+
+  if (!prospectId) {
+    res.status(400).json({ error: "prospectId is required" });
+    return;
+  }
+
+  const [prospect] = await db
+    .select()
+    .from(prospectsTable)
+    .where(and(eq(prospectsTable.id, prospectId), eq(prospectsTable.accountId, accountId)));
+
+  if (!prospect) {
+    res.status(404).json({ error: "Prospect not found" });
+    return;
+  }
+
+  const recentInbound = await db
+    .select({ rawText: interactionsTable.rawText, sourceType: interactionsTable.sourceType })
+    .from(interactionsTable)
+    .where(
+      and(
+        eq(interactionsTable.prospectId, prospectId),
+        eq(interactionsTable.accountId, accountId),
+        eq(interactionsTable.direction, "inbound"),
+      ),
+    )
+    .orderBy(desc(interactionsTable.occurredAt))
+    .limit(3);
+
+  const lastMessage = recentInbound[0]?.rawText ?? null;
+
+  if (!lastMessage) {
+    res.status(200).json({ draft: "" });
+    return;
+  }
+
+  const prospectContext = [
+    prospect.fullName ? `Prospect name: ${prospect.fullName}` : null,
+    prospect.desiredBedrooms ? `Bedrooms desired: ${prospect.desiredBedrooms}` : null,
+    prospect.desiredMoveInDate ? `Move-in date: ${prospect.desiredMoveInDate}` : null,
+    prospect.budgetMax ? `Budget: up to $${prospect.budgetMax}/mo` : null,
+    prospect.latestSummary ? `Summary: ${prospect.latestSummary}` : null,
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const systemPrompt = `You are a helpful leasing agent assistant. Draft a short, professional, and friendly SMS reply to a prospective renter. The reply should directly address their most recent message. Keep it concise (2-4 sentences). Do not use formal salutations or signatures. Respond with only the SMS text — no explanation, no quotes.`;
+
+  const userPrompt = `${prospectContext ? `Prospect context:\n${prospectContext}\n\n` : ""}Most recent message from prospect:\n"${lastMessage}"`;
+
+  try {
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      max_completion_tokens: 300,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+    });
+
+    const draft = response.choices[0]?.message?.content?.trim() ?? "";
+    res.json({ draft });
+  } catch (err) {
+    logger.error({ err, prospectId }, "Failed to generate AI draft reply");
+    res.status(500).json({ error: "Failed to generate draft. Please try again." });
+  }
 });
 
 export default router;

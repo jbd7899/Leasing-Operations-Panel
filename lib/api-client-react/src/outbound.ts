@@ -138,6 +138,32 @@ export const useResolveProspectConflict = <TError = ErrorType<unknown>, TContext
   });
 };
 
+export interface AiDraftBody {
+  prospectId: string;
+}
+
+export interface AiDraftResponse {
+  draft: string;
+}
+
+export const generateAiDraft = async (body: AiDraftBody): Promise<AiDraftResponse> => {
+  return customFetch<AiDraftResponse>("/api/interactions/ai-draft", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+};
+
+export const useGenerateAiDraft = <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<Awaited<ReturnType<typeof generateAiDraft>>, TError, AiDraftBody, TContext>;
+}): UseMutationResult<Awaited<ReturnType<typeof generateAiDraft>>, TError, AiDraftBody, TContext> => {
+  const { mutation: mutationOptions } = options ?? {};
+  return useMutation<Awaited<ReturnType<typeof generateAiDraft>>, TError, AiDraftBody, TContext>({
+    mutationFn: (vars: AiDraftBody) => generateAiDraft(vars),
+    ...mutationOptions,
+  });
+};
+
 export interface WeeklyTrendEntry {
   week: string;
   count: number;

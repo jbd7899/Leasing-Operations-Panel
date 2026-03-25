@@ -31,6 +31,7 @@ router.get("/settings/account", async (req: Request, res: Response) => {
       plan: accountsTable.plan,
       twilioAccountSid: accountsTable.twilioAccountSid,
       twilioAuthToken: accountsTable.twilioAuthToken,
+      aiAssistEnabled: accountsTable.aiAssistEnabled,
     })
     .from(accountsTable)
     .where(eq(accountsTable.id, accountId));
@@ -47,6 +48,7 @@ router.get("/settings/account", async (req: Request, res: Response) => {
     twilioConfigured: !!(account.twilioAccountSid && account.twilioAuthToken),
     twilioAccountSid: account.twilioAccountSid ?? null,
     twilioAuthTokenMasked: maskToken(account.twilioAuthToken),
+    aiAssistEnabled: account.aiAssistEnabled ?? false,
   });
 });
 
@@ -54,9 +56,10 @@ router.put("/settings/account", async (req: Request, res: Response) => {
   if (!requireAuth(req, res)) return;
   const { accountId } = req.user!;
 
-  const { twilioAccountSid, twilioAuthToken } = req.body as {
+  const { twilioAccountSid, twilioAuthToken, aiAssistEnabled } = req.body as {
     twilioAccountSid?: string | null;
     twilioAuthToken?: string | null;
+    aiAssistEnabled?: boolean;
   };
 
   const incomingSid = twilioAccountSid !== undefined ? (twilioAccountSid?.trim() || null) : undefined;
@@ -80,6 +83,9 @@ router.put("/settings/account", async (req: Request, res: Response) => {
   if (incomingToken !== undefined) {
     updates.twilioAuthToken = incomingToken;
   }
+  if (aiAssistEnabled !== undefined) {
+    updates.aiAssistEnabled = aiAssistEnabled;
+  }
 
   const [account] = await db
     .update(accountsTable)
@@ -91,6 +97,7 @@ router.put("/settings/account", async (req: Request, res: Response) => {
       plan: accountsTable.plan,
       twilioAccountSid: accountsTable.twilioAccountSid,
       twilioAuthToken: accountsTable.twilioAuthToken,
+      aiAssistEnabled: accountsTable.aiAssistEnabled,
     });
 
   if (!account) {
@@ -98,7 +105,7 @@ router.put("/settings/account", async (req: Request, res: Response) => {
     return;
   }
 
-  logger.info({ accountId }, "Account Twilio credentials updated");
+  logger.info({ accountId }, "Account settings updated");
 
   res.json({
     id: account.id,
@@ -107,6 +114,7 @@ router.put("/settings/account", async (req: Request, res: Response) => {
     twilioConfigured: !!(account.twilioAccountSid && account.twilioAuthToken),
     twilioAccountSid: account.twilioAccountSid ?? null,
     twilioAuthTokenMasked: maskToken(account.twilioAuthToken),
+    aiAssistEnabled: account.aiAssistEnabled ?? false,
   });
 });
 

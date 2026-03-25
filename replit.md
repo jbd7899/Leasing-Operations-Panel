@@ -102,6 +102,7 @@ Expo React Native mobile app — MyRentCard Leasing Operations Panel. Uses file-
 - Screens: `app/prospect/[id].tsx` (detail), `app/interaction/[id].tsx` (review + AI apply), `app/export-modal.tsx`
 - Components: `components/ui/` — Badge, InboxItem, ProspectCard, SearchBar, SkeletonLoader, EmptyState
 - Settings tab includes an "Integrations" section where users can connect their own Twilio account (Account SID + Auth Token stored in DB per account)
+- Settings tab includes an "AI ASSIST" section with a toggle to enable/disable AI-powered draft reply suggestions (stored as `ai_assist_enabled` boolean on the accounts table). When enabled, opening the SMS compose window on a prospect screen triggers `POST /api/interactions/ai-draft` which returns an OpenAI-generated draft pre-filled into the text field.
 
 Key packages: expo-auth-session, expo-secure-store, expo-crypto, @tanstack/react-query, expo-haptics
 

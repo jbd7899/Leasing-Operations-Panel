@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   View,
   Text,
@@ -29,6 +29,8 @@ import {
   useGetProspectConflicts,
   useResolveProspectConflict,
   getProspectConflictsQueryKey,
+  useGetAccountSettings,
+  useGenerateAiDraft,
 } from "@workspace/api-client-react";
 import type { ProspectDetail, TwilioNumber, ProspectConflict } from "@workspace/api-client-react";
 import { Badge } from "@/components/ui/Badge";
@@ -92,6 +94,8 @@ function ComposeModal({
   twilioNumbers,
   selectedNumberId,
   onSelectNumber,
+  aiDraft,
+  isLoadingDraft,
 }: {
   visible: boolean;
   onClose: () => void;
@@ -101,9 +105,22 @@ function ComposeModal({
   twilioNumbers: TwilioNumber[];
   selectedNumberId: string | null;
   onSelectNumber: (id: string) => void;
+  aiDraft?: string;
+  isLoadingDraft?: boolean;
 }) {
   const [messageText, setMessageText] = useState("");
+  const [draftApplied, setDraftApplied] = useState(false);
   const multipleNumbers = twilioNumbers.length > 1;
+
+  useEffect(() => {
+    if (visible && aiDraft && !draftApplied) {
+      setMessageText(aiDraft);
+      setDraftApplied(true);
+    }
+    if (!visible) {
+      setDraftApplied(false);
+    }
+  }, [visible, aiDraft, draftApplied]);
 
   const handleSend = () => {
     if (messageText.trim()) {
@@ -113,6 +130,7 @@ function ComposeModal({
 
   const handleClose = () => {
     setMessageText("");
+    setDraftApplied(false);
     onClose();
   };
 
@@ -188,15 +206,30 @@ function ComposeModal({
 
         <View style={composeStyles.divider} />
 
+        {isLoadingDraft ? (
+          <View style={composeStyles.draftLoading}>
+            <ActivityIndicator size="small" color={Colors.brand.tealLight} />
+            <Text style={composeStyles.draftLoadingText}>Generating AI draft…</Text>
+          </View>
+        ) : null}
+
+        {aiDraft && messageText === aiDraft && !isLoadingDraft ? (
+          <View style={composeStyles.draftBadge}>
+            <Feather name="cpu" size={11} color={Colors.brand.tealLight} />
+            <Text style={composeStyles.draftBadgeText}>AI Draft</Text>
+          </View>
+        ) : null}
+
         <TextInput
           value={messageText}
           onChangeText={setMessageText}
-          placeholder="Type your message..."
+          placeholder={isLoadingDraft ? "" : "Type your message..."}
           placeholderTextColor={Colors.dark.textMuted}
           style={composeStyles.input}
           multiline
-          autoFocus
+          autoFocus={!isLoadingDraft}
           maxLength={1600}
+          editable={!isLoadingDraft}
         />
 
         <Text style={composeStyles.charCount}>{messageText.length}/1600</Text>
@@ -213,6 +246,7 @@ export default function ProspectDetailScreen() {
   const [selectedTwilioNumberId, setSelectedTwilioNumberId] = useState<string | null>(null);
   const [customValues, setCustomValues] = useState<Record<string, string>>({});
   const [editingField, setEditingField] = useState<string | null>(null);
+  const [aiDraftText, setAiDraftText] = useState<string | undefined>(undefined);
   const noteInputRef = useRef<TextInput>(null);
 
   const { data, isLoading, isError, refetch } = useGetProspect(id, {
@@ -229,6 +263,28 @@ export default function ProspectDetailScreen() {
   });
 
   const activeTwilioNumbers = twilioNumbersData?.twilioNumbers ?? [];
+
+  const { data: accountSettingsData } = useGetAccountSettings();
+  const aiAssistEnabled = accountSettingsData?.aiAssistEnabled ?? false;
+
+  const aiDraftMutation = useGenerateAiDraft({
+    mutation: {
+      onSuccess: (data) => {
+        setAiDraftText(data.draft || undefined);
+      },
+      onError: () => {
+        setAiDraftText(undefined);
+      },
+    },
+  });
+
+  function openCompose() {
+    setAiDraftText(undefined);
+    setComposeVisible(true);
+    if (aiAssistEnabled && id) {
+      aiDraftMutation.mutate({ prospectId: id });
+    }
+  }
 
   const statusMutation = useUpdateProspect({
     mutation: {
@@ -402,6 +458,8 @@ export default function ProspectDetailScreen() {
         twilioNumbers={activeTwilioNumbers}
         selectedNumberId={selectedTwilioNumberId ?? activeTwilioNumbers[0]?.id ?? null}
         onSelectNumber={setSelectedTwilioNumberId}
+        aiDraft={aiDraftText}
+        isLoadingDraft={aiAssistEnabled && aiDraftMutation.isPending}
       />
 
       <KeyboardAvoidingView
@@ -438,7 +496,7 @@ export default function ProspectDetailScreen() {
                 </Pressable>
                 <Pressable
                   style={[styles.ctaBtn, styles.ctaBtnOutline]}
-                  onPress={() => setComposeVisible(true)}
+                  onPress={openCompose}
                 >
                   <Feather name="message-square" size={18} color={Colors.brand.tealLight} />
                   <Text style={[styles.ctaBtnText, styles.ctaBtnOutlineText]}>Message</Text>
@@ -1264,6 +1322,33 @@ const composeStyles = StyleSheet.create({
     textAlign: "right",
     paddingHorizontal: 16,
     paddingBottom: 16,
+  },
+  draftLoading: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 4,
+  },
+  draftLoadingText: {
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+    color: Colors.dark.textMuted,
+  },
+  draftBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 2,
+  },
+  draftBadgeText: {
+    fontSize: 11,
+    fontFamily: "Inter_500Medium",
+    color: Colors.brand.tealLight,
+    letterSpacing: 0.3,
   },
 });
 

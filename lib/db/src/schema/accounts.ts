@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, varchar, timestamp, text } from "drizzle-orm/pg-core";
+import { pgTable, varchar, timestamp, text, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -10,6 +10,7 @@ export const accountsTable = pgTable("accounts", {
   plan: varchar("plan", { length: 50 }).notNull().default("free"),
   twilioAccountSid: varchar("twilio_account_sid", { length: 100 }),
   twilioAuthToken: varchar("twilio_auth_token", { length: 100 }),
+  aiAssistEnabled: boolean("ai_assist_enabled").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

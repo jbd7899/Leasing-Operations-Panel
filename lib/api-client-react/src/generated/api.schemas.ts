@@ -427,6 +427,8 @@ export interface AccountSettings {
   twilioAccountSid?: string | null;
   /** The Twilio Auth Token, masked for display (e.g. AC12••••••••1234) @nullable */
   twilioAuthTokenMasked?: string | null;
+  /** Whether AI Assist draft reply is enabled for this account */
+  aiAssistEnabled?: boolean;
 }
 
 export interface UpdateAccountSettingsBody {
@@ -434,6 +436,8 @@ export interface UpdateAccountSettingsBody {
   twilioAccountSid?: string | null;
   /** Twilio Auth Token. Pass null to clear. @nullable */
   twilioAuthToken?: string | null;
+  /** Enable or disable AI Assist draft reply feature */
+  aiAssistEnabled?: boolean;
 }
 
 export interface TestTwilioBody {
