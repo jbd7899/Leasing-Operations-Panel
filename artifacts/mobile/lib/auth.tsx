@@ -59,7 +59,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
   const redirectUri =
     Platform.OS !== "web" && apiBase
-      ? `${apiBase}/api/mobile-auth/callback`
+      ? `${apiBase}/api/callback`
       : AuthSession.makeRedirectUri({ scheme: "myrentcard", path: "auth-callback" });
 
   const [request, response, promptAsync] = AuthSession.useAuthRequest(
