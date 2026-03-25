@@ -94,7 +94,6 @@ export default function ProspectDetailScreen() {
   const [editingField, setEditingField] = useState<string | null>(null);
   const [aiDraftText, setAiDraftText] = useState<string | undefined>(undefined);
   const [composeText, setComposeText] = useState("");
-  const aiDraftAppliedRef = useRef(false);
   const scrollViewRef = useRef<ScrollView>(null);
   const noteInputRef = useRef<TextInput>(null);
   const composeInputRef = useRef<TextInput>(null);
@@ -124,9 +123,8 @@ export default function ProspectDetailScreen() {
       onSuccess: (result) => {
         const draft = result.draft || undefined;
         setAiDraftText(draft);
-        if (draft && !aiDraftAppliedRef.current) {
+        if (draft) {
           setComposeText(draft);
-          aiDraftAppliedRef.current = true;
         }
       },
       onError: () => {
@@ -135,11 +133,6 @@ export default function ProspectDetailScreen() {
     },
   });
 
-  useEffect(() => {
-    if (aiAssistEnabled && id && data) {
-      aiDraftMutation.mutate({ prospectId: id });
-    }
-  }, [aiAssistEnabled, id, data?.prospect?.id]);
 
   const statusMutation = useUpdateProspect({
     mutation: {
@@ -244,7 +237,6 @@ export default function ProspectDetailScreen() {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         setComposeText("");
         setAiDraftText(undefined);
-        aiDraftAppliedRef.current = false;
         const previous = queryClient.getQueryData<ProspectDetail>(getGetProspectQueryKey(id));
         if (previous) {
           queryClient.setQueryData<ProspectDetail>(getGetProspectQueryKey(id), {
@@ -779,6 +771,22 @@ export default function ProspectDetailScreen() {
             editable={!isLoadingDraft}
             autoFocus
           />
+          {aiAssistEnabled && (
+            <Pressable
+              style={[
+                composeBarStyles.aiGenerateBtn,
+                (aiDraftMutation.isPending || smsMutation.isPending) && composeBarStyles.aiGenerateBtnDisabled,
+              ]}
+              onPress={() => aiDraftMutation.mutate({ prospectId: id })}
+              disabled={aiDraftMutation.isPending || smsMutation.isPending}
+            >
+              {aiDraftMutation.isPending ? (
+                <ActivityIndicator size="small" color={Colors.brand.tealLight} />
+              ) : (
+                <Feather name="zap" size={18} color={Colors.brand.tealLight} />
+              )}
+            </Pressable>
+          )}
           <Pressable
             style={[
               composeBarStyles.sendBtn,
@@ -1267,6 +1275,19 @@ const composeBarStyles = StyleSheet.create({
     borderColor: Colors.dark.border,
     minHeight: 44,
     maxHeight: 120,
+  },
+  aiGenerateBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: Colors.dark.bgElevated,
+    borderWidth: 1,
+    borderColor: Colors.brand.teal,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  aiGenerateBtnDisabled: {
+    opacity: 0.4,
   },
   sendBtn: {
     width: 44,
