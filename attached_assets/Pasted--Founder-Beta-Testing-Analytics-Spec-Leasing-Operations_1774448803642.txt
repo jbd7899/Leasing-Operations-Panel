@@ -1,0 +1,898 @@
+# Founder Beta Testing & Analytics Spec — Leasing Operations Panel
+
+## Purpose
+
+This document defines exactly what the Leasing Operations Panel should log, measure, and surface during the internal founder beta so the product generates **useful evidence, operational insight, and AI-analyzable context** before being offered to other landlords.
+
+This is not just a QA plan.
+This is a **product validation and evidence-generation system**.
+
+The goal is for the app to help answer:
+
+1. Does this save meaningful time?
+2. Does this create cleaner leasing data?
+3. Does this improve leasing follow-up and outcomes?
+4. What product recommendations should another AI be able to generate from the data?
+
+---
+
+# 1. Core Beta Philosophy
+
+## Product rule
+
+The app should not only help process leads.
+It should also generate **rich operational telemetry** so the founder can later ask another AI:
+
+* Where am I losing leads?
+* What steps take too long?
+* What fields are often missing?
+* What should the product automate next?
+* What would be most valuable to sell to landlords?
+
+## Design requirement
+
+Every important action in the system should generate a **context-rich event log**.
+
+Not just:
+
+* “Lead updated”
+
+But:
+
+* what changed
+* who changed it
+* when
+* what the AI suggested before the human changed it
+* what communication triggered the change
+* what happened next
+
+This is what makes later AI analysis actually useful.
+
+---
+
+# 2. Beta Objectives
+
+## During internal testing, the system should help prove:
+
+### Operational value
+
+* lead intake is faster
+* lead review is more consistent
+* fewer leads are dropped or forgotten
+
+### Data value
+
+* leasing conversations become structured records
+* records are usable for export / CRM entry
+* AI is actually helping rather than creating cleanup work
+
+### Commercial value
+
+* there is a measurable problem being solved
+* there are clear buyer pain points
+* the product creates outcomes another landlord would pay for
+
+---
+
+# 3. What Replit Must Implement Before Founder Beta
+
+## A. Event logging framework
+
+A robust event logging system for user actions, AI actions, workflow transitions, and system events.
+
+## B. Founder analytics dashboard
+
+A hidden internal dashboard for reviewing KPIs and trends.
+
+## C. Data export for AI analysis
+
+Ability to export structured telemetry and workflow history to JSON/CSV for analysis by another AI.
+
+## D. Weekly founder reflection workflow
+
+A simple way for the founder to add qualitative notes and pain-point observations during testing.
+
+---
+
+# 4. Event Logging Requirements (Critical)
+
+## Product requirement
+
+Every meaningful workflow event should be logged as a structured event.
+
+## Create a table called `app_events`
+
+Suggested fields:
+
+* id
+* account_id
+* user_id nullable
+* prospect_id nullable
+* interaction_id nullable
+* property_id nullable
+* event_type
+* event_name
+* source_layer
+* event_timestamp
+* session_id nullable
+* device_type nullable
+* platform nullable
+* metadata_json
+* previous_state_json nullable
+* new_state_json nullable
+* ai_context_json nullable
+* created_at
+
+## Recommended field meanings
+
+### event_type
+
+High-level bucket such as:
+
+* system
+* user_action
+* ai_action
+* workflow
+* export
+* integration
+* error
+
+### event_name
+
+Specific action such as:
+
+* inbound_sms_received
+* inbound_call_received
+* voicemail_transcript_attached
+* ai_extraction_completed
+* interaction_review_opened
+* field_edited
+* status_changed
+* property_assigned
+* lead_marked_export_ready
+* export_generated
+* note_added
+* prospect_merged
+* ai_extraction_failed
+
+### source_layer
+
+Examples:
+
+* twilio_webhook
+* ai_pipeline
+* mobile_ui
+* admin_ui
+* export_service
+* system_job
+
+### metadata_json
+
+Stores event-specific details.
+This should be heavily used.
+
+---
+
+# 5. Events That MUST Be Logged
+
+## A. Ingestion / system events
+
+Log:
+
+* inbound_sms_received
+* inbound_call_received
+* voicemail_recording_attached
+* voicemail_transcript_attached
+* twilio_signature_validation_failed
+* duplicate_webhook_ignored
+* unmapped_destination_number
+
+## B. AI events
+
+Log:
+
+* ai_extraction_started
+* ai_extraction_completed
+* ai_extraction_failed
+* ai_summary_generated
+* ai_spam_classification_generated
+* prospect_summary_refreshed
+
+## C. User review events
+
+Log:
+
+* interaction_review_opened
+* interaction_review_completed
+* summary_edited
+* field_edited
+* field_confirmed
+* field_cleared
+* status_changed
+* category_changed
+* property_assigned
+* tags_updated
+* note_added
+* prospect_created_manually
+* prospect_merged
+* marked_spam
+* marked_wrong_number
+* marked_export_ready
+* marked_exported
+* snoozed
+* reopened
+
+## D. Funnel / workflow events
+
+Log:
+
+* lead_first_reviewed
+* lead_first_followup_logged
+* lead_marked_qualified
+* lead_marked_tour_requested
+* lead_marked_tour_scheduled
+* lead_marked_application_likely
+* lead_marked_applied
+* lead_marked_approved
+* lead_marked_leased
+* lead_marked_closed_lost
+
+## E. Export events
+
+Log:
+
+* export_batch_started
+* export_batch_completed
+* export_batch_failed
+* prospect_included_in_export
+
+## F. Founder notes / learning events
+
+Log:
+
+* founder_observation_added
+* founder_weekly_reflection_added
+* founder_manual_issue_flagged
+
+---
+
+# 6. Context Requirements for Logs (Very Important)
+
+## Product rule
+
+Logs must preserve enough context for later AI analysis.
+
+For important events, include:
+
+* account_id
+* property_id
+* prospect_id
+* interaction_id
+* destination Twilio number
+* source type (sms / call / voicemail)
+* lead status before and after
+* AI suggestion before human edit
+* human-confirmed value after edit
+* timing information
+* whether the lead was new or existing
+* whether the record was export-ready at the time
+
+## Example
+
+If a user changes `desired_move_in_date`, do NOT only log:
+
+* “field edited”
+
+Log:
+
+```json
+{
+  "field_name": "desired_move_in_date",
+  "old_value": "April",
+  "new_value": "2026-04-15",
+  "edit_reason": "clarified during review",
+  "ai_original_value": "April",
+  "confidence": 0.71
+}
+```
+
+This is what makes downstream AI recommendations valuable.
+
+---
+
+# 7. KPI Framework — What the App Must Measure
+
+This section defines the KPIs the founder should be able to see automatically.
+
+---
+
+# 8. Core KPI Category A — Lead Capture Completeness
+
+## Goal
+
+Measure whether the system is actually catching all inbound leasing communications.
+
+## KPIs
+
+* total inbound SMS received
+* total inbound calls received
+* total voicemail transcripts attached
+* total communication events ingested
+* total webhook failures
+* duplicate webhook rate
+* percent of inbound events successfully attached to a prospect
+* percent of inbound events successfully attributed to a property
+
+## Founder question answered
+
+“Am I actually capturing the leasing funnel reliably?”
+
+## Recommended target
+
+* 98%+ of inbound Twilio events successfully captured
+
+---
+
+# 9. Core KPI Category B — Speed / Time Savings
+
+## Goal
+
+Measure whether the product is actually saving operational time.
+
+## KPIs
+
+* average time from inbound communication → first review
+* average time from inbound communication → structured record complete
+* average time from inbound communication → export ready
+* median review completion time for SMS
+* median review completion time for calls / voicemail
+* number of leads reviewed per day
+* average number of edits per reviewed lead
+
+## Founder question answered
+
+“Is this materially faster than my current workflow?”
+
+## Recommended target
+
+* simple SMS lead processed in under 2 minutes
+* call / voicemail lead processed in under 5 minutes
+
+---
+
+# 10. Core KPI Category C — AI Usefulness
+
+## Goal
+
+Measure whether the AI is helping or creating cleanup work.
+
+## KPIs
+
+* percent of AI summaries accepted without edit
+* percent of AI summaries edited
+* average number of field edits after AI extraction
+* extraction failure rate
+* top 10 most frequently corrected fields
+* average AI confidence by field type
+* percentage of interactions with at least 3 useful extracted fields
+* percentage of interactions where AI provided no useful structured data
+
+## Founder question answered
+
+“Is the AI reducing work enough to justify its existence?”
+
+## Recommended interpretation
+
+The most corrected fields often indicate:
+
+* prompt issues
+* schema issues
+* UI issues
+* product opportunities
+
+---
+
+# 11. Core KPI Category D — Workflow Adherence
+
+## Goal
+
+Measure whether the founder/team actually use the app consistently.
+
+## KPIs
+
+* percent of inbound leads opened in review screen
+* percent of inbound leads completed to reviewed status
+* percent of leads marked export-ready
+* percent of leads that remain in New or Needs Review for over 24 hours
+* average backlog count by day
+* number of leads snoozed
+* number of leads reopened
+
+## Founder question answered
+
+“Is this becoming the real operating workflow or am I reverting to old habits?”
+
+---
+
+# 12. Core KPI Category E — Data Quality / Structure Quality
+
+## Goal
+
+Measure whether the resulting data is actually clean and usable.
+
+## KPIs
+
+* percent of leads with property assigned
+* percent of leads with status assigned
+* percent of leads with at least one contact method
+* percent of leads with move-in timing captured
+* percent of leads with budget captured
+* percent of leads with unit type captured
+* percent of leads with enough fields to export cleanly
+* duplicate prospect rate
+
+## Founder question answered
+
+“Is this producing trustworthy CRM-ready data?”
+
+---
+
+# 13. Core KPI Category F — Funnel / Leasing Outcome Metrics
+
+## Goal
+
+Measure whether the product improves leasing process outcomes.
+
+## KPIs
+
+* total new leads
+* total qualified leads
+* total tour requests
+* total tours scheduled
+* total likely applications
+* total applications
+* total approvals
+* total leases signed
+* total closed/lost leads
+* conversion rates between each stage
+
+## Founder question answered
+
+“Is this improving leasing pipeline visibility and outcomes?”
+
+## Important note
+
+Even if some downstream outcomes are entered manually at first, they are still very valuable to capture.
+
+---
+
+# 14. Core KPI Category G — Founder Commercial Insight Metrics
+
+## Goal
+
+Capture evidence that can later be used in product positioning and sales.
+
+## KPIs / evidence points
+
+* leads that would likely have been lost without the app
+* number of times same-day review changed outcome
+* number of times AI surfaced important info the user may have missed
+* number of prospects successfully organized from messy communications
+* properties with highest communication chaos
+* average admin burden per lead
+
+## Founder question answered
+
+“What exact painkiller am I actually selling?”
+
+---
+
+# 15. Founder Dashboard Requirements
+
+## Build a hidden admin-only dashboard called:
+
+**Founder Analytics**
+
+This dashboard does not need to be pretty.
+It needs to be useful.
+
+---
+
+# 16. Founder Dashboard — Screen Sections
+
+## Section A — Top Summary Tiles
+
+Show:
+
+* inbound leads today
+* inbound leads this week
+* review backlog
+* export-ready count
+* average review time
+* AI acceptance rate
+* lead capture success rate
+
+## Section B — Funnel Snapshot
+
+Show counts for:
+
+* New
+* Reviewed
+* Qualified
+* Tour Requested
+* Tour Scheduled
+* Applied
+* Approved
+* Leased
+* Lost
+
+## Section C — Property Performance
+
+Show by property:
+
+* inbound leads
+* review lag
+* structured completeness
+* tour requests
+* top missing fields
+
+## Section D — AI Performance
+
+Show:
+
+* extraction success rate
+* average confidence
+* top corrected fields
+* summary edit rate
+* low-confidence lead count
+
+## Section E — Workflow Friction
+
+Show:
+
+* average number of edits per lead
+* most common user actions after review
+* number of leads snoozed
+* number of leads reopened
+* stuck leads older than 24h
+
+## Section F — Export / CRM Readiness
+
+Show:
+
+* export-ready leads
+* exported leads
+* percent of reviewed leads exportable
+
+## Section G — Founder Notes / Insights
+
+Show:
+
+* latest founder observations
+* recurring manually flagged issues
+
+---
+
+# 17. AI-Ready Analytics Export Requirements
+
+## Product requirement
+
+The founder should be able to export the beta data in a format another AI can analyze for recommendations.
+
+## Required export types
+
+### 1. KPI summary export
+
+A structured summary of key metrics by day/week/month
+
+### 2. Event log export
+
+Raw but structured event history
+
+### 3. Prospect lifecycle export
+
+One row/object per prospect showing the full lead journey
+
+### 4. AI correction export
+
+One row/object per AI extraction showing what AI guessed vs what human confirmed
+
+---
+
+# 18. Export Format A — KPI Summary JSON
+
+## Purpose
+
+Useful for giving to another AI for high-level recommendations.
+
+## Include
+
+* date range
+* total inbound communications
+* review speed metrics
+* AI usefulness metrics
+* funnel metrics
+* export metrics
+* top missing fields
+* top corrected fields
+* property-level performance summaries
+
+## Example structure
+
+```json
+{
+  "date_range": {
+    "start": "",
+    "end": ""
+  },
+  "summary": {
+    "total_inbound_sms": 0,
+    "total_inbound_calls": 0,
+    "avg_minutes_to_first_review": 0,
+    "avg_minutes_to_export_ready": 0,
+    "ai_summary_acceptance_rate": 0,
+    "avg_field_edits_per_lead": 0,
+    "review_completion_rate": 0,
+    "export_ready_rate": 0
+  },
+  "top_corrected_fields": [],
+  "top_missing_fields": [],
+  "funnel": {},
+  "by_property": []
+}
+```
+
+---
+
+# 19. Export Format B — Event Log JSON
+
+## Purpose
+
+Useful for deeper AI pattern detection.
+
+## Requirements
+
+Export all app events with linked IDs and context.
+
+## Important
+
+This export should preserve:
+
+* ordering
+* timestamps
+* user actions
+* AI actions
+* workflow transitions
+* state changes
+
+This allows another AI to reason about workflow bottlenecks.
+
+---
+
+# 20. Export Format C — Prospect Lifecycle JSON
+
+## Purpose
+
+This is probably the most valuable format for AI analysis.
+
+## Each prospect record should include
+
+* prospect metadata
+* source number / property context
+* all interactions
+* AI outputs
+* human edits
+* timeline of status changes
+* notes
+* export state
+* downstream outcome fields
+
+## Why
+
+This lets another AI answer:
+
+* what lead patterns convert best
+* where friction occurs
+* what fields matter most
+* which workflows should be automated next
+
+---
+
+# 21. Export Format D — AI Correction Analysis JSON
+
+## Purpose
+
+Measure AI usefulness precisely.
+
+## Each record should include
+
+* interaction_id
+* source_type
+* extracted field name
+* AI value
+* AI confidence
+* human-confirmed value
+* whether it changed
+* time to correction
+
+## Why
+
+This is one of the most valuable product-improvement datasets you can generate.
+
+---
+
+# 22. Weekly Founder Reflection System
+
+## Product requirement
+
+Add a simple founder-only form or note area to capture qualitative learnings during beta.
+
+## Create a table called `founder_observations`
+
+Fields:
+
+* id
+* account_id
+* user_id
+* observation_date
+* observation_type
+* title
+* body
+* related_property_id nullable
+* related_prospect_id nullable
+* tags_json nullable
+* created_at
+
+## Suggested observation types
+
+* workflow_friction
+* product_idea
+* missed_lead_risk
+* ai_issue
+* ui_issue
+* customer_value_signal
+* future_sales_claim
+
+## Suggested weekly reflection prompts
+
+Once per week, prompt the founder to answer:
+
+1. What part of the workflow felt most annoying this week?
+2. What did the app save me from doing manually?
+3. What information did I still wish I had?
+4. What did the AI get wrong most often?
+5. What would another landlord be most excited to pay for?
+6. What nearly caused me to lose a lead this week?
+7. What should be automated next?
+
+These answers are very useful for later AI analysis and product direction.
+
+---
+
+# 23. Testing Instructions for Founder Beta
+
+## Beta should be run in real operational conditions.
+
+Do not just simulate fake usage.
+Use actual inbound leasing traffic where possible.
+
+## Testing behavior rules
+
+The founder / internal testers should try to:
+
+* process every inbound Twilio leasing lead through the app
+* avoid handling leads outside the app when possible
+* mark statuses honestly
+* add notes when friction occurs
+* use export-ready workflow consistently
+* log weekly reflections
+
+## Important
+
+The point is not perfect discipline.
+The point is to capture where real-world workflow breaks down.
+
+---
+
+# 24. Recommended 8-Week Founder Beta Plan
+
+## Week 1–2
+
+Goal: reliability
+Focus on:
+
+* ingestion reliability
+* thread correctness
+* property attribution
+* missing events / duplicate events
+
+## Week 3–4
+
+Goal: review speed
+Focus on:
+
+* interaction review UX
+* how many taps / edits are needed
+* whether AI is actually reducing typing
+
+## Week 5–6
+
+Goal: data quality
+Focus on:
+
+* structured completeness
+* export readiness
+* duplicate prospects
+* top missing fields
+
+## Week 7–8
+
+Goal: commercial proof
+Focus on:
+
+* measurable time saved
+* outcome improvement
+* painkiller positioning
+* strongest sales evidence
+
+---
+
+# 25. Recommended Beta Success Thresholds
+
+These do not need to be perfect, but they provide a target.
+
+## Reliability targets
+
+* 98%+ inbound event capture
+* <2% duplicate artifact confusion
+
+## Speed targets
+
+* median SMS review under 2 minutes
+* median call/voicemail review under 5 minutes
+
+## AI targets
+
+* 60%+ summaries accepted with minimal edits
+* 70%+ of reviewed leads have at least 3 useful extracted fields
+
+## Workflow targets
+
+* 80%+ of inbound leads reviewed in app
+* 70%+ of real leads reach structured/exportable state
+
+## Commercial signal targets
+
+* at least 10–20 strong internal examples of meaningful value created
+
+---
+
+# 26. Most Valuable Questions Another AI Should Be Able to Answer Later
+
+The logging and analytics system should support answering:
+
+* What steps in the leasing intake workflow are wasting the most time?
+* Which lead fields are most worth automating further?
+* What types of leads convert best?
+* Which properties generate the most communication chaos?
+* What features would most increase conversion or reduce admin time?
+* What product value proposition is strongest for small landlords?
+* Which parts of the workflow should become paid premium features?
+
+---
+
+# 27. Replit Implementation Prompt — Beta Analytics Layer
+
+> Implement a founder beta analytics and telemetry system for the Leasing Operations Panel. The system should log all important user, AI, system, workflow, export, and integration events with rich contextual metadata so the founder can later analyze the data manually or with another AI. Build a hidden Founder Analytics dashboard that surfaces reliability, speed, AI usefulness, workflow adherence, data quality, funnel progression, and commercial validation metrics. Also implement structured exports for KPI summaries, event logs, prospect lifecycles, and AI correction analysis so the founder can use another AI to generate recommendations about product improvements, workflow bottlenecks, and future monetization opportunities.
+
+---
+
+# 28. Final Product Rule
+
+The founder beta should not merely answer:
+
+> “Does the app function?”
+
+It should answer:
+
+> “What evidence does this app generate that proves it creates enough operational value for landlords to pay for it?”
