@@ -5,6 +5,7 @@ import { processInteraction } from "../lib/processInteraction";
 import { logger } from "../lib/logger";
 import { validateTwilioSignature } from "../middlewares/twilioSignature";
 import { normalizePhoneE164, findOrCreateProspectShell } from "../lib/prospectShell";
+import { logEvent } from "../lib/logEvent";
 
 const router: IRouter = Router();
 
@@ -74,6 +75,16 @@ router.post(
           .returning();
 
         if (interaction) {
+          logEvent({
+            accountId: twilioNumber.accountId,
+            prospectId,
+            interactionId: interaction.id,
+            propertyId: twilioNumber.propertyId ?? null,
+            eventType: "ingestion",
+            eventName: "inbound_sms_received",
+            sourceLayer: "webhook",
+            metadataJson: { messageSid: MessageSid, from: fromNorm, to: toNorm },
+          });
           await processInteraction(interaction.id);
         } else {
           logger.info({ MessageSid }, "Duplicate SMS webhook — ignoring");
@@ -119,7 +130,7 @@ router.post(
           twilioNumber.propertyId ?? null,
         );
 
-        await db
+        const [voiceInteraction] = await db
           .insert(interactionsTable)
           .values({
             accountId: twilioNumber.accountId,
@@ -135,7 +146,21 @@ router.post(
             extractionStatus: "pending",
             occurredAt: new Date(),
           })
-          .onConflictDoNothing();
+          .onConflictDoNothing()
+          .returning();
+
+        if (voiceInteraction) {
+          logEvent({
+            accountId: twilioNumber.accountId,
+            prospectId,
+            interactionId: voiceInteraction.id,
+            propertyId: twilioNumber.propertyId ?? null,
+            eventType: "ingestion",
+            eventName: "inbound_call_received",
+            sourceLayer: "webhook",
+            metadataJson: { callSid: CallSid, from: fromNorm, to: toNorm, callStatus: CallStatus },
+          });
+        }
       } catch (err) {
         logger.error({ err, CallSid }, "Error recording voice call");
       }
@@ -176,6 +201,17 @@ router.post(
               updatedAt: new Date(),
             })
             .where(eq(interactionsTable.id, interaction.id));
+
+          logEvent({
+            accountId: interaction.accountId,
+            prospectId: interaction.prospectId,
+            interactionId: interaction.id,
+            propertyId: interaction.propertyId,
+            eventType: "ingestion",
+            eventName: "voicemail_transcribed",
+            sourceLayer: "webhook",
+            metadataJson: { callSid: CallSid, transcriptionStatus: TranscriptionStatus },
+          });
 
           await processInteraction(interaction.id);
         } else {

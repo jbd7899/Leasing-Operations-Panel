@@ -11,6 +11,7 @@ import {
   interactionsTable,
 } from "@workspace/db";
 import { eq, and, inArray, max, sql } from "drizzle-orm";
+import { logEvent } from "../lib/logEvent";
 
 const router: IRouter = Router();
 
@@ -53,7 +54,9 @@ router.get("/exports", async (req: Request, res: Response) => {
 
 router.post("/exports", async (req: Request, res: Response) => {
   if (!requireAuth(req, res)) return;
-  const { accountId, id: userId } = req.user!;
+  const exportUser = req.user! as typeof req.user & { id: string };
+  const accountId = exportUser.accountId;
+  const userId = exportUser.id;
 
   const { prospectIds, format, targetSystem } = req.body as {
     prospectIds?: unknown;
@@ -104,6 +107,18 @@ router.post("/exports", async (req: Request, res: Response) => {
   const batchId = batch.id;
   const fileUrl = buildDownloadUrl(req, batchId);
 
+  logEvent({
+    accountId,
+    eventType: "export",
+    eventName: "export_batch_started",
+    metadataJson: {
+      batchId,
+      format: typedFormat,
+      targetSystem: targetSystem ?? null,
+      prospectCount: validatedProspectIds.length,
+    },
+  });
+
   const { content, mimeType } = await generateExportContent(
     accountId,
     validatedProspectIds,
@@ -131,6 +146,17 @@ router.post("/exports", async (req: Request, res: Response) => {
     .insert(exportBatchItemsTable)
     .values(validatedProspectIds.map((pid) => ({ exportBatchId: batch.id, prospectId: pid })));
 
+  for (const prospectId of validatedProspectIds) {
+    logEvent({
+      accountId,
+      userId,
+      eventType: "export",
+      eventName: "prospect_export_included",
+      prospectId,
+      metadataJson: { batchId, format: typedFormat },
+    });
+  }
+
   await db
     .update(prospectsTable)
     .set({ exportStatus: "exported", updatedAt: new Date() })
@@ -140,6 +166,20 @@ router.post("/exports", async (req: Request, res: Response) => {
         eq(prospectsTable.accountId, accountId),
       ),
     );
+
+  logEvent({
+    accountId,
+    userId,
+    eventType: "export",
+    eventName: "export_batch_completed",
+    sourceLayer: "api",
+    metadataJson: {
+      batchId: batch.id,
+      format: typedFormat,
+      targetSystem: targetSystem as string | undefined,
+      recordCount: validatedProspectIds.length,
+    },
+  });
 
   const downloadUrl = fileUrl;
   res.status(201).json({ ...updated, downloadUrl });

@@ -23,6 +23,11 @@ function requireAdmin(req: Request, res: Response): boolean {
   return true;
 }
 
+router.get("/users/me/role", (req: Request, res: Response) => {
+  if (!requireAuth(req, res)) return;
+  res.json({ role: req.user!.role });
+});
+
 router.get("/users", async (req: Request, res: Response) => {
   if (!requireAdmin(req, res)) return;
   const { accountId } = req.user!;

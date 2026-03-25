@@ -3,6 +3,7 @@ import { db, interactionsTable, prospectsTable, propertiesTable, twilioNumbersTa
 import { eq, and, desc } from "drizzle-orm";
 import { logger } from "../lib/logger";
 import { processInteraction } from "../lib/processInteraction";
+import { logEvent } from "../lib/logEvent";
 import { normalizePhoneE164, findOrCreateProspectShell } from "../lib/prospectShell";
 import { getTwilioClientForAccount } from "./settings";
 import { openai } from "@workspace/integrations-openai-ai-server";
@@ -28,15 +29,32 @@ router.get("/interactions/:id", async (req: Request, res: Response) => {
     .where(and(eq(interactionsTable.id, id), eq(interactionsTable.accountId, accountId)));
 
   if (!interaction) { res.status(404).json({ error: "Not found" }); return; }
+
+  logEvent({
+    accountId,
+    eventType: "user_review",
+    eventName: "interaction_opened",
+    interactionId: id as string,
+    prospectId: interaction.prospectId ?? undefined,
+    propertyId: interaction.propertyId ?? undefined,
+    metadataJson: { extractionStatus: interaction.extractionStatus, sourceType: interaction.sourceType },
+  });
+
   res.json(interaction);
 });
 
 router.patch("/interactions/:id/review", async (req: Request, res: Response) => {
   if (!requireAuth(req, res)) return;
-  const { accountId } = req.user!;
+  const reviewUser = req.user! as typeof req.user & { id: string };
+  const { accountId } = reviewUser;
+  const userId = reviewUser.id;
 
   const { id } = req.params;
   const { summary, category, propertyId, prospectId, structuredExtractionJson } = req.body;
+
+  const [before] = await db.select().from(interactionsTable)
+    .where(and(eq(interactionsTable.id, id), eq(interactionsTable.accountId, accountId)));
+  if (!before) { res.status(404).json({ error: "Not found" }); return; }
 
   if (propertyId !== undefined) {
     const [property] = await db.select({ id: propertiesTable.id })
@@ -72,6 +90,60 @@ router.patch("/interactions/:id/review", async (req: Request, res: Response) => 
     .returning();
 
   if (!interaction) { res.status(404).json({ error: "Not found" }); return; }
+
+  logEvent({
+    accountId,
+    userId,
+    prospectId: interaction.prospectId,
+    interactionId: interaction.id,
+    propertyId: interaction.propertyId,
+    eventType: "user_review",
+    eventName: "review_completed",
+    sourceLayer: "api",
+    previousStateJson: {
+      summary: before.summary,
+      category: before.category,
+      propertyId: before.propertyId,
+      prospectId: before.prospectId,
+    },
+    newStateJson: {
+      summary: interaction.summary,
+      category: interaction.category,
+      propertyId: interaction.propertyId,
+      prospectId: interaction.prospectId,
+    },
+    metadataJson: {
+      summaryEdited: summary !== undefined && summary !== before.summary,
+      categoryEdited: category !== undefined && category !== before.category,
+      propertyAssigned: propertyId !== undefined,
+      prospectLinked: prospectId !== undefined,
+      structuredFieldsEdited: structuredExtractionJson !== undefined,
+    },
+  });
+
+  if (structuredExtractionJson !== undefined && before.structuredExtractionJson) {
+    const aiFields = before.structuredExtractionJson as Record<string, unknown>;
+    const humanFields = structuredExtractionJson as Record<string, unknown>;
+    for (const field of Object.keys(humanFields)) {
+      const aiVal = aiFields[field];
+      const humanVal = humanFields[field];
+      if (String(aiVal ?? "") !== String(humanVal ?? "") && humanVal != null) {
+        logEvent({
+          accountId,
+          userId,
+          prospectId: interaction.prospectId,
+          interactionId: interaction.id,
+          propertyId: interaction.propertyId,
+          eventType: "user_review",
+          eventName: "field_edited",
+          sourceLayer: "api",
+          previousStateJson: { field, aiValue: aiVal },
+          newStateJson: { field, humanValue: humanVal },
+          aiContextJson: { confidence: aiFields["confidence"] ?? null },
+        });
+      }
+    }
+  }
 
   if (interaction.prospectId && interaction.summary) {
     await db.update(prospectsTable)

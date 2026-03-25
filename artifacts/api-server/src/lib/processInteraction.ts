@@ -2,6 +2,7 @@ import { db, interactionsTable, prospectsTable, prospectConflictsTable } from "@
 import { eq, and, isNull } from "drizzle-orm";
 import { extractProspectData, ExtractionValidationError, type ProspectExtraction } from "./aiExtract";
 import { logger } from "./logger";
+import { logEvent } from "./logEvent";
 
 const CONFLICT_FIELDS: (keyof ProspectExtraction)[] = [
   "firstName",
@@ -146,6 +147,17 @@ export async function processInteraction(interactionId: string): Promise<void> {
       .set({ extractionStatus: "processing", updatedAt: new Date() })
       .where(eq(interactionsTable.id, interactionId));
 
+    logEvent({
+      accountId: interaction.accountId,
+      prospectId: interaction.prospectId,
+      interactionId: interaction.id,
+      propertyId: interaction.propertyId,
+      eventType: "ai",
+      eventName: "ai_extraction_started",
+      sourceLayer: "ai_pipeline",
+      metadataJson: { sourceType },
+    });
+
     const extraction = await extractProspectData(textToAnalyze, sourceType);
 
     await db
@@ -161,6 +173,40 @@ export async function processInteraction(interactionId: string): Promise<void> {
         updatedAt: new Date(),
       })
       .where(eq(interactionsTable.id, interactionId));
+
+    const isSpam = extraction.category === "spam" || extraction.category === "wrong_number";
+
+    logEvent({
+      accountId: interaction.accountId,
+      prospectId: interaction.prospectId,
+      interactionId: interaction.id,
+      propertyId: interaction.propertyId,
+      eventType: "ai",
+      eventName: "ai_extraction_completed",
+      sourceLayer: "ai_pipeline",
+      aiContextJson: {
+        confidence: extraction.confidence,
+        category: extraction.category,
+        sentiment: extraction.sentiment,
+        urgency: extraction.urgency,
+        suggestedStatus: extraction.suggestedStatus,
+        isSpam,
+        summaryGenerated: !!extraction.summary,
+      },
+    });
+
+    if (isSpam) {
+      logEvent({
+        accountId: interaction.accountId,
+        prospectId: interaction.prospectId,
+        interactionId: interaction.id,
+        propertyId: interaction.propertyId,
+        eventType: "ai",
+        eventName: "ai_spam_detected",
+        sourceLayer: "ai_pipeline",
+        metadataJson: { category: extraction.category },
+      });
+    }
 
     await updateProspectDisplayFields(
       interaction.accountId,
@@ -187,6 +233,17 @@ export async function processInteraction(interactionId: string): Promise<void> {
         updatedAt: new Date(),
       })
       .where(eq(interactionsTable.id, interactionId));
+
+    logEvent({
+      accountId: interaction.accountId,
+      prospectId: interaction.prospectId,
+      interactionId: interaction.id,
+      propertyId: interaction.propertyId,
+      eventType: "ai",
+      eventName: "ai_extraction_failed",
+      sourceLayer: "ai_pipeline",
+      metadataJson: { error: err instanceof Error ? err.message : String(err) },
+    });
   }
 }
 

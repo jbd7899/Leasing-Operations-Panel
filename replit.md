@@ -98,11 +98,12 @@ Expo React Native mobile app — MyRentCard Leasing Operations Panel. Uses file-
 - Entry: `app/_layout.tsx` — Root layout with AuthProvider, QueryClientProvider, font loading, and Stack nav
 - Auth: `lib/auth.tsx` — Replit OIDC PKCE flow via expo-auth-session; token stored in expo-secure-store
 - API client: `lib/api.ts` — Custom fetch wrapper using expo-secure-store for Bearer token
-- Tabs: `app/(tabs)/` — index (Inbox), prospects, exports, settings, analytics
+- Tabs: `app/(tabs)/` — index (Inbox), prospects, exports, settings, analytics, founder (owner-only)
 - Screens: `app/prospect/[id].tsx` (detail), `app/interaction/[id].tsx` (review + AI apply), `app/export-modal.tsx`
 - Components: `components/ui/` — Badge, InboxItem, ProspectCard, SearchBar, SkeletonLoader, EmptyState
 - Settings tab includes an "Integrations" section where users can connect their own Twilio account (Account SID + Auth Token stored in DB per account)
 - Settings tab includes an "AI ASSIST" section with a toggle to enable/disable AI-powered draft reply suggestions (stored as `ai_assist_enabled` boolean on the accounts table). When enabled, opening the SMS compose window on a prospect screen triggers `POST /api/interactions/ai-draft` which returns an OpenAI-generated draft pre-filled into the text field.
+- Founder tab (owner-only, gated by `account_users.role = 'owner'`) exposes two sub-tabs: (1) Observations — freeform notes/reflections with 7 typed categories and a weekly 7-prompt reflection wizard; (2) Analytics — 7 KPI dashboard sections. Calls `GET /api/founder/dashboard`, `GET /api/founder/ai-performance`, `GET /api/founder/workflow-friction`, `GET /api/founder/observations`.
 
 Key packages: expo-auth-session, expo-secure-store, expo-crypto, @tanstack/react-query, expo-haptics
 

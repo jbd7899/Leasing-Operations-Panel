@@ -1,4 +1,5 @@
 import { Router, type IRouter, type Request, type Response } from "express";
+import { logEvent } from "../lib/logEvent";
 import {
   db,
   prospectsTable,
@@ -157,6 +158,11 @@ router.patch("/prospects/:id", async (req: Request, res: Response) => {
     }
   }
 
+  const [existingBeforeUpdate] = await db.select({ status: prospectsTable.status, exportStatus: prospectsTable.exportStatus })
+    .from(prospectsTable)
+    .where(and(eq(prospectsTable.id, id), eq(prospectsTable.accountId, accountId)))
+    .limit(1);
+
   const [prospect] = await db
     .update(prospectsTable)
     .set({ ...updates, updatedAt: new Date() })
@@ -164,6 +170,29 @@ router.patch("/prospects/:id", async (req: Request, res: Response) => {
     .returning();
 
   if (!prospect) { res.status(404).json({ error: "Not found" }); return; }
+
+  if (existingBeforeUpdate && updates.status && updates.status !== existingBeforeUpdate.status) {
+    logEvent({
+      accountId,
+      eventType: "funnel",
+      eventName: "prospect_status_changed",
+      prospectId: id as string,
+      previousStateJson: { status: existingBeforeUpdate.status },
+      newStateJson: { status: updates.status },
+    });
+  }
+
+  if (existingBeforeUpdate && updates.exportStatus && updates.exportStatus !== existingBeforeUpdate.exportStatus) {
+    logEvent({
+      accountId,
+      eventType: "funnel",
+      eventName: "prospect_export_status_changed",
+      prospectId: id as string,
+      previousStateJson: { exportStatus: existingBeforeUpdate.exportStatus },
+      newStateJson: { exportStatus: updates.exportStatus },
+    });
+  }
+
   res.json(prospect);
 });
 

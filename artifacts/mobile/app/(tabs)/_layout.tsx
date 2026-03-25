@@ -3,14 +3,15 @@ import { isLiquidGlassAvailable } from "expo-glass-effect";
 import { Tabs, usePathname, router } from "expo-router";
 import { SymbolView } from "expo-symbols";
 import { Feather } from "@expo/vector-icons";
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { Platform, StyleSheet, View, Text, Pressable, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Colors from "@/constants/colors";
+import { api } from "@/lib/api";
 
 const WEB_SIDEBAR_BREAKPOINT = 768;
 
-const NAV_ITEMS = [
+const BASE_NAV_ITEMS = [
   {
     name: "index",
     label: "Inbox",
@@ -48,18 +49,40 @@ const NAV_ITEMS = [
   },
 ];
 
+const FOUNDER_NAV_ITEM = {
+  name: "founder",
+  label: "Founder",
+  icon: "activity" as const,
+  sfDefault: "waveform.path",
+  sfSelected: "waveform.path",
+};
+
+const ALL_TAB_NAMES = [...BASE_NAV_ITEMS.map((i) => i.name), "founder"];
+
+function useIsOwner(): boolean {
+  const [isOwner, setIsOwner] = useState(false);
+  useEffect(() => {
+    api.get<{ role: string }>("/users/me/role").then((data) => {
+      setIsOwner(data?.role === "owner");
+    }).catch(() => setIsOwner(false));
+  }, []);
+  return isOwner;
+}
+
 function WebSidebarLayout() {
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
+  const isOwner = useIsOwner();
 
   const isWide = width >= WEB_SIDEBAR_BREAKPOINT;
+  const navItems = isOwner ? [...BASE_NAV_ITEMS, FOUNDER_NAV_ITEM] : BASE_NAV_ITEMS;
 
   if (!isWide) {
     return <ClassicTabLayout />;
   }
 
-  const activeTab = NAV_ITEMS.find((item) => {
+  const activeTab = navItems.find((item) => {
     if (item.name === "index") return pathname === "/" || pathname === "/index" || pathname === "/(tabs)" || pathname === "/(tabs)/index";
     return pathname.includes(item.name);
   });
@@ -74,7 +97,7 @@ function WebSidebarLayout() {
         </View>
 
         <View style={sidebarStyles.navList}>
-          {NAV_ITEMS.map((item) => {
+          {navItems.map((item) => {
             const isActive = activeKey === item.name;
             return (
               <Pressable
@@ -83,14 +106,8 @@ function WebSidebarLayout() {
                 onPress={() => {
                   if (item.name === "index") {
                     router.push("/(tabs)");
-                  } else if (item.name === "prospects") {
-                    router.push("/(tabs)/prospects");
-                  } else if (item.name === "exports") {
-                    router.push("/(tabs)/exports");
-                  } else if (item.name === "analytics") {
-                    router.push("/(tabs)/analytics");
-                  } else if (item.name === "settings") {
-                    router.push("/(tabs)/settings");
+                  } else {
+                    router.push(`/(tabs)/${item.name}` as Parameters<typeof router.push>[0]);
                   }
                 }}
               >
@@ -120,8 +137,8 @@ function WebSidebarLayout() {
             tabBarStyle: { display: "none" },
           }}
         >
-          {NAV_ITEMS.map((item) => (
-            <Tabs.Screen key={item.name} name={item.name} />
+          {ALL_TAB_NAMES.map((name) => (
+            <Tabs.Screen key={name} name={name} />
           ))}
         </Tabs>
       </View>
@@ -130,6 +147,7 @@ function WebSidebarLayout() {
 }
 
 function NativeTabLayout() {
+  const isOwner = useIsOwner();
   const { NativeTabs, Icon, Label } = require("expo-router/unstable-native-tabs");
   return (
     <NativeTabs>
@@ -153,6 +171,12 @@ function NativeTabLayout() {
         <Icon sf={{ default: "gearshape", selected: "gearshape.fill" }} />
         <Label>Settings</Label>
       </NativeTabs.Trigger>
+      {isOwner && (
+        <NativeTabs.Trigger name="founder">
+          <Icon sf={{ default: "waveform.path", selected: "waveform.path" }} />
+          <Label>Founder</Label>
+        </NativeTabs.Trigger>
+      )}
     </NativeTabs>
   );
 }
@@ -161,6 +185,7 @@ function ClassicTabLayout() {
   const isIOS = Platform.OS === "ios";
   const isWeb = Platform.OS === "web";
   const safeAreaInsets = useSafeAreaInsets();
+  const isOwner = useIsOwner();
 
   return (
     <Tabs
@@ -246,6 +271,19 @@ function ClassicTabLayout() {
               <SymbolView name="gearshape" tintColor={color} size={22} />
             ) : (
               <Feather name="settings" size={22} color={color} />
+            ),
+        }}
+      />
+      <Tabs.Screen
+        name="founder"
+        options={{
+          title: "Founder",
+          href: isOwner ? undefined : null,
+          tabBarIcon: ({ color }) =>
+            isIOS ? (
+              <SymbolView name="waveform.path" tintColor={color} size={22} />
+            ) : (
+              <Feather name="activity" size={22} color={color} />
             ),
         }}
       />

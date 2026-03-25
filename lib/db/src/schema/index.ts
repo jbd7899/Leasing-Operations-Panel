@@ -10,3 +10,5 @@ export * from "./notes";
 export * from "./tags";
 export * from "./exports";
 export * from "./audit-logs";
+export * from "./app-events";
+export * from "./founder-observations";
