@@ -1,0 +1,28 @@
+{
+  "cli": {
+    "version": ">= 12.0.0"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal"
+    },
+    "preview": {
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_DOMAIN": "myrentcardleasing.replit.app",
+        "EXPO_PUBLIC_REPL_ID": "98770259-d5c7-4ca0-be19-efa4eba0b9ca"
+      }
+    },
+    "production": {
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_DOMAIN": "myrentcardleasing.replit.app",
+        "EXPO_PUBLIC_REPL_ID": "98770259-d5c7-4ca0-be19-efa4eba0b9ca"
+      }
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}
