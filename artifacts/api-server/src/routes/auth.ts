@@ -231,6 +231,11 @@ router.get("/callback", async (req: Request, res: Response) => {
       return;
     }
 
+    if (req.query.code && !req.query.state) {
+      res.redirect("myrentcard://auth-callback?error=invalid_state");
+      return;
+    }
+
     if (req.query.code && req.query.state) {
       const code = req.query.code as string;
       const state = req.query.state as string;
