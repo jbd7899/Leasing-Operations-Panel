@@ -708,27 +708,12 @@ export default function ProspectDetailScreen() {
 
       {/* Pinned Compose Bar */}
       <View style={composeBarStyles.container}>
-        {/* Status Picker Row */}
-        <View style={composeBarStyles.statusRow}>
-          <Text style={composeBarStyles.statusLabel}>Status:</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={composeBarStyles.statusChips}>
-            {STATUS_OPTIONS.map((s) => (
-              <Pressable
-                key={s}
-                style={[composeBarStyles.statusChip, s === prospect.status && composeBarStyles.statusChipActive]}
-                onPress={() => statusMutation.mutate({ id, data: { status: s } })}
-                disabled={statusMutation.isPending || s === prospect.status}
-              >
-                {statusMutation.isPending && s === prospect.status ? (
-                  <ActivityIndicator size="small" color={Colors.brand.tealLight} />
-                ) : (
-                  <Text style={[composeBarStyles.statusChipLabel, s === prospect.status && composeBarStyles.statusChipLabelActive]}>
-                    {s}
-                  </Text>
-                )}
-              </Pressable>
-            ))}
-          </ScrollView>
+        {/* SMS Header Label */}
+        <View style={composeBarStyles.smsHeader}>
+          <Feather name="message-square" size={14} color={Colors.brand.tealLight} />
+          <Text style={composeBarStyles.smsHeaderLabel}>
+            {prospect.firstName ? `Text ${prospect.firstName}` : "Send SMS"}
+          </Text>
         </View>
 
         {/* From number selector */}
@@ -786,7 +771,7 @@ export default function ProspectDetailScreen() {
             ref={composeInputRef}
             value={composeText}
             onChangeText={setComposeText}
-            placeholder={isLoadingDraft ? "Generating AI draft…" : "Type a message…"}
+            placeholder={isLoadingDraft ? "Generating AI draft…" : prospect.firstName ? `Message ${prospect.firstName}…` : "Send a text message…"}
             placeholderTextColor={Colors.dark.textMuted}
             style={composeBarStyles.input}
             multiline
@@ -811,6 +796,29 @@ export default function ProspectDetailScreen() {
         </View>
 
         <Text style={composeBarStyles.charCount}>{composeText.length}/1600</Text>
+
+        {/* Status Picker Row — de-emphasized, below the input */}
+        <View style={composeBarStyles.statusRow}>
+          <Text style={composeBarStyles.statusLabel}>Status:</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={composeBarStyles.statusChips}>
+            {STATUS_OPTIONS.map((s) => (
+              <Pressable
+                key={s}
+                style={[composeBarStyles.statusChip, s === prospect.status && composeBarStyles.statusChipActive]}
+                onPress={() => statusMutation.mutate({ id, data: { status: s } })}
+                disabled={statusMutation.isPending || s === prospect.status}
+              >
+                {statusMutation.isPending && s === prospect.status ? (
+                  <ActivityIndicator size="small" color={Colors.brand.tealLight} />
+                ) : (
+                  <Text style={[composeBarStyles.statusChipLabel, s === prospect.status && composeBarStyles.statusChipLabelActive]}>
+                    {s}
+                  </Text>
+                )}
+              </Pressable>
+            ))}
+          </ScrollView>
+        </View>
       </View>
     </KeyboardAvoidingView>
   );
@@ -1119,32 +1127,44 @@ const styles = StyleSheet.create({
 const composeBarStyles = StyleSheet.create({
   container: {
     backgroundColor: Colors.dark.bgCard,
-    borderTopWidth: 1,
-    borderTopColor: Colors.dark.border,
+    borderTopWidth: 2,
+    borderTopColor: Colors.brand.teal,
     paddingHorizontal: 14,
     paddingTop: 10,
     paddingBottom: Platform.OS === "ios" ? 28 : 12,
     gap: 8,
   },
-  statusRow: {
+  smsHeader: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
   },
+  smsHeaderLabel: {
+    fontSize: 12,
+    fontFamily: "Inter_600SemiBold",
+    color: Colors.brand.tealLight,
+    letterSpacing: 0.2,
+  },
+  statusRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    opacity: 0.75,
+  },
   statusLabel: {
-    fontSize: 11,
+    fontSize: 10,
     fontFamily: "Inter_500Medium",
     color: Colors.dark.textMuted,
     flexShrink: 0,
   },
   statusChips: {
     flexDirection: "row",
-    gap: 6,
+    gap: 5,
   },
   statusChip: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
     backgroundColor: Colors.dark.bgElevated,
     borderWidth: 1,
     borderColor: Colors.dark.border,
@@ -1154,7 +1174,7 @@ const composeBarStyles = StyleSheet.create({
     borderColor: Colors.brand.teal,
   },
   statusChipLabel: {
-    fontSize: 11,
+    fontSize: 10,
     fontFamily: "Inter_500Medium",
     color: Colors.dark.textMuted,
     textTransform: "capitalize",
