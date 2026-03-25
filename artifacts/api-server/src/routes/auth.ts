@@ -175,15 +175,27 @@ router.get("/callback", async (req: Request, res: Response) => {
 
   // Mobile passthrough: ASWebAuthenticationSession has an isolated cookie store,
   // so none of the server-set PKCE cookies are present. Detect this by checking
-  // that a code arrived but neither code_verifier nor state cookies exist.
+  // that a code (or error) arrived but neither code_verifier nor state cookies exist.
   // The app will complete the PKCE exchange via /api/mobile-auth/token-exchange.
-  if (req.query.code && !codeVerifier && !expectedState) {
-    const params = new URLSearchParams();
-    params.set("code", req.query.code as string);
-    if (req.query.state) params.set("state", req.query.state as string);
-    if (req.query.iss) params.set("iss", req.query.iss as string);
-    res.redirect(`myrentcard://auth-callback?${params.toString()}`);
-    return;
+  if (!codeVerifier && !expectedState) {
+    if (req.query.code) {
+      const params = new URLSearchParams();
+      params.set("code", req.query.code as string);
+      if (req.query.state) params.set("state", req.query.state as string);
+      if (req.query.iss) params.set("iss", req.query.iss as string);
+      res.redirect(`myrentcard://auth-callback?${params.toString()}`);
+      return;
+    }
+    if (req.query.error) {
+      const params = new URLSearchParams();
+      params.set("error", req.query.error as string);
+      if (req.query.error_description) {
+        params.set("error_description", req.query.error_description as string);
+      }
+      if (req.query.state) params.set("state", req.query.state as string);
+      res.redirect(`myrentcard://auth-callback?${params.toString()}`);
+      return;
+    }
   }
 
   if (!codeVerifier || !expectedState) {
