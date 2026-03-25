@@ -122,7 +122,6 @@ function htmlPage(title: string, body: string): string {
         <div class="brand-logo">M</div>
         <span class="brand-name">MyRentCard</span>
       </div>
-      ${body.startsWith("<h1") ? "" : ""}
     </header>
     ${body}
     <footer>
