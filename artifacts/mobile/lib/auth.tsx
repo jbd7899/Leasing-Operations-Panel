@@ -51,7 +51,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const discovery = AuthSession.useAutoDiscovery(ISSUER_URL);
 
   const redirectUri = AuthSession.makeRedirectUri({
-    scheme: "mobile",
+    scheme: "myrentcard",
     path: "auth-callback",
   });
 
