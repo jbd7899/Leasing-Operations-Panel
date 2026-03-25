@@ -240,6 +240,34 @@ router.get("/logout", async (req: Request, res: Response) => {
   res.redirect(endSessionUrl.href);
 });
 
+router.get("/mobile-auth/callback", (req: Request, res: Response) => {
+  const { code, state, iss, error, error_description } = req.query;
+
+  if (error) {
+    const params = new URLSearchParams();
+    params.set("error", error as string);
+    if (error_description) {
+      params.set("error_description", error_description as string);
+    }
+    res.redirect(`myrentcard://auth-callback?${params.toString()}`);
+    return;
+  }
+
+  if (!code || !state) {
+    res.redirect("myrentcard://auth-callback?error=missing_params");
+    return;
+  }
+
+  const params = new URLSearchParams();
+  params.set("code", code as string);
+  params.set("state", state as string);
+  if (iss) {
+    params.set("iss", iss as string);
+  }
+
+  res.redirect(`myrentcard://auth-callback?${params.toString()}`);
+});
+
 router.post(
   "/mobile-auth/token-exchange",
   async (req: Request, res: Response) => {
