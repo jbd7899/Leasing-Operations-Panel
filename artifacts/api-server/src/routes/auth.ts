@@ -240,6 +240,101 @@ router.get("/logout", async (req: Request, res: Response) => {
   res.redirect(endSessionUrl.href);
 });
 
+router.get("/mobile-auth/start", async (req: Request, res: Response) => {
+  const returnUri = req.query.return_uri as string;
+  if (!returnUri || !returnUri.startsWith("mobile://")) {
+    res.status(400).json({ error: "Invalid or missing return_uri" });
+    return;
+  }
+
+  const config = await getOidcConfig();
+  const callbackUrl = `${getOrigin(req)}/api/mobile-auth/callback`;
+
+  const state = oidc.randomState();
+  const nonce = oidc.randomNonce();
+  const codeVerifier = oidc.randomPKCECodeVerifier();
+  const codeChallenge = await oidc.calculatePKCECodeChallenge(codeVerifier);
+
+  const redirectTo = oidc.buildAuthorizationUrl(config, {
+    redirect_uri: callbackUrl,
+    scope: "openid email profile offline_access",
+    code_challenge: codeChallenge,
+    code_challenge_method: "S256",
+    prompt: "login consent",
+    state,
+    nonce,
+  });
+
+  setOidcCookie(res, "mob_code_verifier", codeVerifier);
+  setOidcCookie(res, "mob_nonce", nonce);
+  setOidcCookie(res, "mob_state", state);
+  setOidcCookie(res, "mob_return_uri", returnUri);
+
+  res.redirect(redirectTo.href);
+});
+
+router.get("/mobile-auth/callback", async (req: Request, res: Response) => {
+  const config = await getOidcConfig();
+  const callbackUrl = `${getOrigin(req)}/api/mobile-auth/callback`;
+
+  const codeVerifier = req.cookies?.mob_code_verifier;
+  const nonce = req.cookies?.mob_nonce;
+  const expectedState = req.cookies?.mob_state;
+  const returnUri = req.cookies?.mob_return_uri;
+
+  if (!codeVerifier || !expectedState || !returnUri) {
+    res.status(400).send("Missing auth state. Please try again.");
+    return;
+  }
+
+  res.clearCookie("mob_code_verifier", { path: "/" });
+  res.clearCookie("mob_nonce", { path: "/" });
+  res.clearCookie("mob_state", { path: "/" });
+  res.clearCookie("mob_return_uri", { path: "/" });
+
+  const currentUrl = new URL(
+    `${callbackUrl}?${new URL(req.url, `http://${req.headers.host}`).searchParams}`,
+  );
+
+  let tokens: oidc.TokenEndpointResponse & oidc.TokenEndpointResponseHelpers;
+  try {
+    tokens = await oidc.authorizationCodeGrant(config, currentUrl, {
+      pkceCodeVerifier: codeVerifier,
+      expectedNonce: nonce,
+      expectedState,
+      idTokenExpected: true,
+    });
+  } catch (err) {
+    req.log.error({ err }, "Mobile OAuth callback error");
+    res.status(500).send("Authentication failed. Please try again.");
+    return;
+  }
+
+  const claims = tokens.claims();
+  if (!claims) {
+    res.status(401).send("Authentication failed: no claims.");
+    return;
+  }
+
+  const dbUser = await upsertUser(claims as unknown as Record<string, unknown>);
+  const displayName = [dbUser.firstName, dbUser.lastName].filter(Boolean).join(" ") || null;
+  const { accountId, role } = await ensureAccountForUser(dbUser.id, displayName);
+
+  const now = Math.floor(Date.now() / 1000);
+  const sessionData: SessionData = {
+    user: buildSessionUser(dbUser, accountId, role),
+    access_token: tokens.access_token,
+    refresh_token: tokens.refresh_token,
+    expires_at: tokens.expiresIn() ? now + tokens.expiresIn()! : claims.exp,
+  };
+
+  const sid = await createSession(sessionData);
+
+  const deepLink = new URL(returnUri);
+  deepLink.searchParams.set("token", sid);
+  res.redirect(deepLink.toString());
+});
+
 router.post(
   "/mobile-auth/token-exchange",
   async (req: Request, res: Response) => {
