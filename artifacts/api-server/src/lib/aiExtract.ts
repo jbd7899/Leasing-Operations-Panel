@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { openai } from "@workspace/integrations-openai-ai-server";
+import { anthropic } from "@workspace/integrations-openai-ai-server";
 import { logger } from "./logger";
 
 export const extractionSchema = z.object({
@@ -64,86 +64,44 @@ const JSON_SCHEMA = `{
   "monthlyIncome": number | null,
   "languagePreference": string | null (BCP 47 code, e.g. "en", "es"),
   "summary": string (1-2 sentence summary of the inquiry),
-  "category": one of: "availability_inquiry" | "pricing_inquiry" | "schedule_tour" | "application_question" | "maintenance" | "general_question" | "spam" | "wrong_number" | "voicemail",
-  "sentiment": one of: "positive" | "neutral" | "negative" | "mixed",
-  "urgency": one of: "low" | "medium" | "high",
+  "category": "availability_inquiry" | "pricing_inquiry" | "schedule_tour" | "application_question" | "maintenance" | "general_question" | "spam" | "wrong_number" | "voicemail",
+  "sentiment": "positive" | "neutral" | "negative" | "mixed",
+  "urgency": "low" | "medium" | "high",
   "confidence": number 0.0-1.0 (overall extraction confidence),
-  "suggestedStatus": one of: "new" | "contacted" | "qualified" | "disqualified" | "closed" | null,
+  "suggestedStatus": "new" | "contacted" | "qualified" | "disqualified" | "closed" | null,
   "suggestedNextAction": string | null (brief recommended next action for the leasing agent)
 }`;
 
-const BASE_SYSTEM = `You are a leasing intake AI assistant for a property management company. Your job is to extract structured prospect data from messages or transcripts and return ONLY valid JSON — no explanation, no markdown.
+const BASE_SYSTEM = `You are a leasing intake AI assistant for a property management company. Extract structured prospect data from messages or transcripts and respond with ONLY valid JSON — no explanation, no markdown.
 
 Be conservative with confidence scores — only assign high confidence when data is explicit and unambiguous. If a field is not mentioned or unclear, set it to null.
 
 Respond ONLY with a JSON object matching this exact schema:
 ${JSON_SCHEMA}`;
 
-function smsPrompt(text: string): string {
-  return `${BASE_SYSTEM}
+function buildUserMessage(text: string, sourceType: "sms" | "voice" | "voicemail" | "call"): string {
+  const sourceLabels = {
+    sms: "SMS message from a prospective renter",
+    voicemail: "Voicemail transcript (automated, may have errors — be charitable). Default category to 'voicemail' unless content clearly indicates otherwise.",
+    call: "Voice call note or metadata. If no meaningful prospect content, set confidence low.",
+    voice: "Outbound call transcript between leasing agent and prospective renter (may have transcription errors).",
+  };
 
-SOURCE TYPE: SMS message
-CONTEXT: Short text message from a prospective renter to a property management number.
-
-Extract prospect data from this SMS message:
-
-${text}`;
-}
-
-function voicemailPrompt(text: string): string {
-  return `${BASE_SYSTEM}
-
-SOURCE TYPE: Voicemail transcript
-CONTEXT: Automated transcription of a voicemail left by a prospective renter. Transcription may have errors — be charitable when interpreting unclear words. The category should default to "voicemail" unless the content clearly indicates another specific intent.
-
-Extract prospect data from this voicemail transcript:
-
-${text}`;
-}
-
-function callNotePrompt(text: string): string {
-  return `${BASE_SYSTEM}
-
-SOURCE TYPE: Voice call note
-CONTEXT: Notes or metadata from an inbound phone call. May include call status, duration, or call metadata rather than conversation content. If there is no meaningful prospect content, set confidence low and summary to describe what little was captured.
-
-Extract prospect data from this call note:
-
-${text}`;
-}
-
-function callTranscriptPrompt(text: string): string {
-  return `${BASE_SYSTEM}
-
-SOURCE TYPE: Outbound call transcript
-CONTEXT: Automated transcription of a recorded outbound call between a leasing agent and a prospective renter. May contain both sides of the conversation. Transcription may have errors — be charitable when interpreting unclear words.
-
-Extract prospect data from this call transcript:
-
-${text}`;
-}
-
-function buildPrompt(text: string, sourceType: "sms" | "voice" | "voicemail" | "call"): string {
-  if (sourceType === "sms") return smsPrompt(text);
-  if (sourceType === "voicemail") return voicemailPrompt(text);
-  if (sourceType === "call") return callTranscriptPrompt(text);
-  return callNotePrompt(text);
+  return `SOURCE: ${sourceLabels[sourceType]}\n\n${text}`;
 }
 
 export async function extractProspectData(
   text: string,
   sourceType: "sms" | "voice" | "voicemail" | "call",
 ): Promise<ProspectExtraction> {
-  const prompt = buildPrompt(text, sourceType);
-
-  const response = await openai.chat.completions.create({
-    model: "gpt-5-mini",
-    max_completion_tokens: 1024,
-    messages: [{ role: "user", content: prompt }],
-    response_format: { type: "json_object" },
+  const response = await anthropic.messages.create({
+    model: "claude-opus-4-6",
+    max_tokens: 1024,
+    system: BASE_SYSTEM,
+    messages: [{ role: "user", content: buildUserMessage(text, sourceType) }],
   });
 
-  const content = response.choices[0]?.message?.content;
+  const content = response.content.find((b) => b.type === "text")?.text;
   if (!content) {
     throw new Error("No content in AI extraction response");
   }

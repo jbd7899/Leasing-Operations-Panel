@@ -1,6 +1,7 @@
 import { db, interactionsTable, prospectsTable, prospectConflictsTable } from "@workspace/db";
 import { eq, and, isNull } from "drizzle-orm";
 import { extractProspectData, ExtractionValidationError, type ProspectExtraction } from "./aiExtract";
+import { computeCompletenessScore } from "./completenessScore";
 import { logger } from "./logger";
 import { logEvent } from "./logEvent";
 
@@ -314,4 +315,31 @@ async function updateProspectDisplayFields(
     .where(and(eq(prospectsTable.id, prospectId), eq(prospectsTable.accountId, accountId)));
 
   await detectAndStoreConflicts(accountId, prospectId, prospect, extraction);
+
+  // Re-fetch updated prospect to compute completeness score with all newly extracted fields
+  const [refreshed] = await db
+    .select()
+    .from(prospectsTable)
+    .where(and(eq(prospectsTable.id, prospectId), eq(prospectsTable.accountId, accountId)));
+
+  if (refreshed) {
+    const score = computeCompletenessScore({
+      firstName: refreshed.firstName,
+      lastName: refreshed.lastName,
+      email: refreshed.email,
+      desiredBedrooms: refreshed.desiredBedrooms,
+      desiredMoveInDate: refreshed.desiredMoveInDate,
+      budgetMin: refreshed.budgetMin != null ? Number(refreshed.budgetMin) : null,
+      budgetMax: refreshed.budgetMax != null ? Number(refreshed.budgetMax) : null,
+      pets: refreshed.pets,
+      voucherType: refreshed.voucherType,
+      employmentStatus: refreshed.employmentStatus,
+      monthlyIncome: refreshed.monthlyIncome != null ? Number(refreshed.monthlyIncome) : null,
+      languagePreference: refreshed.languagePreference,
+    });
+    await db
+      .update(prospectsTable)
+      .set({ qualificationScore: String(score) })
+      .where(and(eq(prospectsTable.id, prospectId), eq(prospectsTable.accountId, accountId)));
+  }
 }

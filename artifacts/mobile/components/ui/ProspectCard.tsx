@@ -26,6 +26,12 @@ function formatPhone(phone: string) {
   return phone;
 }
 
+function needsFollowUp(prospect: Prospect): boolean {
+  if (prospect.status !== "contacted") return false;
+  const MS_48H = 48 * 60 * 60 * 1000;
+  return Date.now() - new Date(prospect.updatedAt).getTime() > MS_48H;
+}
+
 function sentimentIcon(sentiment?: string | null): { name: FeatherIconName; color: string } {
   switch (sentiment) {
     case "positive": return { name: "trending-up", color: "#34D399" };
@@ -64,6 +70,12 @@ export function ProspectCard({ prospect, onPress, selected, onLongPress, hasConf
         <View style={styles.row}>
           <Text style={styles.name} numberOfLines={1}>{name}</Text>
           <View style={styles.badgeRow}>
+            {needsFollowUp(prospect) && (
+              <View style={styles.followUpBadge}>
+                <Feather name="clock" size={10} color="#60A5FA" />
+                <Text style={styles.followUpBadgeText}>Follow up</Text>
+              </View>
+            )}
             {hasConflicts && (
               <View style={styles.conflictBadge}>
                 <Feather name="alert-circle" size={10} color="#FCA84A" />
@@ -212,6 +224,22 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
+  },
+  followUpBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    backgroundColor: "#0A1A2A",
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderWidth: 1,
+    borderColor: "#1E40AF",
+  },
+  followUpBadgeText: {
+    fontSize: 10,
+    fontFamily: "Inter_600SemiBold",
+    color: "#60A5FA",
   },
   conflictBadge: {
     flexDirection: "row",
