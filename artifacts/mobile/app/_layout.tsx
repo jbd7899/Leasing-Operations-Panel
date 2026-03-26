@@ -20,7 +20,7 @@ import {
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import { useSignIn, useSignUp } from "@clerk/clerk-expo";
+import { useSignIn } from "@clerk/clerk-expo";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { initApiClient } from "@/lib/api";
@@ -52,37 +52,22 @@ function LoadingScreen() {
 
 function LoginScreen() {
   const { signIn, setActive: setSignInActive, isLoaded: signInLoaded } = useSignIn();
-  const { signUp, setActive: setSignUpActive, isLoaded: signUpLoaded } = useSignUp();
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
   const [step, setStep] = useState<"email" | "code">("email");
-  const [isSigningUp, setIsSigningUp] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
 
   const handleSendCode = async () => {
-    if (!signInLoaded || !signUpLoaded) return;
+    if (!signInLoaded) return;
     setIsLoading(true);
     setErrorMsg("");
     try {
       await signIn!.create({ identifier: email, strategy: "email_code" });
-      setIsSigningUp(false);
       setStep("code");
     } catch (err: unknown) {
-      const clerkErr = err as { errors?: { code?: string; longMessage?: string }[] };
-      if (clerkErr.errors?.[0]?.code === "form_identifier_not_found") {
-        try {
-          await signUp!.create({ emailAddress: email });
-          await signUp!.prepareEmailAddressVerification({ strategy: "email_code" });
-          setIsSigningUp(true);
-          setStep("code");
-        } catch (signUpErr: unknown) {
-          const e = signUpErr as { errors?: { longMessage?: string }[] };
-          setErrorMsg(e.errors?.[0]?.longMessage ?? "Sign up failed. Try again.");
-        }
-      } else {
-        setErrorMsg(clerkErr.errors?.[0]?.longMessage ?? "Something went wrong.");
-      }
+      const e = err as { errors?: { longMessage?: string }[] };
+      setErrorMsg(e.errors?.[0]?.longMessage ?? "Something went wrong. Check your email address.");
     } finally {
       setIsLoading(false);
     }
@@ -92,20 +77,15 @@ function LoginScreen() {
     setIsLoading(true);
     setErrorMsg("");
     try {
-      if (isSigningUp) {
-        const result = await signUp!.attemptEmailAddressVerification({ code });
-        if (result.status === "complete") {
-          await setSignUpActive!({ session: result.createdSessionId });
-        }
+      const result = await signIn!.attemptFirstFactor({ strategy: "email_code", code: code.trim() });
+      if (result.status === "complete") {
+        await setSignInActive!({ session: result.createdSessionId });
       } else {
-        const result = await signIn!.attemptFirstFactor({ strategy: "email_code", code });
-        if (result.status === "complete") {
-          await setSignInActive!({ session: result.createdSessionId });
-        }
+        setErrorMsg("Verification incomplete. Please try again.");
       }
     } catch (err: unknown) {
       const e = err as { errors?: { longMessage?: string }[] };
-      setErrorMsg(e.errors?.[0]?.longMessage ?? "Invalid code. Try again.");
+      setErrorMsg(e.errors?.[0]?.longMessage ?? "Invalid code. Please try again.");
     } finally {
       setIsLoading(false);
     }

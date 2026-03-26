@@ -50,20 +50,27 @@ export async function authMiddleware(
   }
 
   // Fast path: user already exists in our DB
-  const [row] = await db
-    .select({
-      id: usersTable.id,
-      email: usersTable.email,
-      firstName: usersTable.firstName,
-      lastName: usersTable.lastName,
-      profileImageUrl: usersTable.profileImageUrl,
-      accountId: accountUsersTable.accountId,
-      role: accountUsersTable.role,
-    })
-    .from(usersTable)
-    .innerJoin(accountUsersTable, eq(accountUsersTable.userId, usersTable.id))
-    .where(eq(usersTable.id, clerkUserId))
-    .limit(1);
+  let row: { id: string; email: string | null; firstName: string | null; lastName: string | null; profileImageUrl: string | null; accountId: string; role: string } | undefined;
+  try {
+    const rows = await db
+      .select({
+        id: usersTable.id,
+        email: usersTable.email,
+        firstName: usersTable.firstName,
+        lastName: usersTable.lastName,
+        profileImageUrl: usersTable.profileImageUrl,
+        accountId: accountUsersTable.accountId,
+        role: accountUsersTable.role,
+      })
+      .from(usersTable)
+      .innerJoin(accountUsersTable, eq(accountUsersTable.userId, usersTable.id))
+      .where(eq(usersTable.id, clerkUserId))
+      .limit(1);
+    row = rows[0];
+  } catch (err: unknown) {
+    const e = err as Error & { cause?: Error };
+    req.log?.error({ clerkUserId, msg: e.message, cause: e.cause?.message }, "DB lookup failed in authMiddleware");
+  }
 
   if (row) {
     req.user = row as SessionUser;
