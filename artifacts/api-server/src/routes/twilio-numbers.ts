@@ -67,7 +67,7 @@ router.patch("/twilio-numbers/:id", async (req: Request, res: Response) => {
   if (!requireAdmin(req, res)) return;
   const { accountId } = req.user!;
 
-  const { id } = req.params;
+  const id = String(req.params.id);
   const { friendlyName, propertyId, purpose, isActive } = req.body;
 
   if (propertyId !== undefined) {

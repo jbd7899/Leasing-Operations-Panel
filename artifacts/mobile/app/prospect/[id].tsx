@@ -24,6 +24,7 @@ import {
   useListProperties,
   getGetProspectQueryKey,
   getListProspectsQueryKey,
+  getListTwilioNumbersQueryKey,
   useSendSms,
   useGetProspectConflicts,
   useResolveProspectConflict,
@@ -105,6 +106,7 @@ export default function ProspectDetailScreen() {
 
   const { data: twilioNumbersData } = useListTwilioNumbers({
     query: {
+      queryKey: getListTwilioNumbersQueryKey(),
       select: (d) => ({
         ...d,
         twilioNumbers: d.twilioNumbers.filter((n) => n.isActive),
@@ -158,7 +160,7 @@ export default function ProspectDetailScreen() {
   });
 
   const conflictsQuery = useGetProspectConflicts(id, {
-    query: { enabled: !!id },
+    query: { queryKey: getProspectConflictsQueryKey(id), enabled: !!id },
   });
 
   const conflicts: ProspectConflict[] = conflictsQuery.data?.conflicts ?? [];

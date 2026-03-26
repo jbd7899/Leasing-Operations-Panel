@@ -59,7 +59,7 @@ router.post("/internal/process-interaction/:id", async (req: Request, res: Respo
   const callerKind = requireInternalOrAdmin(req, res);
   if (!callerKind) return;
 
-  const { id } = req.params;
+  const id = String(req.params.id);
   const ok = await resolveAndGateInteraction(id, callerKind, req, res);
   if (!ok) return;
 
@@ -74,7 +74,7 @@ router.post("/internal/retry-extraction/:id", async (req: Request, res: Response
   const callerKind = requireInternalOrAdmin(req, res);
   if (!callerKind) return;
 
-  const { id } = req.params;
+  const id = String(req.params.id);
   const ok = await resolveAndGateInteraction(id, callerKind, req, res);
   if (!ok) return;
 

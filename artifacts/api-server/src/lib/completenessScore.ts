@@ -19,12 +19,12 @@ type ProspectFields = {
   email?: string | null;
   desiredBedrooms?: string | null;
   desiredMoveInDate?: string | null;
-  budgetMin?: number | null;
-  budgetMax?: number | null;
+  budgetMin?: string | number | null;
+  budgetMax?: string | number | null;
   pets?: string | null;
   voucherType?: string | null;
   employmentStatus?: string | null;
-  monthlyIncome?: number | null;
+  monthlyIncome?: string | number | null;
   languagePreference?: string | null;
 };
 

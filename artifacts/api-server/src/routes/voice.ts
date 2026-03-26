@@ -316,7 +316,9 @@ router.post(
 
             try {
               const client = twilio(creds.sid, creds.token);
-              await client.recordings(RecordingSid).transcriptions.create({
+              // NOTE: Twilio SDK v5 removed the create() type from TranscriptionListInstance,
+              // but the REST endpoint may still work. Using `any` to preserve runtime behavior.
+              await (client.recordings(RecordingSid).transcriptions as any).create({
                 transcribeCallback: transcriptionCallback,
               });
               logger.info({ CallSid, RecordingSid }, "Transcription requested via REST API");

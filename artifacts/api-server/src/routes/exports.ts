@@ -189,12 +189,12 @@ router.get("/exports/:id/download", async (req: Request, res: Response) => {
   if (!requireAuth(req, res)) return;
   const { accountId } = req.user!;
 
-  const { id } = req.params;
+  const id = String(req.params.id);
 
   const [batch] = await db
     .select()
     .from(exportBatchesTable)
-    .where(and(eq(exportBatchesTable.id, id), eq(exportBatchesTable.accountId, accountId)));
+    .where(and(eq(exportBatchesTable.id, String(id)), eq(exportBatchesTable.accountId, accountId)));
 
   if (!batch) {
     res.status(404).json({ error: "Export batch not found" });
@@ -216,7 +216,7 @@ router.get("/exports/:id/download", async (req: Request, res: Response) => {
   const items = await db
     .select()
     .from(exportBatchItemsTable)
-    .where(eq(exportBatchItemsTable.exportBatchId, id));
+    .where(eq(exportBatchItemsTable.exportBatchId, String(id)));
 
   const prospectIds = items.map((i) => i.prospectId);
   if (prospectIds.length === 0) {
@@ -225,7 +225,7 @@ router.get("/exports/:id/download", async (req: Request, res: Response) => {
     return;
   }
 
-  const { content } = await generateExportContent(accountId, prospectIds, batch.format as "csv" | "json", id);
+  const { content } = await generateExportContent(accountId, prospectIds, batch.format as "csv" | "json", String(id));
   res.send(content);
 });
 

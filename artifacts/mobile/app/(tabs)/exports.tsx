@@ -31,7 +31,7 @@ import { Badge } from "@/components/ui/Badge";
 
 function getDownloadUrl(exportId: string): string {
   const domain = process.env.EXPO_PUBLIC_DOMAIN;
-  const base = domain ? `https://${domain}/api` : "http://localhost:8080/api";
+  const base = domain ? `https://${domain}/api` : "";
   return `${base}/exports/${exportId}/download`;
 }
 

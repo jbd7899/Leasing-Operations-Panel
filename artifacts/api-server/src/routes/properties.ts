@@ -56,7 +56,7 @@ router.patch("/properties/:id", async (req: Request, res: Response) => {
   if (!requireAdmin(req, res)) return;
   const { accountId } = req.user!;
 
-  const { id } = req.params;
+  const id = String(req.params.id);
   const { name, address1, address2, city, state, zip, status } = req.body;
 
   const updates: Record<string, unknown> = {};
@@ -71,7 +71,7 @@ router.patch("/properties/:id", async (req: Request, res: Response) => {
   const [property] = await db
     .update(propertiesTable)
     .set({ ...updates, updatedAt: new Date() })
-    .where(and(eq(propertiesTable.id, id), eq(propertiesTable.accountId, accountId)))
+    .where(and(eq(propertiesTable.id, String(id)), eq(propertiesTable.accountId, accountId)))
     .returning();
 
   if (!property) { res.status(404).json({ error: "Not found" }); return; }

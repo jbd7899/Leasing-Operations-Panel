@@ -4,7 +4,7 @@ import { Feather } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
 import { Badge } from "./Badge";
 import type { InboxItem as InboxItemType } from "@workspace/api-client-react";
-import { useListTwilioNumbers } from "@workspace/api-client-react";
+import { useListTwilioNumbers, getListTwilioNumbersQueryKey } from "@workspace/api-client-react";
 import { useTwilioCall } from "@/contexts/TwilioCallContext";
 
 type FeatherIconName = ComponentProps<typeof Feather>["name"];
@@ -38,6 +38,7 @@ export function InboxItem({ item, onPress }: InboxItemProps) {
 
   const { data: twilioNumbersData } = useListTwilioNumbers({
     query: {
+      queryKey: getListTwilioNumbersQueryKey(),
       select: (d) => ({
         ...d,
         twilioNumbers: d.twilioNumbers.filter((n) => n.isActive),

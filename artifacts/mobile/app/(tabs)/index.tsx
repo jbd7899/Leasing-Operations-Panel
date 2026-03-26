@@ -14,7 +14,7 @@ import {
   ActivityIndicator,
   Alert,
 } from "react-native";
-import { useGetInbox, useListProperties, useListTwilioNumbers, useInitiateNewSms, getListProspectsQueryKey, getGetInboxQueryKey } from "@workspace/api-client-react";
+import { useGetInbox, useListProperties, useListTwilioNumbers, useInitiateNewSms, getListProspectsQueryKey, getGetInboxQueryKey, getListTwilioNumbersQueryKey } from "@workspace/api-client-react";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
@@ -295,6 +295,7 @@ export default function InboxScreen() {
 
   const { data: twilioNumbersData } = useListTwilioNumbers({
     query: {
+      queryKey: getListTwilioNumbersQueryKey(),
       select: (d) => ({
         ...d,
         twilioNumbers: d.twilioNumbers.filter((n) => n.isActive),

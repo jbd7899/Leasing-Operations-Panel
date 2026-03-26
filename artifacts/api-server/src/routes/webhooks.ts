@@ -224,4 +224,57 @@ router.post(
   },
 );
 
+router.post(
+  "/webhooks/twilio/sms-status",
+  validateTwilioSignature,
+  async (req: Request, res: Response) => {
+    const { MessageSid, MessageStatus, ErrorCode, ErrorMessage } = req.body as Record<string, string>;
+
+    res.status(200).json({ received: true });
+
+    setImmediate(async () => {
+      try {
+        if (!MessageSid || !MessageStatus) return;
+
+        const [interaction] = await db
+          .select()
+          .from(interactionsTable)
+          .where(eq(interactionsTable.twilioMessageSid, MessageSid))
+          .limit(1);
+
+        if (interaction) {
+          logEvent({
+            accountId: interaction.accountId,
+            prospectId: interaction.prospectId,
+            interactionId: interaction.id,
+            propertyId: interaction.propertyId,
+            eventType: "delivery",
+            eventName: `sms_${MessageStatus}`,
+            sourceLayer: "webhook",
+            metadataJson: {
+              messageSid: MessageSid,
+              messageStatus: MessageStatus,
+              ...(ErrorCode ? { errorCode: ErrorCode } : {}),
+              ...(ErrorMessage ? { errorMessage: ErrorMessage } : {}),
+            },
+          });
+
+          if (MessageStatus === "failed" || MessageStatus === "undelivered") {
+            logger.warn(
+              { MessageSid, MessageStatus, ErrorCode, ErrorMessage },
+              "SMS delivery failed",
+            );
+          } else {
+            logger.info({ MessageSid, MessageStatus }, "SMS status update");
+          }
+        } else {
+          logger.warn({ MessageSid }, "No interaction found for SMS status callback");
+        }
+      } catch (err) {
+        logger.error({ err, MessageSid }, "Error processing SMS status callback");
+      }
+    });
+  },
+);
+
 export default router;
