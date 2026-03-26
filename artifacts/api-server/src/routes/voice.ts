@@ -146,16 +146,16 @@ router.post("/voice/token", async (req: Request, res: Response) => {
 
   const apiKeySid = creds.twilioApiKeySid ?? process.env.TWILIO_API_KEY_SID ?? null;
   const apiKeySecret = creds.twilioApiKeySecret ?? process.env.TWILIO_API_KEY_SECRET ?? null;
+  const twimlAppSid = creds.twilioTwimlAppSid ?? process.env.TWILIO_TWIML_APP_SID ?? null;
 
-  if (!apiKeySid || !apiKeySecret) {
+  if (!apiKeySid || !apiKeySecret || !twimlAppSid) {
     res.status(503).json({
       error:
-        "Twilio API Key is not configured for this account. Add your API Key credentials in Settings > Twilio Voice.",
+        "Voice calling is not fully configured for this account. Add your API Key and TwiML App in Settings.",
     });
     return;
   }
 
-  const twimlAppSid = creds.twilioTwimlAppSid ?? process.env.TWILIO_TWIML_APP_SID ?? undefined;
   const identity = `user_${accountId.slice(0, 8)}`;
 
   try {
