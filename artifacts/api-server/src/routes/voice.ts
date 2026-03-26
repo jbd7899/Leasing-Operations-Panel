@@ -24,11 +24,20 @@ function twimlResponse(twiml = ""): string {
   return `<?xml version="1.0" encoding="UTF-8"?><Response>${twiml}</Response>`;
 }
 
-async function getAccountTwilioCreds(accountId: string): Promise<{ sid: string; token: string } | null> {
+async function getAccountTwilioCreds(accountId: string): Promise<{
+  sid: string;
+  token: string;
+  twilioApiKeySid: string | null;
+  twilioApiKeySecret: string | null;
+  twilioTwimlAppSid: string | null;
+} | null> {
   const [account] = await db
     .select({
       twilioAccountSid: accountsTable.twilioAccountSid,
       twilioAuthToken: accountsTable.twilioAuthToken,
+      twilioApiKeySid: accountsTable.twilioApiKeySid,
+      twilioApiKeySecret: accountsTable.twilioApiKeySecret,
+      twilioTwimlAppSid: accountsTable.twilioTwimlAppSid,
     })
     .from(accountsTable)
     .where(eq(accountsTable.id, accountId));
@@ -48,7 +57,13 @@ async function getAccountTwilioCreds(accountId: string): Promise<{ sid: string; 
   }
 
   if (!sid || !token) return null;
-  return { sid, token };
+  return {
+    sid,
+    token,
+    twilioApiKeySid: account?.twilioApiKeySid ?? null,
+    twilioApiKeySecret: account?.twilioApiKeySecret ?? null,
+    twilioTwimlAppSid: account?.twilioTwimlAppSid ?? null,
+  };
 }
 
 async function resolveAuthTokenFromCallerId(req: Request): Promise<string | null> {
@@ -129,18 +144,18 @@ router.post("/voice/token", async (req: Request, res: Response) => {
     return;
   }
 
-  const apiKeySid = process.env.TWILIO_API_KEY_SID ?? null;
-  const apiKeySecret = process.env.TWILIO_API_KEY_SECRET ?? null;
+  const apiKeySid = creds.twilioApiKeySid ?? process.env.TWILIO_API_KEY_SID ?? null;
+  const apiKeySecret = creds.twilioApiKeySecret ?? process.env.TWILIO_API_KEY_SECRET ?? null;
 
   if (!apiKeySid || !apiKeySecret) {
     res.status(503).json({
       error:
-        "Twilio API Key is not configured. Set TWILIO_API_KEY_SID and TWILIO_API_KEY_SECRET environment variables to enable in-app calling.",
+        "Twilio API Key is not configured for this account. Add your API Key credentials in Settings > Twilio Voice.",
     });
     return;
   }
 
-  const twimlAppSid = process.env.TWILIO_TWIML_APP_SID ?? undefined;
+  const twimlAppSid = creds.twilioTwimlAppSid ?? process.env.TWILIO_TWIML_APP_SID ?? undefined;
   const identity = `user_${accountId.slice(0, 8)}`;
 
   try {

@@ -19,6 +19,7 @@ export interface AuthUser {
   lastName: string | null;
   /** @nullable */
   profileImageUrl: string | null;
+  /** The user's role in their account (owner, admin, agent) */
   role?: string;
 }
 
@@ -339,6 +340,7 @@ export interface InboxItem {
   interaction: Interaction;
   prospect?: Prospect | null;
   property?: Property | null;
+  /** Total number of interactions in this conversation thread */
   messageCount?: number;
 }
 
@@ -380,6 +382,92 @@ export interface CreateExportBody {
   targetSystem?: string;
 }
 
+export interface AccountSettings {
+  id: string;
+  name: string;
+  plan: string;
+  /** True if both twilioAccountSid and twilioAuthToken are stored for this account */
+  twilioConfigured: boolean;
+  /**
+   * The stored Twilio Account SID (shown in full)
+   * @nullable
+   */
+  twilioAccountSid?: string | null;
+  /**
+   * The Twilio Auth Token, masked for display (e.g. AC12••••••••1234)
+   * @nullable
+   */
+  twilioAuthTokenMasked?: string | null;
+  /** True when all three Voice credentials (API Key SID, API Key Secret, TwiML App SID) are stored */
+  twilioVoiceConfigured: boolean;
+  /**
+   * API Key SID (starts with SK)
+   * @nullable
+   */
+  twilioApiKeySid?: string | null;
+  /**
+   * API Key Secret, masked for display
+   * @nullable
+   */
+  twilioApiKeySecretMasked?: string | null;
+  /**
+   * TwiML App SID (starts with AP)
+   * @nullable
+   */
+  twilioTwimlAppSid?: string | null;
+  /** Whether AI-assisted reply drafts are enabled for this account */
+  aiAssistEnabled?: boolean;
+}
+
+export interface UpdateAccountSettingsBody {
+  /**
+   * Twilio Account SID (starts with AC). Pass null to clear.
+   * @nullable
+   */
+  twilioAccountSid?: string | null;
+  /**
+   * Twilio Auth Token. Pass null to clear.
+   * @nullable
+   */
+  twilioAuthToken?: string | null;
+  /**
+   * API Key SID (starts with SK). Pass null to clear.
+   * @nullable
+   */
+  twilioApiKeySid?: string | null;
+  /**
+   * API Key Secret. Pass null to clear.
+   * @nullable
+   */
+  twilioApiKeySecret?: string | null;
+  /**
+   * TwiML App SID (starts with AP). Pass null to clear.
+   * @nullable
+   */
+  twilioTwimlAppSid?: string | null;
+  /** Enable or disable AI-assisted reply drafts. */
+  aiAssistEnabled?: boolean;
+}
+
+export interface TestTwilioBody {
+  twilioAccountSid: string;
+  twilioAuthToken: string;
+}
+
+export interface TestTwilioResult {
+  ok: boolean;
+  /**
+   * Friendly name from Twilio if credentials are valid
+   * @nullable
+   */
+  accountFriendlyName?: string | null;
+  /**
+   * Error message if credentials are invalid
+   * @nullable
+   */
+  error?: string | null;
+}
+
 /**
  * Opaque session token — Bearer <sid>.
  */
@@ -415,40 +503,3 @@ export type GetInboxParams = {
 };
 
 export type DownloadExport200Two = { [key: string]: unknown };
-
-
-export interface AccountSettings {
-  id: string;
-  name: string;
-  plan: string;
-  /** True if both twilioAccountSid and twilioAuthToken are stored for this account */
-  twilioConfigured: boolean;
-  /** The stored Twilio Account SID (shown in full) @nullable */
-  twilioAccountSid?: string | null;
-  /** The Twilio Auth Token, masked for display (e.g. AC12••••••••1234) @nullable */
-  twilioAuthTokenMasked?: string | null;
-  /** Whether AI Assist draft reply is enabled for this account */
-  aiAssistEnabled?: boolean;
-}
-
-export interface UpdateAccountSettingsBody {
-  /** Twilio Account SID (starts with AC). Pass null to clear. @nullable */
-  twilioAccountSid?: string | null;
-  /** Twilio Auth Token. Pass null to clear. @nullable */
-  twilioAuthToken?: string | null;
-  /** Enable or disable AI Assist draft reply feature */
-  aiAssistEnabled?: boolean;
-}
-
-export interface TestTwilioBody {
-  twilioAccountSid: string;
-  twilioAuthToken: string;
-}
-
-export interface TestTwilioResult {
-  ok: boolean;
-  /** Friendly name from Twilio if credentials are valid @nullable */
-  accountFriendlyName?: string | null;
-  /** Error message if credentials are invalid @nullable */
-  error?: string | null;
-}

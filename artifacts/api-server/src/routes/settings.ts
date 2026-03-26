@@ -20,19 +20,54 @@ function maskToken(token: string | null | undefined): string | null {
   return token.slice(0, 4) + "••••••••••••" + token.slice(-4);
 }
 
+function buildAccountSettingsResponse(account: {
+  id: string;
+  name: string;
+  plan: string;
+  twilioAccountSid: string | null;
+  twilioAuthToken: string | null;
+  twilioApiKeySid: string | null;
+  twilioApiKeySecret: string | null;
+  twilioTwimlAppSid: string | null;
+  aiAssistEnabled: boolean;
+}) {
+  return {
+    id: account.id,
+    name: account.name,
+    plan: account.plan,
+    twilioConfigured: !!(account.twilioAccountSid && account.twilioAuthToken),
+    twilioAccountSid: account.twilioAccountSid ?? null,
+    twilioAuthTokenMasked: maskToken(account.twilioAuthToken),
+    twilioVoiceConfigured: !!(
+      account.twilioApiKeySid &&
+      account.twilioApiKeySecret &&
+      account.twilioTwimlAppSid
+    ),
+    twilioApiKeySid: account.twilioApiKeySid ?? null,
+    twilioApiKeySecretMasked: maskToken(account.twilioApiKeySecret),
+    twilioTwimlAppSid: account.twilioTwimlAppSid ?? null,
+    aiAssistEnabled: account.aiAssistEnabled ?? false,
+  };
+}
+
+const ACCOUNT_SELECT_FIELDS = {
+  id: accountsTable.id,
+  name: accountsTable.name,
+  plan: accountsTable.plan,
+  twilioAccountSid: accountsTable.twilioAccountSid,
+  twilioAuthToken: accountsTable.twilioAuthToken,
+  twilioApiKeySid: accountsTable.twilioApiKeySid,
+  twilioApiKeySecret: accountsTable.twilioApiKeySecret,
+  twilioTwimlAppSid: accountsTable.twilioTwimlAppSid,
+  aiAssistEnabled: accountsTable.aiAssistEnabled,
+} as const;
+
 router.get("/settings/account", async (req: Request, res: Response) => {
   if (!requireAuth(req, res)) return;
   const { accountId } = req.user!;
 
   const [account] = await db
-    .select({
-      id: accountsTable.id,
-      name: accountsTable.name,
-      plan: accountsTable.plan,
-      twilioAccountSid: accountsTable.twilioAccountSid,
-      twilioAuthToken: accountsTable.twilioAuthToken,
-      aiAssistEnabled: accountsTable.aiAssistEnabled,
-    })
+    .select(ACCOUNT_SELECT_FIELDS)
     .from(accountsTable)
     .where(eq(accountsTable.id, accountId));
 
@@ -41,24 +76,26 @@ router.get("/settings/account", async (req: Request, res: Response) => {
     return;
   }
 
-  res.json({
-    id: account.id,
-    name: account.name,
-    plan: account.plan,
-    twilioConfigured: !!(account.twilioAccountSid && account.twilioAuthToken),
-    twilioAccountSid: account.twilioAccountSid ?? null,
-    twilioAuthTokenMasked: maskToken(account.twilioAuthToken),
-    aiAssistEnabled: account.aiAssistEnabled ?? false,
-  });
+  res.json(buildAccountSettingsResponse(account));
 });
 
 router.put("/settings/account", async (req: Request, res: Response) => {
   if (!requireAuth(req, res)) return;
   const { accountId } = req.user!;
 
-  const { twilioAccountSid, twilioAuthToken, aiAssistEnabled } = req.body as {
+  const {
+    twilioAccountSid,
+    twilioAuthToken,
+    twilioApiKeySid,
+    twilioApiKeySecret,
+    twilioTwimlAppSid,
+    aiAssistEnabled,
+  } = req.body as {
     twilioAccountSid?: string | null;
     twilioAuthToken?: string | null;
+    twilioApiKeySid?: string | null;
+    twilioApiKeySecret?: string | null;
+    twilioTwimlAppSid?: string | null;
     aiAssistEnabled?: boolean;
   };
 
@@ -67,38 +104,43 @@ router.put("/settings/account", async (req: Request, res: Response) => {
 
   const settingEither = incomingSid !== undefined || incomingToken !== undefined;
   if (settingEither) {
-    const bothPresent = (incomingSid !== null && incomingToken !== null);
-    const bothAbsent = (incomingSid === null && incomingToken === null);
+    const bothPresent = incomingSid !== null && incomingToken !== null;
+    const bothAbsent = incomingSid === null && incomingToken === null;
     if (!bothPresent && !bothAbsent) {
-      res.status(400).json({ error: "twilioAccountSid and twilioAuthToken must be provided together, or both cleared together" });
+      res.status(400).json({
+        error: "twilioAccountSid and twilioAuthToken must be provided together, or both cleared together",
+      });
       return;
     }
   }
 
+  const incomingApiKeySid = twilioApiKeySid !== undefined ? (twilioApiKeySid?.trim() || null) : undefined;
+  const incomingApiKeySecret = twilioApiKeySecret !== undefined ? (twilioApiKeySecret?.trim() || null) : undefined;
+  const incomingTwimlAppSid = twilioTwimlAppSid !== undefined ? (twilioTwimlAppSid?.trim() || null) : undefined;
+
+  if (incomingApiKeySid !== undefined && incomingApiKeySid !== null && !incomingApiKeySid.startsWith("SK")) {
+    res.status(400).json({ error: "twilioApiKeySid must start with 'SK'" });
+    return;
+  }
+  if (incomingTwimlAppSid !== undefined && incomingTwimlAppSid !== null && !incomingTwimlAppSid.startsWith("AP")) {
+    res.status(400).json({ error: "twilioTwimlAppSid must start with 'AP'" });
+    return;
+  }
+
   const updates: Record<string, unknown> = { updatedAt: new Date() };
 
-  if (incomingSid !== undefined) {
-    updates.twilioAccountSid = incomingSid;
-  }
-  if (incomingToken !== undefined) {
-    updates.twilioAuthToken = incomingToken;
-  }
-  if (aiAssistEnabled !== undefined) {
-    updates.aiAssistEnabled = aiAssistEnabled;
-  }
+  if (incomingSid !== undefined) updates.twilioAccountSid = incomingSid;
+  if (incomingToken !== undefined) updates.twilioAuthToken = incomingToken;
+  if (incomingApiKeySid !== undefined) updates.twilioApiKeySid = incomingApiKeySid;
+  if (incomingApiKeySecret !== undefined) updates.twilioApiKeySecret = incomingApiKeySecret;
+  if (incomingTwimlAppSid !== undefined) updates.twilioTwimlAppSid = incomingTwimlAppSid;
+  if (aiAssistEnabled !== undefined) updates.aiAssistEnabled = aiAssistEnabled;
 
   const [account] = await db
     .update(accountsTable)
     .set(updates)
     .where(eq(accountsTable.id, accountId))
-    .returning({
-      id: accountsTable.id,
-      name: accountsTable.name,
-      plan: accountsTable.plan,
-      twilioAccountSid: accountsTable.twilioAccountSid,
-      twilioAuthToken: accountsTable.twilioAuthToken,
-      aiAssistEnabled: accountsTable.aiAssistEnabled,
-    });
+    .returning(ACCOUNT_SELECT_FIELDS);
 
   if (!account) {
     res.status(404).json({ error: "Account not found" });
@@ -107,15 +149,7 @@ router.put("/settings/account", async (req: Request, res: Response) => {
 
   logger.info({ accountId }, "Account settings updated");
 
-  res.json({
-    id: account.id,
-    name: account.name,
-    plan: account.plan,
-    twilioConfigured: !!(account.twilioAccountSid && account.twilioAuthToken),
-    twilioAccountSid: account.twilioAccountSid ?? null,
-    twilioAuthTokenMasked: maskToken(account.twilioAuthToken),
-    aiAssistEnabled: account.aiAssistEnabled ?? false,
-  });
+  res.json(buildAccountSettingsResponse(account));
 });
 
 router.post("/settings/account/test-twilio", async (req: Request, res: Response) => {

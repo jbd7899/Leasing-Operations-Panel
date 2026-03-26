@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from "./accountSettings";
 export * from "./accountUser";
 export * from "./addNoteBody";
 export * from "./authorizationSessionHeaderParameter";
@@ -45,8 +46,11 @@ export * from "./reviewInteractionBodyStructuredExtractionJson";
 export * from "./setTagsBody";
 export * from "./tag";
 export * from "./tagList";
+export * from "./testTwilioBody";
+export * from "./testTwilioResult";
 export * from "./twilioNumber";
 export * from "./twilioNumberList";
+export * from "./updateAccountSettingsBody";
 export * from "./updatePropertyBody";
 export * from "./updateProspectBody";
 export * from "./updateTwilioNumberBody";

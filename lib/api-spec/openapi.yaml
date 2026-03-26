@@ -789,6 +789,9 @@ components:
           type: [string, 'null']
         profileImageUrl:
           type: [string, 'null']
+        role:
+          type: string
+          description: The user's role in their account (owner, admin, agent)
     AuthUserEnvelope:
       type: object
       required: [user]
@@ -1364,7 +1367,7 @@ components:
     # Account Settings schemas
     AccountSettings:
       type: object
-      required: [id, name, plan, twilioConfigured]
+      required: [id, name, plan, twilioConfigured, twilioVoiceConfigured]
       properties:
         id:
           type: string
@@ -1381,6 +1384,21 @@ components:
         twilioAuthTokenMasked:
           type: [string, 'null']
           description: The Twilio Auth Token, masked for display (e.g. AC12••••••••1234)
+        twilioVoiceConfigured:
+          type: boolean
+          description: True when all three Voice credentials (API Key SID, API Key Secret, TwiML App SID) are stored
+        twilioApiKeySid:
+          type: [string, 'null']
+          description: API Key SID (starts with SK)
+        twilioApiKeySecretMasked:
+          type: [string, 'null']
+          description: API Key Secret, masked for display
+        twilioTwimlAppSid:
+          type: [string, 'null']
+          description: TwiML App SID (starts with AP)
+        aiAssistEnabled:
+          type: boolean
+          description: Whether AI-assisted reply drafts are enabled for this account
     UpdateAccountSettingsBody:
       type: object
       properties:
@@ -1390,6 +1408,18 @@ components:
         twilioAuthToken:
           type: [string, 'null']
           description: Twilio Auth Token. Pass null to clear.
+        twilioApiKeySid:
+          type: [string, 'null']
+          description: API Key SID (starts with SK). Pass null to clear.
+        twilioApiKeySecret:
+          type: [string, 'null']
+          description: API Key Secret. Pass null to clear.
+        twilioTwimlAppSid:
+          type: [string, 'null']
+          description: TwiML App SID (starts with AP). Pass null to clear.
+        aiAssistEnabled:
+          type: boolean
+          description: Enable or disable AI-assisted reply drafts.
     TestTwilioBody:
       type: object
       required: [twilioAccountSid, twilioAuthToken]

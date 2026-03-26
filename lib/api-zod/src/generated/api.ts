@@ -33,7 +33,10 @@ export const GetCurrentAuthUserResponse = zod.object({
       firstName: zod.string().nullable(),
       lastName: zod.string().nullable(),
       profileImageUrl: zod.string().nullable(),
-      role: zod.string().optional(),
+      role: zod
+        .string()
+        .optional()
+        .describe("The user's role in their account (owner, admin, agent)"),
     }),
     zod.null(),
   ]),
@@ -671,6 +674,10 @@ export const GetInboxResponse = zod.object({
           zod.null(),
         ])
         .optional(),
+      messageCount: zod
+        .number()
+        .optional()
+        .describe("Total number of interactions in this conversation thread"),
     }),
   ),
   total: zod.number(),
@@ -712,6 +719,143 @@ export const DownloadExportParams = zod.object({
 });
 
 export const DownloadExportResponse = zod.object({}).passthrough();
+
+/**
+ * @summary Get account settings including Twilio configuration
+ */
+export const GetAccountSettingsResponse = zod.object({
+  id: zod.string(),
+  name: zod.string(),
+  plan: zod.string(),
+  twilioConfigured: zod
+    .boolean()
+    .describe(
+      "True if both twilioAccountSid and twilioAuthToken are stored for this account",
+    ),
+  twilioAccountSid: zod
+    .string()
+    .nullish()
+    .describe("The stored Twilio Account SID (shown in full)"),
+  twilioAuthTokenMasked: zod
+    .string()
+    .nullish()
+    .describe(
+      "The Twilio Auth Token, masked for display (e.g. AC12••••••••1234)",
+    ),
+  twilioVoiceConfigured: zod
+    .boolean()
+    .describe(
+      "True when all three Voice credentials (API Key SID, API Key Secret, TwiML App SID) are stored",
+    ),
+  twilioApiKeySid: zod
+    .string()
+    .nullish()
+    .describe("API Key SID (starts with SK)"),
+  twilioApiKeySecretMasked: zod
+    .string()
+    .nullish()
+    .describe("API Key Secret, masked for display"),
+  twilioTwimlAppSid: zod
+    .string()
+    .nullish()
+    .describe("TwiML App SID (starts with AP)"),
+  aiAssistEnabled: zod
+    .boolean()
+    .optional()
+    .describe("Whether AI-assisted reply drafts are enabled for this account"),
+});
+
+/**
+ * @summary Update account settings (e.g. Twilio credentials)
+ */
+export const UpdateAccountSettingsBody = zod.object({
+  twilioAccountSid: zod
+    .string()
+    .nullish()
+    .describe("Twilio Account SID (starts with AC). Pass null to clear."),
+  twilioAuthToken: zod
+    .string()
+    .nullish()
+    .describe("Twilio Auth Token. Pass null to clear."),
+  twilioApiKeySid: zod
+    .string()
+    .nullish()
+    .describe("API Key SID (starts with SK). Pass null to clear."),
+  twilioApiKeySecret: zod
+    .string()
+    .nullish()
+    .describe("API Key Secret. Pass null to clear."),
+  twilioTwimlAppSid: zod
+    .string()
+    .nullish()
+    .describe("TwiML App SID (starts with AP). Pass null to clear."),
+  aiAssistEnabled: zod
+    .boolean()
+    .optional()
+    .describe("Enable or disable AI-assisted reply drafts."),
+});
+
+export const UpdateAccountSettingsResponse = zod.object({
+  id: zod.string(),
+  name: zod.string(),
+  plan: zod.string(),
+  twilioConfigured: zod
+    .boolean()
+    .describe(
+      "True if both twilioAccountSid and twilioAuthToken are stored for this account",
+    ),
+  twilioAccountSid: zod
+    .string()
+    .nullish()
+    .describe("The stored Twilio Account SID (shown in full)"),
+  twilioAuthTokenMasked: zod
+    .string()
+    .nullish()
+    .describe(
+      "The Twilio Auth Token, masked for display (e.g. AC12••••••••1234)",
+    ),
+  twilioVoiceConfigured: zod
+    .boolean()
+    .describe(
+      "True when all three Voice credentials (API Key SID, API Key Secret, TwiML App SID) are stored",
+    ),
+  twilioApiKeySid: zod
+    .string()
+    .nullish()
+    .describe("API Key SID (starts with SK)"),
+  twilioApiKeySecretMasked: zod
+    .string()
+    .nullish()
+    .describe("API Key Secret, masked for display"),
+  twilioTwimlAppSid: zod
+    .string()
+    .nullish()
+    .describe("TwiML App SID (starts with AP)"),
+  aiAssistEnabled: zod
+    .boolean()
+    .optional()
+    .describe("Whether AI-assisted reply drafts are enabled for this account"),
+});
+
+/**
+ * @summary Test Twilio credentials without saving them
+ */
+export const TestTwilioCredentialsBody = zod.object({
+  twilioAccountSid: zod.string(),
+  twilioAuthToken: zod.string(),
+});
+
+export const TestTwilioCredentialsResponse = zod.object({
+  ok: zod.boolean(),
+  accountFriendlyName: zod
+    .string()
+    .nullish()
+    .describe("Friendly name from Twilio if credentials are valid"),
+  error: zod
+    .string()
+    .nullish()
+    .describe("Error message if credentials are invalid"),
+});
 
 /**
  * @summary Trigger AI extraction for an interaction

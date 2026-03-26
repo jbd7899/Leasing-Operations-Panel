@@ -16,5 +16,6 @@ export interface AuthUser {
   lastName: string | null;
   /** @nullable */
   profileImageUrl: string | null;
+  /** The user's role in their account (owner, admin, agent) */
   role?: string;
 }
