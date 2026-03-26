@@ -251,6 +251,7 @@ router.post("/interactions/initiate-sms", async (req: Request, res: Response) =>
       fromNumber: twilioNumber.phoneNumber,
       toNumber: normalizedPhone,
       rawText: body.trim(),
+      parentThreadKey: [twilioNumber.phoneNumber, normalizedPhone].sort().join("|"),
       extractionStatus: "pending",
       occurredAt: new Date(),
     })
@@ -346,6 +347,7 @@ router.post("/interactions/send-sms", async (req: Request, res: Response) => {
       rawText: body.trim(),
       summary: body.trim(),
       category: "general_question",
+      parentThreadKey: [twilioNumber.phoneNumber, prospect.phonePrimary].sort().join("|"),
       extractionStatus: "skipped",
       occurredAt: new Date(),
     })
@@ -385,7 +387,7 @@ router.post("/interactions/ai-draft", async (req: Request, res: Response) => {
       ),
     )
     .orderBy(desc(interactionsTable.occurredAt))
-    .limit(20);
+    .limit(50);
 
   const lastMessage = recentMessages.find((m) => m.direction === "inbound")?.rawText ?? null;
 

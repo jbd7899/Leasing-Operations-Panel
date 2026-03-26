@@ -19,7 +19,7 @@ export interface Prospect {
   languagePreference?: string | null;
   latestSummary?: string | null;
   latestSentiment?: string | null;
-  qualificationScore?: string | null;
+  completenessScore?: number | null;
   status: string;
   exportStatus: string;
   crmExternalId?: string | null;

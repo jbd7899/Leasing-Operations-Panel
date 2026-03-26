@@ -45,7 +45,7 @@ export interface Prospect {
   /** @nullable */
   latestSentiment?: string | null;
   /** @nullable */
-  qualificationScore?: number | null;
+  completenessScore?: number | null;
   status: string;
   exportStatus: string;
   /** @nullable */

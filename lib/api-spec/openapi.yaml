@@ -1102,8 +1102,9 @@ components:
           type: [string, 'null']
         latestSentiment:
           type: [string, 'null']
-        qualificationScore:
-          type: [number, 'null']
+        completenessScore:
+          type: [integer, 'null']
+          description: Profile completeness percentage (0-100)
         status:
           type: string
         exportStatus:

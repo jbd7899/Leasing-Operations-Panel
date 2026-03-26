@@ -55,6 +55,8 @@ router.post(
           twilioNumber.propertyId ?? null,
         );
 
+        const threadKey = [fromNorm, toNorm].sort().join("|");
+
         const [interaction] = await db
           .insert(interactionsTable)
           .values({
@@ -68,6 +70,7 @@ router.post(
             fromNumber: fromNorm,
             toNumber: toNorm,
             rawText: Body ?? null,
+            parentThreadKey: threadKey,
             extractionStatus: "pending",
             occurredAt: new Date(),
           })

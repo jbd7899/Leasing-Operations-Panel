@@ -724,7 +724,7 @@ router.get("/founder/exports/prospect-lifecycle", async (req: Request, res: Resp
       assignedProperty: p.assignedPropertyId ? propMap.get(p.assignedPropertyId) ?? null : null,
       createdAt: p.createdAt,
       updatedAt: p.updatedAt,
-      qualificationScore: p.qualificationScore != null ? Number(p.qualificationScore) : null,
+      completenessScore: p.completenessScore ?? null,
       statusHistory,
       exportStateHistory,
       humanEditsTimeline,
