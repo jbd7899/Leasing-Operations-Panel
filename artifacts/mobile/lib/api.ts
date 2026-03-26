@@ -1,29 +1,33 @@
 import { setBaseUrl, setAuthTokenGetter } from "@workspace/api-client-react";
-import { Platform } from "react-native";
-import * as storage from "@/lib/storage";
 
-export const AUTH_TOKEN_KEY = "auth_session_token";
+// Clerk token getter — set by ClerkAuthBridge once Clerk loads
+let _getClerkToken: (() => Promise<string | null | undefined>) | null = null;
+
+export function setClerkTokenGetter(getter: () => Promise<string | null | undefined>) {
+  _getClerkToken = getter;
+  setAuthTokenGetter(getter); // for Orval-generated React Query hooks
+}
 
 export function initApiClient() {
+  const apiUrl = process.env.EXPO_PUBLIC_API_URL;
   const domain = process.env.EXPO_PUBLIC_DOMAIN;
-  if (domain) {
+  if (apiUrl) {
+    setBaseUrl(apiUrl);
+  } else if (domain) {
     setBaseUrl(`https://${domain}`);
   }
-  if (Platform.OS !== "web") {
-    setAuthTokenGetter(() => storage.getItem(AUTH_TOKEN_KEY));
-  }
+  // Token getter is wired by ClerkAuthBridge after Clerk loads
 }
 
 const BASE = () => {
+  const apiUrl = process.env.EXPO_PUBLIC_API_URL;
   const domain = process.env.EXPO_PUBLIC_DOMAIN;
+  if (apiUrl) return `${apiUrl}/api`;
   return domain ? `https://${domain}/api` : `http://localhost:8080/api`;
 };
 
 async function authHeaders(): Promise<HeadersInit> {
-  if (Platform.OS === "web") {
-    return { "Content-Type": "application/json" };
-  }
-  const token = await storage.getItem(AUTH_TOKEN_KEY);
+  const token = _getClerkToken ? await _getClerkToken() : null;
   return {
     "Content-Type": "application/json",
     ...(token ? { Authorization: `Bearer ${token}` } : {}),

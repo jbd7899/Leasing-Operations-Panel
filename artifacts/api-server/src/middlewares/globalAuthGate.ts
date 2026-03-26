@@ -2,9 +2,6 @@ import { type Request, type Response, type NextFunction } from "express";
 
 const PUBLIC_PATHS = new Set([
   "/api/healthz",
-  "/api/login",
-  "/api/callback",
-  "/api/logout",
   "/api/auth/user",
   "/api/privacy",
   "/api/terms",
@@ -12,7 +9,6 @@ const PUBLIC_PATHS = new Set([
 
 const WEBHOOK_PREFIXES = [
   "/api/webhooks/",
-  "/api/mobile-auth/",
 ];
 
 const INTERNAL_SECRET = process.env.INTERNAL_API_SECRET;

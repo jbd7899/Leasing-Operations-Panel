@@ -1,14 +1,14 @@
-import * as oidc from "openid-client";
 import { type Request, type Response, type NextFunction } from "express";
-import type { SessionUser } from "../lib/types";
+import { db, usersTable, accountUsersTable } from "@workspace/db";
+import { eq } from "drizzle-orm";
 import {
-  clearSession,
-  getOidcConfig,
-  getSessionId,
-  getSession,
-  updateSession,
-  type SessionData,
+  verifyClerkToken,
+  clerkClient,
+  getAuthToken,
+  upsertUser,
+  ensureAccountForUser,
 } from "../lib/auth";
+import type { SessionUser } from "../lib/types";
 
 declare global {
   namespace Express {
@@ -25,33 +25,6 @@ declare global {
   }
 }
 
-async function refreshIfExpired(
-  sid: string,
-  session: SessionData,
-): Promise<SessionData | null> {
-  const now = Math.floor(Date.now() / 1000);
-  if (!session.expires_at || now <= session.expires_at) return session;
-
-  if (!session.refresh_token) return null;
-
-  try {
-    const config = await getOidcConfig();
-    const tokens = await oidc.refreshTokenGrant(
-      config,
-      session.refresh_token,
-    );
-    session.access_token = tokens.access_token;
-    session.refresh_token = tokens.refresh_token ?? session.refresh_token;
-    session.expires_at = tokens.expiresIn()
-      ? now + tokens.expiresIn()!
-      : session.expires_at;
-    await updateSession(sid, session);
-    return session;
-  } catch {
-    return null;
-  }
-}
-
 export async function authMiddleware(
   req: Request,
   res: Response,
@@ -61,26 +34,82 @@ export async function authMiddleware(
     return this.user != null;
   } as Request["isAuthenticated"];
 
-  const sid = getSessionId(req);
-  if (!sid) {
+  const token = getAuthToken(req);
+  if (!token) {
     next();
     return;
   }
 
-  const session = await getSession(sid);
-  if (!session?.user?.id) {
-    await clearSession(res, sid);
+  let clerkUserId: string;
+  try {
+    const payload = await verifyClerkToken(token);
+    clerkUserId = payload.sub;
+  } catch {
     next();
     return;
   }
 
-  const refreshed = await refreshIfExpired(sid, session);
-  if (!refreshed) {
-    await clearSession(res, sid);
+  // Fast path: user already exists in our DB
+  let row: { id: string; email: string | null; firstName: string | null; lastName: string | null; profileImageUrl: string | null; accountId: string; role: string } | undefined;
+  try {
+    const rows = await db
+      .select({
+        id: usersTable.id,
+        email: usersTable.email,
+        firstName: usersTable.firstName,
+        lastName: usersTable.lastName,
+        profileImageUrl: usersTable.profileImageUrl,
+        accountId: accountUsersTable.accountId,
+        role: accountUsersTable.role,
+      })
+      .from(usersTable)
+      .innerJoin(accountUsersTable, eq(accountUsersTable.userId, usersTable.id))
+      .where(eq(usersTable.id, clerkUserId))
+      .limit(1);
+    row = rows[0];
+  } catch (err: unknown) {
+    const e = err as Error & { cause?: Error };
+    req.log?.error({ clerkUserId, msg: e.message, cause: e.cause?.message }, "DB lookup failed in authMiddleware");
+  }
+
+  if (row) {
+    req.user = row as SessionUser;
     next();
     return;
   }
 
-  req.user = refreshed.user;
+  // First-time login: pull profile from Clerk and provision in our DB
+  try {
+    const clerkUser = await clerkClient.users.getUser(clerkUserId);
+    const primaryEmail =
+      clerkUser.emailAddresses.find(
+        (e) => e.id === clerkUser.primaryEmailAddressId,
+      )?.emailAddress ?? null;
+
+    const dbUser = await upsertUser({
+      id: clerkUserId,
+      email: primaryEmail,
+      firstName: clerkUser.firstName ?? null,
+      lastName: clerkUser.lastName ?? null,
+      profileImageUrl: clerkUser.imageUrl ?? null,
+    });
+
+    const displayName =
+      [dbUser.firstName, dbUser.lastName].filter(Boolean).join(" ") || null;
+    const { accountId, role } = await ensureAccountForUser(dbUser.id, displayName);
+
+    req.user = {
+      id: dbUser.id,
+      email: dbUser.email,
+      firstName: dbUser.firstName,
+      lastName: dbUser.lastName,
+      profileImageUrl: dbUser.profileImageUrl,
+      accountId,
+      role,
+    };
+  } catch (err) {
+    req.log?.error({ err }, "Failed to provision user from Clerk");
+  }
+
   next();
 }
