@@ -8,18 +8,19 @@ import {
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
-import React, { useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
+  TextInput,
   Pressable,
   StyleSheet,
   ActivityIndicator,
-  ImageBackground,
 } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import { useSignIn, useSignUp } from "@clerk/clerk-expo";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { initApiClient } from "@/lib/api";
@@ -50,7 +51,66 @@ function LoadingScreen() {
 }
 
 function LoginScreen() {
-  const { login, devLogin, isLoading } = useAuth();
+  const { signIn, setActive: setSignInActive, isLoaded: signInLoaded } = useSignIn();
+  const { signUp, setActive: setSignUpActive, isLoaded: signUpLoaded } = useSignUp();
+  const [email, setEmail] = useState("");
+  const [code, setCode] = useState("");
+  const [step, setStep] = useState<"email" | "code">("email");
+  const [isSigningUp, setIsSigningUp] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
+
+  const handleSendCode = async () => {
+    if (!signInLoaded || !signUpLoaded) return;
+    setIsLoading(true);
+    setErrorMsg("");
+    try {
+      await signIn!.create({ identifier: email, strategy: "email_code" });
+      setIsSigningUp(false);
+      setStep("code");
+    } catch (err: unknown) {
+      const clerkErr = err as { errors?: { code?: string; longMessage?: string }[] };
+      if (clerkErr.errors?.[0]?.code === "form_identifier_not_found") {
+        try {
+          await signUp!.create({ emailAddress: email });
+          await signUp!.prepareEmailAddressVerification({ strategy: "email_code" });
+          setIsSigningUp(true);
+          setStep("code");
+        } catch (signUpErr: unknown) {
+          const e = signUpErr as { errors?: { longMessage?: string }[] };
+          setErrorMsg(e.errors?.[0]?.longMessage ?? "Sign up failed. Try again.");
+        }
+      } else {
+        setErrorMsg(clerkErr.errors?.[0]?.longMessage ?? "Something went wrong.");
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleVerifyCode = async () => {
+    setIsLoading(true);
+    setErrorMsg("");
+    try {
+      if (isSigningUp) {
+        const result = await signUp!.attemptEmailAddressVerification({ code });
+        if (result.status === "complete") {
+          await setSignUpActive!({ session: result.createdSessionId });
+        }
+      } else {
+        const result = await signIn!.attemptFirstFactor({ strategy: "email_code", code });
+        if (result.status === "complete") {
+          await setSignInActive!({ session: result.createdSessionId });
+        }
+      }
+    } catch (err: unknown) {
+      const e = err as { errors?: { longMessage?: string }[] };
+      setErrorMsg(e.errors?.[0]?.longMessage ?? "Invalid code. Try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <View style={loginStyles.container}>
       <View style={loginStyles.logoRow}>
@@ -63,34 +123,72 @@ function LoginScreen() {
 
       <View style={loginStyles.card}>
         <Text style={loginStyles.cardTitle}>Sign in to continue</Text>
-        <Text style={loginStyles.cardSubtitle}>
-          Use your Replit account to access the leasing panel.
-        </Text>
 
-        <Pressable
-          style={[loginStyles.loginBtn, isLoading && loginStyles.loginBtnDisabled]}
-          onPress={login}
-          disabled={isLoading}
-        >
-          {isLoading ? (
-            <ActivityIndicator size="small" color="#fff" />
-          ) : (
-            <Text style={loginStyles.loginBtnText}>Sign in with Replit</Text>
-          )}
-        </Pressable>
-
-        {__DEV__ && (
-          <Pressable
-            style={[loginStyles.devBtn, isLoading && loginStyles.loginBtnDisabled]}
-            onPress={devLogin}
-            disabled={isLoading}
-          >
-            <Text style={loginStyles.devBtnText}>⚙ Dev Login (local only)</Text>
-          </Pressable>
+        {step === "email" ? (
+          <>
+            <TextInput
+              style={loginStyles.input}
+              value={email}
+              onChangeText={setEmail}
+              placeholder="your@email.com"
+              placeholderTextColor={Colors.dark.textMuted}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+              editable={!isLoading}
+            />
+            <Pressable
+              style={[loginStyles.loginBtn, (isLoading || !email) && loginStyles.loginBtnDisabled]}
+              onPress={handleSendCode}
+              disabled={isLoading || !email}
+            >
+              {isLoading ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Text style={loginStyles.loginBtnText}>Send verification code</Text>
+              )}
+            </Pressable>
+          </>
+        ) : (
+          <>
+            <Text style={loginStyles.cardSubtitle}>
+              Enter the 6-digit code sent to {email}
+            </Text>
+            <TextInput
+              style={[loginStyles.input, loginStyles.codeInput]}
+              value={code}
+              onChangeText={setCode}
+              placeholder="000000"
+              placeholderTextColor={Colors.dark.textMuted}
+              keyboardType="number-pad"
+              maxLength={6}
+              editable={!isLoading}
+            />
+            <Pressable
+              style={[loginStyles.loginBtn, (isLoading || code.length < 6) && loginStyles.loginBtnDisabled]}
+              onPress={handleVerifyCode}
+              disabled={isLoading || code.length < 6}
+            >
+              {isLoading ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Text style={loginStyles.loginBtnText}>Verify code</Text>
+              )}
+            </Pressable>
+            <Pressable
+              style={loginStyles.backBtn}
+              onPress={() => { setStep("email"); setCode(""); setErrorMsg(""); }}
+              disabled={isLoading}
+            >
+              <Text style={loginStyles.backBtnText}>← Use a different email</Text>
+            </Pressable>
+          </>
         )}
+
+        {errorMsg ? <Text style={loginStyles.errorText}>{errorMsg}</Text> : null}
       </View>
 
-      <Text style={loginStyles.footer}>MyRentCard · Powered by Replit</Text>
+      <Text style={loginStyles.footer}>MyRentCard · Secured by Clerk</Text>
     </View>
   );
 }
@@ -244,41 +342,59 @@ const loginStyles = StyleSheet.create({
     textAlign: "center",
     lineHeight: 20,
   },
+  input: {
+    backgroundColor: Colors.dark.bgElevated,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.dark.border,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    fontSize: 15,
+    fontFamily: "Inter_400Regular",
+    color: Colors.dark.text,
+  },
+  codeInput: {
+    textAlign: "center",
+    letterSpacing: 8,
+    fontSize: 22,
+    fontFamily: "Inter_600SemiBold",
+  },
   loginBtn: {
     backgroundColor: Colors.brand.teal,
     borderRadius: 14,
     paddingVertical: 15,
     alignItems: "center",
     justifyContent: "center",
-    marginTop: 8,
+    marginTop: 4,
     minHeight: 52,
   },
   loginBtnDisabled: {
-    opacity: 0.6,
+    opacity: 0.5,
   },
   loginBtnText: {
     fontSize: 16,
     fontFamily: "Inter_600SemiBold",
     color: "#fff",
   },
+  backBtn: {
+    alignItems: "center",
+    paddingVertical: 6,
+  },
+  backBtnText: {
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+    color: Colors.dark.textMuted,
+  },
+  errorText: {
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+    color: "#F87171",
+    textAlign: "center",
+  },
   footer: {
     fontSize: 12,
     fontFamily: "Inter_400Regular",
     color: Colors.dark.textMuted,
     marginTop: 40,
-  },
-  devBtn: {
-    borderRadius: 14,
-    paddingVertical: 12,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "#334155",
-    borderStyle: "dashed",
-  },
-  devBtnText: {
-    fontSize: 13,
-    fontFamily: "Inter_500Medium",
-    color: Colors.dark.textMuted,
   },
 });
