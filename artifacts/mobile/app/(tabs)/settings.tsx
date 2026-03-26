@@ -553,25 +553,41 @@ function TwilioIntegrationModal({
   currentSettings: AccountSettings | null;
 }) {
   const queryClient = useQueryClient();
+
   const [accountSid, setAccountSid] = useState(currentSettings?.twilioAccountSid ?? "");
   const [authToken, setAuthToken] = useState("");
   const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [isTesting, setIsTesting] = useState(false);
+
+  const [apiKeySid, setApiKeySid] = useState(currentSettings?.twilioApiKeySid ?? "");
+  const [apiKeySecret, setApiKeySecret] = useState("");
+  const [twimlAppSid, setTwimlAppSid] = useState(currentSettings?.twilioTwimlAppSid ?? "");
+  const [copiedVoiceUrl, setCopiedVoiceUrl] = useState(false);
+
+  const isConnected = currentSettings?.twilioConfigured ?? false;
+  const isVoiceConfigured = currentSettings?.twilioVoiceConfigured ?? false;
 
   useEffect(() => {
     if (visible) {
       setAccountSid(currentSettings?.twilioAccountSid ?? "");
       setAuthToken("");
       setTestResult(null);
+      setApiKeySid(currentSettings?.twilioApiKeySid ?? "");
+      setApiKeySecret("");
+      setTwimlAppSid(currentSettings?.twilioTwimlAppSid ?? "");
+      setCopiedVoiceUrl(false);
     }
-  }, [visible, currentSettings?.twilioAccountSid]);
+  }, [
+    visible,
+    currentSettings?.twilioAccountSid,
+    currentSettings?.twilioApiKeySid,
+    currentSettings?.twilioTwimlAppSid,
+  ]);
 
   const updateMutation = useUpdateAccountSettings({
     mutation: {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: getGetAccountSettingsQueryKey() });
-        Alert.alert("Saved", "Your Twilio credentials have been saved.");
-        onClose();
       },
       onError: (err: unknown) => Alert.alert("Error", String(err)),
     },
@@ -608,15 +624,18 @@ function TwilioIntegrationModal({
     }
   }
 
-  function handleSave() {
+  function handleSaveAccount() {
     const sid = accountSid.trim();
     const token = authToken.trim();
     if (!sid) { Alert.alert("Missing field", "Account SID is required."); return; }
     if (!token) { Alert.alert("Missing field", "Auth Token is required."); return; }
-    updateMutation.mutate({ data: { twilioAccountSid: sid, twilioAuthToken: token } });
+    updateMutation.mutate(
+      { data: { twilioAccountSid: sid, twilioAuthToken: token } },
+      { onSuccess: () => Alert.alert("Saved", "Your Twilio credentials have been saved.") }
+    );
   }
 
-  function handleDisconnect() {
+  function handleDisconnectAccount() {
     Alert.alert(
       "Disconnect Twilio",
       "This will remove your Twilio credentials. Outbound SMS will stop working until you reconnect.",
@@ -633,8 +652,37 @@ function TwilioIntegrationModal({
     );
   }
 
-  const isConnected = currentSettings?.twilioConfigured ?? false;
-  const canSave = accountSid.trim().length > 0 && authToken.trim().length > 0;
+  function handleSaveVoice() {
+    const sid = apiKeySid.trim();
+    const secret = apiKeySecret.trim();
+    const appSid = twimlAppSid.trim();
+    if (!sid) { Alert.alert("Missing field", "API Key SID is required."); return; }
+    if (!sid.startsWith("SK")) { Alert.alert("Invalid", "API Key SID must start with 'SK'."); return; }
+    if (!secret) { Alert.alert("Missing field", "API Key Secret is required."); return; }
+    if (!appSid) { Alert.alert("Missing field", "TwiML App SID is required."); return; }
+    if (!appSid.startsWith("AP")) { Alert.alert("Invalid", "TwiML App SID must start with 'AP'."); return; }
+    updateMutation.mutate(
+      { data: { twilioApiKeySid: sid, twilioApiKeySecret: secret, twilioTwimlAppSid: appSid } },
+      { onSuccess: () => Alert.alert("Saved", "Twilio Voice credentials saved.") }
+    );
+  }
+
+  function handleDisconnectVoice() {
+    Alert.alert(
+      "Remove Voice Credentials",
+      "This will disable in-app calling for all agents until you re-enter credentials.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Remove",
+          style: "destructive",
+          onPress: () => {
+            updateMutation.mutate({ data: { twilioApiKeySid: null, twilioApiKeySecret: null, twilioTwimlAppSid: null } });
+          },
+        },
+      ],
+    );
+  }
 
   const apiBase = (() => {
     const domain = process.env.EXPO_PUBLIC_DOMAIN;
@@ -644,6 +692,7 @@ function TwilioIntegrationModal({
     { label: "Incoming SMS", url: `${apiBase}/webhooks/twilio/sms` },
     { label: "Incoming Voice", url: `${apiBase}/webhooks/twilio/voice` },
   ];
+  const outboundCallWebhook = `${apiBase}/webhooks/twilio/outbound-call`;
   const [copiedLabel, setCopiedLabel] = useState<string | null>(null);
 
   function handleCopy(label: string, url: string) {
@@ -652,6 +701,16 @@ function TwilioIntegrationModal({
       setTimeout(() => setCopiedLabel(null), 1800);
     });
   }
+
+  function handleCopyVoiceWebhook() {
+    Clipboard.setStringAsync(outboundCallWebhook).then(() => {
+      setCopiedVoiceUrl(true);
+      setTimeout(() => setCopiedVoiceUrl(false), 1800);
+    });
+  }
+
+  const canSaveAccount = accountSid.trim().length > 0 && authToken.trim().length > 0;
+  const canSaveVoice = apiKeySid.trim().length > 0 && apiKeySecret.trim().length > 0 && twimlAppSid.trim().length > 0;
 
   return (
     <Modal
@@ -670,11 +729,16 @@ function TwilioIntegrationModal({
           </View>
 
           <ScrollView style={modalStyles.body} keyboardShouldPersistTaps="handled">
-            <View style={integrationStyles.statusRow}>
-              <View style={[integrationStyles.statusDot, isConnected && integrationStyles.statusDotActive]} />
-              <Text style={integrationStyles.statusText}>
-                {isConnected ? "Connected" : "Not connected"}
-              </Text>
+
+            {/* ── Section 1: Account Connection ── */}
+            <View style={voiceSetupStyles.sectionHeader}>
+              <Text style={voiceSetupStyles.sectionTitle}>Account Connection</Text>
+              <View style={integrationStyles.statusRow}>
+                <View style={[integrationStyles.statusDot, isConnected && integrationStyles.statusDotActive]} />
+                <Text style={integrationStyles.statusText}>
+                  {isConnected ? "Connected" : "Not connected"}
+                </Text>
+              </View>
             </View>
 
             {isConnected && currentSettings?.twilioAccountSid && (
@@ -694,7 +758,7 @@ function TwilioIntegrationModal({
               </View>
             )}
 
-            <Text style={[modalStyles.fieldLabel, { marginTop: 20 }]}>
+            <Text style={[modalStyles.fieldLabel, { marginTop: 16 }]}>
               {isConnected ? "Update" : "Enter"} Credentials
             </Text>
             <Text style={integrationStyles.hint}>
@@ -737,23 +801,37 @@ function TwilioIntegrationModal({
               </View>
             )}
 
-            <Pressable
-              style={[integrationStyles.testBtn, (isTesting || !canSave) && integrationStyles.testBtnDisabled]}
-              onPress={handleTest}
-              disabled={isTesting || !canSave}
-            >
-              {isTesting ? (
-                <ActivityIndicator size="small" color={Colors.brand.tealLight} />
-              ) : (
-                <>
-                  <Feather name="zap" size={14} color={Colors.brand.tealLight} />
-                  <Text style={integrationStyles.testBtnText}>Test Connection</Text>
-                </>
-              )}
-            </Pressable>
+            <View style={voiceSetupStyles.accountBtnRow}>
+              <Pressable
+                style={[integrationStyles.testBtn, (isTesting || !canSaveAccount) && integrationStyles.testBtnDisabled]}
+                onPress={handleTest}
+                disabled={isTesting || !canSaveAccount}
+              >
+                {isTesting ? (
+                  <ActivityIndicator size="small" color={Colors.brand.tealLight} />
+                ) : (
+                  <>
+                    <Feather name="zap" size={14} color={Colors.brand.tealLight} />
+                    <Text style={integrationStyles.testBtnText}>Test Connection</Text>
+                  </>
+                )}
+              </Pressable>
+
+              <Pressable
+                style={[modalStyles.saveBtn, (!canSaveAccount || updateMutation.isPending) && modalStyles.saveBtnDisabled, voiceSetupStyles.inlineBtn]}
+                onPress={handleSaveAccount}
+                disabled={!canSaveAccount || updateMutation.isPending}
+              >
+                {updateMutation.isPending ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={modalStyles.saveBtnText}>Save</Text>
+                )}
+              </Pressable>
+            </View>
 
             {isConnected && (
-              <Pressable style={integrationStyles.disconnectBtn} onPress={handleDisconnect}>
+              <Pressable style={integrationStyles.disconnectBtn} onPress={handleDisconnectAccount}>
                 <Feather name="trash-2" size={14} color="#FF6B6B" />
                 <Text style={integrationStyles.disconnectText}>Disconnect Twilio</Text>
               </Pressable>
@@ -791,151 +869,18 @@ function TwilioIntegrationModal({
                 </View>
               ))}
             </View>
-          </ScrollView>
 
-          <View style={modalStyles.footer}>
-            <Pressable style={modalStyles.cancelBtn} onPress={handleClose}>
-              <Text style={modalStyles.cancelBtnText}>Cancel</Text>
-            </Pressable>
-            <Pressable
-              style={[modalStyles.saveBtn, (!canSave || updateMutation.isPending) && modalStyles.saveBtnDisabled]}
-              onPress={handleSave}
-              disabled={!canSave || updateMutation.isPending}
-            >
-              {updateMutation.isPending ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <Text style={modalStyles.saveBtnText}>Save Credentials</Text>
-              )}
-            </Pressable>
-          </View>
-        </View>
-      </KeyboardAvoidingView>
-    </Modal>
-  );
-}
+            {/* ── Section 2: Voice Calling ── */}
+            <View style={voiceSetupStyles.divider} />
 
-function TwilioVoiceModal({
-  visible,
-  onClose,
-  currentSettings,
-}: {
-  visible: boolean;
-  onClose: () => void;
-  currentSettings: AccountSettings | null;
-}) {
-  const queryClient = useQueryClient();
-  const [apiKeySid, setApiKeySid] = useState("");
-  const [apiKeySecret, setApiKeySecret] = useState("");
-  const [twimlAppSid, setTwimlAppSid] = useState("");
-
-  const isVoiceConfigured = currentSettings?.twilioVoiceConfigured ?? false;
-
-  useEffect(() => {
-    if (visible) {
-      setApiKeySid(currentSettings?.twilioApiKeySid ?? "");
-      setApiKeySecret("");
-      setTwimlAppSid(currentSettings?.twilioTwimlAppSid ?? "");
-    }
-  }, [visible, currentSettings?.twilioApiKeySid, currentSettings?.twilioTwimlAppSid]);
-
-  const updateMutation = useUpdateAccountSettings({
-    mutation: {
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: getGetAccountSettingsQueryKey() });
-        Alert.alert("Saved", "Twilio Voice credentials saved.");
-        onClose();
-      },
-      onError: (err: unknown) => Alert.alert("Error", String(err)),
-    },
-  });
-
-  function handleClose() {
-    onClose();
-  }
-
-  function handleSave() {
-    const sid = apiKeySid.trim();
-    const secret = apiKeySecret.trim();
-    const appSid = twimlAppSid.trim();
-    if (!sid) { Alert.alert("Missing field", "API Key SID is required."); return; }
-    if (!sid.startsWith("SK")) { Alert.alert("Invalid", "API Key SID must start with 'SK'."); return; }
-    if (!secret) { Alert.alert("Missing field", "API Key Secret is required."); return; }
-    if (!appSid) { Alert.alert("Missing field", "TwiML App SID is required."); return; }
-    if (!appSid.startsWith("AP")) { Alert.alert("Invalid", "TwiML App SID must start with 'AP'."); return; }
-    updateMutation.mutate({
-      data: {
-        twilioApiKeySid: sid,
-        twilioApiKeySecret: secret,
-        twilioTwimlAppSid: appSid,
-      },
-    });
-  }
-
-  function handleDisconnect() {
-    Alert.alert(
-      "Remove Voice Credentials",
-      "This will disable in-app calling for all agents until you re-enter credentials.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Remove",
-          style: "destructive",
-          onPress: () => {
-            updateMutation.mutate({
-              data: {
-                twilioApiKeySid: null,
-                twilioApiKeySecret: null,
-                twilioTwimlAppSid: null,
-              },
-            });
-          },
-        },
-      ],
-    );
-  }
-
-  const apiBase = (() => {
-    const domain = process.env.EXPO_PUBLIC_DOMAIN;
-    return domain ? `https://${domain}/api` : `http://localhost:8080/api`;
-  })();
-  const outboundCallWebhook = `${apiBase}/webhooks/twilio/outbound-call`;
-  const [copiedUrl, setCopiedUrl] = useState(false);
-
-  function handleCopyWebhook() {
-    Clipboard.setStringAsync(outboundCallWebhook).then(() => {
-      setCopiedUrl(true);
-      setTimeout(() => setCopiedUrl(false), 1800);
-    });
-  }
-
-  const canSave =
-    apiKeySid.trim().length > 0 &&
-    apiKeySecret.trim().length > 0 &&
-    twimlAppSid.trim().length > 0;
-
-  return (
-    <Modal
-      visible={visible}
-      animationType={Platform.OS === "web" ? "fade" : "slide"}
-      presentationStyle={Platform.OS === "web" ? "overFullScreen" : "pageSheet"}
-      onRequestClose={handleClose}
-    >
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <View style={modalStyles.container}>
-          <View style={modalStyles.header}>
-            <Text style={modalStyles.title}>Twilio Voice Setup</Text>
-            <Pressable onPress={handleClose}>
-              <Feather name="x" size={22} color={Colors.dark.textSecondary} />
-            </Pressable>
-          </View>
-
-          <ScrollView style={modalStyles.body} keyboardShouldPersistTaps="handled">
-            <View style={integrationStyles.statusRow}>
-              <View style={[integrationStyles.statusDot, isVoiceConfigured && integrationStyles.statusDotActive]} />
-              <Text style={integrationStyles.statusText}>
-                {isVoiceConfigured ? "Voice enabled" : "Not configured"}
-              </Text>
+            <View style={voiceSetupStyles.sectionHeader}>
+              <Text style={voiceSetupStyles.sectionTitle}>Voice Calling</Text>
+              <View style={integrationStyles.statusRow}>
+                <View style={[integrationStyles.statusDot, isVoiceConfigured && integrationStyles.statusDotActive]} />
+                <Text style={integrationStyles.statusText}>
+                  {isVoiceConfigured ? "Enabled" : "Not configured"}
+                </Text>
+              </View>
             </View>
 
             {isVoiceConfigured && currentSettings?.twilioApiKeySid && (
@@ -966,34 +911,34 @@ function TwilioVoiceModal({
             <View style={voiceSetupStyles.stepBox}>
               <Text style={voiceSetupStyles.stepTitle}>How to set up in-app calling</Text>
               <Text style={voiceSetupStyles.stepItem}>
-                {"1."} In Twilio Console → Account → API Keys, create an API Key. Copy the SID and secret below.
+                {"1."} In Twilio Console → Account → API keys & tokens, create a Standard API Key. Copy the SID (SK...) and Secret below.
               </Text>
               <Text style={voiceSetupStyles.stepItem}>
-                {"2."} In Twilio Console → Voice → TwiML Apps, create a TwiML App. Set the Voice Request URL to the webhook below. Copy the TwiML App SID.
+                {"2."} In Twilio Console → Voice → TwiML Apps, create a TwiML App. Set the Voice Request URL to the outbound webhook below, then copy the App SID (AP...).
               </Text>
               <Text style={voiceSetupStyles.stepItem}>
-                {"3."} Enter all three values below and tap Save.
+                {"3."} Enter all three values below and tap Save Voice Settings.
               </Text>
             </View>
 
-            <Text style={[modalStyles.fieldLabel, { marginTop: 4 }]}>Outbound Call Webhook URL</Text>
-            <Pressable style={voiceSetupStyles.webhookBox} onPress={handleCopyWebhook}>
+            <Text style={[modalStyles.fieldLabel, { marginTop: 16 }]}>Outbound Call Webhook URL</Text>
+            <Text style={integrationStyles.hint}>
+              Paste this as the Voice Request URL in your TwiML App (Step 2 above).
+            </Text>
+            <Pressable style={voiceSetupStyles.webhookBox} onPress={handleCopyVoiceWebhook}>
               <Text style={voiceSetupStyles.webhookUrl} numberOfLines={1} ellipsizeMode="middle">
                 {outboundCallWebhook}
               </Text>
               <Feather
-                name={copiedUrl ? "check" : "copy"}
+                name={copiedVoiceUrl ? "check" : "copy"}
                 size={14}
-                color={copiedUrl ? Colors.brand.tealLight : Colors.dark.textSecondary}
+                color={copiedVoiceUrl ? Colors.brand.tealLight : Colors.dark.textSecondary}
               />
             </Pressable>
-            {copiedUrl && <Text style={voiceSetupStyles.copiedHint}>Copied!</Text>}
+            {copiedVoiceUrl && <Text style={voiceSetupStyles.copiedHint}>Copied!</Text>}
 
             <Text style={[modalStyles.fieldLabel, { marginTop: 20 }]}>
               {isVoiceConfigured ? "Update" : "Enter"} Voice Credentials
-            </Text>
-            <Text style={integrationStyles.hint}>
-              Create these in your Twilio Console (console.twilio.com)
             </Text>
 
             <Text style={modalStyles.fieldLabel}>API Key SID (starts with SK)</Text>
@@ -1030,28 +975,31 @@ function TwilioVoiceModal({
               autoCorrect={false}
             />
 
-            {isVoiceConfigured && (
-              <Pressable style={integrationStyles.disconnectBtn} onPress={handleDisconnect}>
-                <Feather name="trash-2" size={14} color="#FF6B6B" />
-                <Text style={integrationStyles.disconnectText}>Remove Voice Credentials</Text>
-              </Pressable>
-            )}
-          </ScrollView>
-
-          <View style={modalStyles.footer}>
-            <Pressable style={modalStyles.cancelBtn} onPress={handleClose}>
-              <Text style={modalStyles.cancelBtnText}>Cancel</Text>
-            </Pressable>
             <Pressable
-              style={[modalStyles.saveBtn, (!canSave || updateMutation.isPending) && modalStyles.saveBtnDisabled]}
-              onPress={handleSave}
-              disabled={!canSave || updateMutation.isPending}
+              style={[modalStyles.saveBtn, (!canSaveVoice || updateMutation.isPending) && modalStyles.saveBtnDisabled, voiceSetupStyles.saveVoiceBtn]}
+              onPress={handleSaveVoice}
+              disabled={!canSaveVoice || updateMutation.isPending}
             >
               {updateMutation.isPending ? (
                 <ActivityIndicator size="small" color="#fff" />
               ) : (
-                <Text style={modalStyles.saveBtnText}>Save Credentials</Text>
+                <Text style={modalStyles.saveBtnText}>Save Voice Settings</Text>
               )}
+            </Pressable>
+
+            {isVoiceConfigured && (
+              <Pressable style={integrationStyles.disconnectBtn} onPress={handleDisconnectVoice}>
+                <Feather name="trash-2" size={14} color="#FF6B6B" />
+                <Text style={integrationStyles.disconnectText}>Disconnect Voice</Text>
+              </Pressable>
+            )}
+
+            <View style={{ height: 8 }} />
+          </ScrollView>
+
+          <View style={modalStyles.footer}>
+            <Pressable style={[modalStyles.cancelBtn, { flex: 1 }]} onPress={handleClose}>
+              <Text style={modalStyles.cancelBtnText}>Done</Text>
             </Pressable>
           </View>
         </View>
@@ -1140,7 +1088,6 @@ export default function SettingsScreen() {
   const [showAddTwilioNumber, setShowAddTwilioNumber] = useState(false);
   const [showAddTeamMember, setShowAddTeamMember] = useState(false);
   const [showTwilioIntegration, setShowTwilioIntegration] = useState(false);
-  const [showTwilioVoice, setShowTwilioVoice] = useState(false);
   const [propertiesExpanded, setPropertiesExpanded] = useState(true);
   const [twilioExpanded, setTwilioExpanded] = useState(false);
   const [usersExpanded, setUsersExpanded] = useState(false);
@@ -1277,7 +1224,7 @@ export default function SettingsScreen() {
             </View>
             <View style={integrationStyles.integrationInfo}>
               <Text style={integrationStyles.integrationName}>Twilio</Text>
-              <Text style={integrationStyles.integrationDesc}>SMS & Voice — your account credentials</Text>
+              <Text style={integrationStyles.integrationDesc}>SMS & Voice — account credentials</Text>
             </View>
             <View style={[
               integrationStyles.integrationBadge,
@@ -1287,29 +1234,11 @@ export default function SettingsScreen() {
                 integrationStyles.integrationBadgeText,
                 accountSettingsData?.twilioConfigured && integrationStyles.integrationBadgeTextActive,
               ]}>
-                {accountSettingsData?.twilioConfigured ? "Connected" : "Not set"}
-              </Text>
-            </View>
-            <Feather name="chevron-right" size={16} color={Colors.dark.textMuted} />
-          </Pressable>
-
-          <Pressable style={integrationStyles.integrationCard} onPress={() => setShowTwilioVoice(true)}>
-            <View style={integrationStyles.integrationIconWrap}>
-              <Feather name="mic" size={16} color={Colors.brand.tealLight} />
-            </View>
-            <View style={integrationStyles.integrationInfo}>
-              <Text style={integrationStyles.integrationName}>Twilio Voice</Text>
-              <Text style={integrationStyles.integrationDesc}>In-app calling — API Key & TwiML App</Text>
-            </View>
-            <View style={[
-              integrationStyles.integrationBadge,
-              accountSettingsData?.twilioVoiceConfigured && integrationStyles.integrationBadgeActive,
-            ]}>
-              <Text style={[
-                integrationStyles.integrationBadgeText,
-                accountSettingsData?.twilioVoiceConfigured && integrationStyles.integrationBadgeTextActive,
-              ]}>
-                {accountSettingsData?.twilioVoiceConfigured ? "Enabled" : "Not set"}
+                {accountSettingsData?.twilioConfigured && accountSettingsData?.twilioVoiceConfigured
+                  ? "SMS + Voice"
+                  : accountSettingsData?.twilioConfigured
+                    ? "SMS only"
+                    : "Not set"}
               </Text>
             </View>
             <Feather name="chevron-right" size={16} color={Colors.dark.textMuted} />
@@ -1505,11 +1434,6 @@ export default function SettingsScreen() {
         currentSettings={accountSettingsData ?? null}
       />
 
-      <TwilioVoiceModal
-        visible={showTwilioVoice}
-        onClose={() => setShowTwilioVoice(false)}
-        currentSettings={accountSettingsData ?? null}
-      />
     </View>
   );
 }
@@ -2206,6 +2130,40 @@ const integrationStyles = StyleSheet.create({
 });
 
 const voiceSetupStyles = StyleSheet.create({
+  divider: {
+    height: 1,
+    backgroundColor: Colors.dark.border,
+    marginVertical: 24,
+  },
+  sectionHeader: {
+    gap: 6,
+    marginBottom: 4,
+  },
+  sectionTitle: {
+    fontSize: 13,
+    fontFamily: "Inter_700Bold",
+    color: Colors.dark.text,
+    textTransform: "uppercase",
+    letterSpacing: 0.6,
+  },
+  accountBtnRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginTop: 14,
+    flexWrap: "wrap",
+  },
+  inlineBtn: {
+    flex: 0,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+  },
+  saveVoiceBtn: {
+    alignSelf: "flex-start",
+    marginTop: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+  },
   stepBox: {
     marginTop: 12,
     padding: 14,
