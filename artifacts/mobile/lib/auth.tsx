@@ -21,18 +21,25 @@ interface AuthContextValue {
   isLoading: boolean;
   isAuthenticated: boolean;
   login: () => Promise<void>;
+  devLogin: () => Promise<void>;
   logout: () => Promise<void>;
 }
+
+const DEV_TOKEN_KEY = "dev_auth_token";
 
 const AuthContext = createContext<AuthContextValue>({
   user: null,
   isLoading: true,
   isAuthenticated: false,
   login: async () => {},
+  devLogin: async () => {},
   logout: async () => {},
 });
 
 function getApiBaseUrl(): string {
+  if (process.env.EXPO_PUBLIC_API_URL) {
+    return process.env.EXPO_PUBLIC_API_URL;
+  }
   if (process.env.EXPO_PUBLIC_DOMAIN) {
     return `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
   }
@@ -48,8 +55,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const apiBase = getApiBaseUrl();
 
       if (Platform.OS === "web") {
+        const devToken = typeof window !== "undefined" ? sessionStorage.getItem(DEV_TOKEN_KEY) : null;
+        const headers: Record<string, string> = devToken ? { Authorization: `Bearer ${devToken}` } : {};
         const res = await fetch(`${apiBase}/api/auth/user`, {
           credentials: "include",
+          headers,
         });
         const data = await res.json();
         setUser(data.user ?? null);
@@ -133,6 +143,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [fetchUser]);
 
+  const devLogin = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const apiBase = getApiBaseUrl();
+      const res = await fetch(`${apiBase}/api/auth/dev-login`, { method: "POST" });
+      const data = await res.json();
+      if (data.token) {
+        if (Platform.OS === "web") {
+          sessionStorage.setItem(DEV_TOKEN_KEY, data.token);
+        } else {
+          await storage.setItem(AUTH_TOKEN_KEY, data.token);
+        }
+        await fetchUser();
+      } else {
+        setIsLoading(false);
+      }
+    } catch (err) {
+      console.error("[Auth] Dev login error:", err);
+      setIsLoading(false);
+    }
+  }, [fetchUser]);
+
   const logout = useCallback(async () => {
     if (Platform.OS === "web") {
       const apiBase = getApiBaseUrl();
@@ -151,6 +183,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {
     } finally {
       await storage.deleteItem(AUTH_TOKEN_KEY);
+      if (typeof window !== "undefined") sessionStorage.removeItem(DEV_TOKEN_KEY);
       setUser(null);
     }
   }, []);
@@ -162,6 +195,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isLoading,
         isAuthenticated: !!user,
         login,
+        devLogin,
         logout,
       }}
     >

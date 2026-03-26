@@ -365,4 +365,32 @@ router.post("/mobile-auth/logout", async (req: Request, res: Response) => {
   res.json(LogoutMobileSessionResponse.parse({ success: true }));
 });
 
+// Dev-only bypass — creates a fixed local dev user without OIDC
+router.post("/auth/dev-login", async (req: Request, res: Response) => {
+  if (process.env.NODE_ENV !== "development") {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+  try {
+    const dbUser = await upsertUser({
+      sub: "dev-user-local",
+      email: "dev@localhost.dev",
+      first_name: "Dev",
+      last_name: "User",
+    });
+    const { accountId, role } = await ensureAccountForUser(dbUser.id, "Dev User");
+    const sessionData: SessionData = {
+      user: buildSessionUser(dbUser, accountId, role),
+      access_token: "dev-access-token",
+      expires_at: Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60,
+    };
+    const sid = await createSession(sessionData);
+    setSessionCookie(res, sid);
+    res.json({ token: sid });
+  } catch (err) {
+    req.log.error({ err }, "Dev login failed");
+    res.status(500).json({ error: "Dev login failed" });
+  }
+});
+
 export default router;

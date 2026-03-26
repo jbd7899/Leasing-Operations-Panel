@@ -50,7 +50,7 @@ function LoadingScreen() {
 }
 
 function LoginScreen() {
-  const { login, isLoading } = useAuth();
+  const { login, devLogin, isLoading } = useAuth();
   return (
     <View style={loginStyles.container}>
       <View style={loginStyles.logoRow}>
@@ -78,6 +78,16 @@ function LoginScreen() {
             <Text style={loginStyles.loginBtnText}>Sign in with Replit</Text>
           )}
         </Pressable>
+
+        {__DEV__ && (
+          <Pressable
+            style={[loginStyles.devBtn, isLoading && loginStyles.loginBtnDisabled]}
+            onPress={devLogin}
+            disabled={isLoading}
+          >
+            <Text style={loginStyles.devBtnText}>⚙ Dev Login (local only)</Text>
+          </Pressable>
+        )}
       </View>
 
       <Text style={loginStyles.footer}>MyRentCard · Powered by Replit</Text>
@@ -256,5 +266,19 @@ const loginStyles = StyleSheet.create({
     fontFamily: "Inter_400Regular",
     color: Colors.dark.textMuted,
     marginTop: 40,
+  },
+  devBtn: {
+    borderRadius: 14,
+    paddingVertical: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#334155",
+    borderStyle: "dashed",
+  },
+  devBtnText: {
+    fontSize: 13,
+    fontFamily: "Inter_500Medium",
+    color: Colors.dark.textMuted,
   },
 });

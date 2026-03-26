@@ -547,82 +547,71 @@ export default function ProspectDetailScreen() {
           )}
         </View>
 
-        {/* Interactions / Timeline */}
+        {/* Conversation Thread */}
         {(interactions ?? []).length > 0 && (
           <View style={styles.card}>
-            <SectionHeader title={`INTERACTIONS (${interactions!.length})`} />
-            {interactions!.map((interaction) => {
-              const isOptimistic = interaction.id.startsWith("optimistic-");
-              const isOutbound = interaction.direction === "outbound";
-              return (
-                <Pressable
-                  key={interaction.id}
-                  style={styles.interactionRow}
-                  onPress={() => {
-                    if (isOptimistic) return;
-                    router.push({
-                      pathname: "/interaction/[id]",
-                      params: { id: interaction.id, prospectId: id },
-                    });
-                  }}
-                >
-                  <View style={[
-                    styles.interactionIconWrap,
-                    isOutbound && styles.interactionIconWrapOutbound,
-                  ]}>
-                    <Feather
-                      name={
-                        isOutbound && interaction.sourceType === "call"
-                          ? "phone-call"
-                          : isOutbound
-                          ? "send"
-                          : interaction.sourceType === "sms"
-                          ? "message-square"
-                          : interaction.sourceType === "voicemail"
-                          ? "mic"
-                          : interaction.sourceType === "call"
-                          ? "phone-call"
-                          : "phone"
-                      }
-                      size={14}
-                      color={isOutbound ? "#A3E4D7" : Colors.brand.tealLight}
-                    />
-                  </View>
-                  <View style={styles.interactionContent}>
-                    <View style={styles.interactionTopRow}>
-                      <View style={styles.interactionBadgeRow}>
-                        <Badge label={interaction.sourceType} value={interaction.sourceType} />
-                        {isOutbound && (
-                          <View style={styles.outboundBadge}>
-                            <Text style={styles.outboundBadgeText}>
-                              {isOptimistic ? "Sending…" : interaction.sourceType === "call" ? "Called" : "Sent"}
-                            </Text>
-                          </View>
-                        )}
+            <SectionHeader title={`CONVERSATION (${interactions!.length})`} />
+            <View style={chatStyles.thread}>
+              {interactions!.map((interaction) => {
+                const isOptimistic = interaction.id.startsWith("optimistic-");
+                const isOutbound = interaction.direction === "outbound";
+                const isCall = interaction.sourceType === "call" || interaction.sourceType === "voicemail";
+                const messageText = interaction.summary ?? interaction.rawText ?? interaction.transcript;
+                const timeLabel = new Date(interaction.occurredAt).toLocaleDateString("en-US", {
+                  month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
+                });
+
+                if (isCall) {
+                  return (
+                    <Pressable
+                      key={interaction.id}
+                      style={chatStyles.callRow}
+                      onPress={() => {
+                        if (!isOptimistic) router.push({ pathname: "/interaction/[id]", params: { id: interaction.id, prospectId: id } });
+                      }}
+                    >
+                      <View style={chatStyles.callPill}>
+                        <Feather
+                          name={interaction.sourceType === "voicemail" ? "mic" : isOutbound ? "phone-outgoing" : "phone-incoming"}
+                          size={11}
+                          color={Colors.dark.textMuted}
+                        />
+                        <Text style={chatStyles.callText}>
+                          {interaction.sourceType === "voicemail" ? "Voicemail" : isOutbound ? "Outgoing call" : "Incoming call"}
+                          {" · "}{timeLabel}
+                        </Text>
                       </View>
-                      <Text style={styles.interactionTime}>
-                        {new Date(interaction.occurredAt).toLocaleDateString("en-US", {
-                          month: "short",
-                          day: "numeric",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
+                      {messageText && <Text style={chatStyles.callSummary}>{messageText}</Text>}
+                    </Pressable>
+                  );
+                }
+
+                return (
+                  <Pressable
+                    key={interaction.id}
+                    style={[chatStyles.bubbleRow, isOutbound ? chatStyles.bubbleRowOutbound : chatStyles.bubbleRowInbound]}
+                    onPress={() => {
+                      if (!isOptimistic) router.push({ pathname: "/interaction/[id]", params: { id: interaction.id, prospectId: id } });
+                    }}
+                  >
+                    <View style={[chatStyles.bubble, isOutbound ? chatStyles.bubbleOutbound : chatStyles.bubbleInbound]}>
+                      {messageText ? (
+                        <Text style={[chatStyles.bubbleText, isOptimistic && chatStyles.bubbleTextOptimistic]}>
+                          {messageText}
+                        </Text>
+                      ) : (
+                        <Text style={chatStyles.bubbleTextEmpty}>
+                          {isOptimistic ? "Sending…" : "(no content)"}
+                        </Text>
+                      )}
+                      <Text style={[chatStyles.bubbleTime, isOutbound ? chatStyles.bubbleTimeOutbound : chatStyles.bubbleTimeInbound]}>
+                        {timeLabel}{isOptimistic ? " · Sending…" : ""}
                       </Text>
                     </View>
-                    {(interaction.summary ?? interaction.rawText ?? interaction.transcript) && (
-                      <Text style={[styles.interactionText, isOptimistic && styles.interactionTextOptimistic]}>
-                        {interaction.summary ?? interaction.rawText ?? interaction.transcript}
-                      </Text>
-                    )}
-                    {interaction.category && !isOutbound && (
-                      <Text style={styles.interactionCategory}>
-                        {interaction.category.replace(/_/g, " ")}
-                      </Text>
-                    )}
-                  </View>
-                </Pressable>
-              );
-            })}
+                  </Pressable>
+                );
+              })}
+            </View>
           </View>
         )}
 
@@ -990,72 +979,6 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_400Regular",
     color: Colors.brand.tealLight,
     lineHeight: 18,
-  },
-  interactionRow: {
-    flexDirection: "row",
-    gap: 10,
-    paddingVertical: 8,
-    borderTopWidth: 1,
-    borderTopColor: Colors.dark.border,
-  },
-  interactionIconWrap: {
-    width: 30,
-    height: 30,
-    borderRadius: 8,
-    backgroundColor: "#0D2A2A",
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: 2,
-  },
-  interactionIconWrapOutbound: {
-    backgroundColor: "#0A2030",
-  },
-  interactionBadgeRow: {
-    flexDirection: "row",
-    gap: 6,
-    alignItems: "center",
-  },
-  outboundBadge: {
-    backgroundColor: "#0A2030",
-    borderRadius: 6,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderWidth: 1,
-    borderColor: "#3A7BD5",
-  },
-  outboundBadgeText: {
-    fontSize: 10,
-    fontFamily: "Inter_600SemiBold",
-    color: "#7AB8F5",
-  },
-  interactionContent: {
-    flex: 1,
-    gap: 4,
-  },
-  interactionTopRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  interactionTime: {
-    fontSize: 11,
-    fontFamily: "Inter_400Regular",
-    color: Colors.dark.textMuted,
-  },
-  interactionText: {
-    fontSize: 13,
-    fontFamily: "Inter_400Regular",
-    color: Colors.dark.textSecondary,
-    lineHeight: 18,
-  },
-  interactionTextOptimistic: {
-    opacity: 0.6,
-  },
-  interactionCategory: {
-    fontSize: 11,
-    fontFamily: "Inter_400Regular",
-    color: Colors.dark.textMuted,
-    textTransform: "capitalize",
   },
   tagsRow: {
     flexDirection: "row",
@@ -1510,5 +1433,94 @@ const conflictStyles = StyleSheet.create({
   loadingIndicator: {
     alignSelf: "center",
     marginTop: 4,
+  },
+});
+
+const chatStyles = StyleSheet.create({
+  thread: {
+    gap: 6,
+  },
+  bubbleRow: {
+    flexDirection: "row",
+  },
+  bubbleRowInbound: {
+    justifyContent: "flex-start",
+  },
+  bubbleRowOutbound: {
+    justifyContent: "flex-end",
+  },
+  bubble: {
+    maxWidth: "80%",
+    borderRadius: 16,
+    paddingHorizontal: 13,
+    paddingVertical: 9,
+    gap: 4,
+  },
+  bubbleInbound: {
+    backgroundColor: "#0D2A2A",
+    borderWidth: 1,
+    borderColor: Colors.brand.teal + "66",
+    borderBottomLeftRadius: 4,
+  },
+  bubbleOutbound: {
+    backgroundColor: "#101828",
+    borderWidth: 1,
+    borderColor: "#334155",
+    borderBottomRightRadius: 4,
+  },
+  bubbleText: {
+    fontSize: 14,
+    fontFamily: "Inter_400Regular",
+    color: Colors.dark.text,
+    lineHeight: 20,
+  },
+  bubbleTextOptimistic: {
+    opacity: 0.6,
+  },
+  bubbleTextEmpty: {
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+    color: Colors.dark.textMuted,
+    fontStyle: "italic",
+  },
+  bubbleTime: {
+    fontSize: 10,
+    fontFamily: "Inter_400Regular",
+  },
+  bubbleTimeInbound: {
+    color: Colors.dark.textMuted,
+  },
+  bubbleTimeOutbound: {
+    color: Colors.dark.textMuted,
+    textAlign: "right",
+  },
+  callRow: {
+    alignItems: "center",
+    gap: 4,
+    paddingVertical: 2,
+  },
+  callPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: Colors.dark.bgElevated,
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: Colors.dark.border,
+  },
+  callText: {
+    fontSize: 11,
+    fontFamily: "Inter_400Regular",
+    color: Colors.dark.textMuted,
+  },
+  callSummary: {
+    fontSize: 12,
+    fontFamily: "Inter_400Regular",
+    color: Colors.dark.textSecondary,
+    textAlign: "center",
+    paddingHorizontal: 16,
+    lineHeight: 17,
   },
 });

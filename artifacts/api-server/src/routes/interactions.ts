@@ -3,10 +3,11 @@ import { db, interactionsTable, prospectsTable, propertiesTable, twilioNumbersTa
 import { eq, and, desc } from "drizzle-orm";
 import { logger } from "../lib/logger";
 import { processInteraction } from "../lib/processInteraction";
+import { computeCompletenessScore, getMissingFields } from "../lib/completenessScore";
 import { logEvent } from "../lib/logEvent";
 import { normalizePhoneE164, findOrCreateProspectShell } from "../lib/prospectShell";
 import { getTwilioClientForAccount } from "./settings";
-import { openai } from "@workspace/integrations-openai-ai-server";
+import { anthropic } from "@workspace/integrations-openai-ai-server";
 
 const router: IRouter = Router();
 
@@ -375,7 +376,7 @@ router.post("/interactions/ai-draft", async (req: Request, res: Response) => {
   }
 
   const recentInbound = await db
-    .select({ rawText: interactionsTable.rawText, sourceType: interactionsTable.sourceType })
+    .select({ rawText: interactionsTable.rawText, sourceType: interactionsTable.sourceType, occurredAt: interactionsTable.occurredAt })
     .from(interactionsTable)
     .where(
       and(
@@ -385,7 +386,7 @@ router.post("/interactions/ai-draft", async (req: Request, res: Response) => {
       ),
     )
     .orderBy(desc(interactionsTable.occurredAt))
-    .limit(3);
+    .limit(10);
 
   const lastMessage = recentInbound[0]?.rawText ?? null;
 
@@ -394,31 +395,51 @@ router.post("/interactions/ai-draft", async (req: Request, res: Response) => {
     return;
   }
 
+  const completeness = computeCompletenessScore(prospect);
+  const missingFields = getMissingFields(prospect);
+
+  const conversationHistory = recentInbound
+    .slice()
+    .reverse()
+    .map((i) => `[${new Date(i.occurredAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}] Prospect: ${i.rawText}`)
+    .join("\n");
+
   const prospectContext = [
-    prospect.fullName ? `Prospect name: ${prospect.fullName}` : null,
+    prospect.fullName ? `Name: ${prospect.fullName}` : null,
     prospect.desiredBedrooms ? `Bedrooms desired: ${prospect.desiredBedrooms}` : null,
     prospect.desiredMoveInDate ? `Move-in date: ${prospect.desiredMoveInDate}` : null,
-    prospect.budgetMax ? `Budget: up to $${prospect.budgetMax}/mo` : null,
+    prospect.budgetMax ? `Budget: up to $${prospect.budgetMax}/mo` : prospect.budgetMin ? `Budget: from $${prospect.budgetMin}/mo` : null,
+    prospect.pets ? `Pets: ${prospect.pets}` : null,
+    prospect.voucherType ? `Voucher: ${prospect.voucherType}` : null,
+    prospect.employmentStatus ? `Employment: ${prospect.employmentStatus}` : null,
     prospect.latestSummary ? `Summary: ${prospect.latestSummary}` : null,
+    `Profile completeness: ${completeness}%`,
+    missingFields.length > 0 ? `Missing info: ${missingFields.join(", ")}` : null,
   ]
     .filter(Boolean)
     .join("\n");
 
-  const systemPrompt = `You are a helpful leasing agent assistant. Draft a short, professional, and friendly SMS reply to a prospective renter. The reply should directly address their most recent message. Keep it concise (2-4 sentences). Do not use formal salutations or signatures. Respond with only the SMS text — no explanation, no quotes.`;
+  const systemPrompt = `You are a helpful leasing agent assistant. Draft a short, professional, and friendly SMS reply to a prospective renter.
 
-  const userPrompt = `${prospectContext ? `Prospect context:\n${prospectContext}\n\n` : ""}Most recent message from prospect:\n"${lastMessage}"`;
+Rules:
+- Address the prospect's most recent message directly
+- Keep it concise (2-4 sentences)
+- No formal salutations or signatures
+- Respond with ONLY the SMS text — no explanation, no quotes
+- If the profile completeness is below 60% and it fits naturally, ask for one missing piece of info (but don't make the message feel like a form)
+- If the prospect has a language preference other than English, reply in that language`;
+
+  const userPrompt = `Prospect context:\n${prospectContext}\n\nConversation history:\n${conversationHistory}\n\nLatest message to reply to:\n"${lastMessage}"`;
 
   try {
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      max_completion_tokens: 300,
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
-      ],
+    const response = await anthropic.messages.create({
+      model: "claude-opus-4-6",
+      max_tokens: 300,
+      system: systemPrompt,
+      messages: [{ role: "user", content: userPrompt }],
     });
 
-    const draft = response.choices[0]?.message?.content?.trim() ?? "";
+    const draft = response.content.find((b) => b.type === "text")?.text?.trim() ?? "";
     res.json({ draft });
   } catch (err) {
     logger.error({ err, prospectId }, "Failed to generate AI draft reply");
