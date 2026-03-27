@@ -23,10 +23,12 @@ import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
+import { useTheme } from "@/contexts/ThemeContext";
 import { ProspectCard } from "@/components/ui/ProspectCard";
 import { SkeletonLoader } from "@/components/ui/SkeletonLoader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SearchBar } from "@/components/ui/SearchBar";
+import { FilterChip } from "@/components/ui/FilterChip";
 import type { Prospect } from "@workspace/api-client-react";
 
 const STATUS_FILTERS = [
@@ -38,6 +40,7 @@ const STATUS_FILTERS = [
 ];
 
 export default function ProspectsScreen() {
+  const { theme } = useTheme();
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
@@ -155,18 +158,18 @@ export default function ProspectsScreen() {
   }, [selectedIds, updateProspect, queryClient, clearSelection, isWeb]);
 
   return (
-    <View style={[styles.container, { paddingTop: topPad }]}>
+    <View style={[styles.container, { paddingTop: topPad, backgroundColor: theme.bg }]}>
       <View style={styles.header}>
         <View>
-          <Text style={styles.screenTitle}>Prospects</Text>
-          <Text style={styles.screenSubtitle}>
+          <Text style={[styles.screenTitle, { color: theme.text }]}>Prospects</Text>
+          <Text style={[styles.screenSubtitle, { color: theme.textMuted }]}>
             {data ? `${data.total} total` : "Loading..."}
           </Text>
         </View>
 
         {isSelecting ? (
           <View style={styles.selectionActions}>
-            <Pressable style={styles.actionBtn} onPress={handleSelectAll}>
+            <Pressable style={[styles.actionBtn, { backgroundColor: theme.bgCard, borderColor: theme.border }]} onPress={handleSelectAll}>
               <Feather
                 name={selectedIds.size === prospects.length ? "check-square" : "square"}
                 size={18}
@@ -174,7 +177,7 @@ export default function ProspectsScreen() {
               />
             </Pressable>
             <Pressable
-              style={[styles.actionBtn, styles.queueBtn]}
+              style={[styles.actionBtn, { backgroundColor: theme.bgCard, borderColor: theme.border }, styles.queueBtn]}
               onPress={handleQueueExport}
               disabled={isQueuing}
             >
@@ -188,16 +191,16 @@ export default function ProspectsScreen() {
               <Feather name="upload" size={16} color="#fff" />
               <Text style={styles.exportBtnText}>{selectedIds.size}</Text>
             </Pressable>
-            <Pressable style={styles.actionBtn} onPress={clearSelection}>
-              <Feather name="x" size={18} color={Colors.dark.textSecondary} />
+            <Pressable style={[styles.actionBtn, { backgroundColor: theme.bgCard, borderColor: theme.border }]} onPress={clearSelection}>
+              <Feather name="x" size={18} color={theme.textSecondary} />
             </Pressable>
           </View>
         ) : (
-          <Pressable style={styles.refreshBtn} onPress={() => refetch()} disabled={isFetching}>
+          <Pressable style={[styles.refreshBtn, { backgroundColor: theme.bgCard, borderColor: theme.border }]} onPress={() => refetch()} disabled={isFetching}>
             <Feather
               name="refresh-cw"
               size={18}
-              color={isFetching ? Colors.dark.textMuted : Colors.brand.tealLight}
+              color={isFetching ? theme.textMuted : Colors.brand.tealLight}
             />
           </Pressable>
         )}
@@ -248,17 +251,13 @@ export default function ProspectsScreen() {
 
       <View style={styles.filterRow}>
         {STATUS_FILTERS.map((f) => (
-          <Pressable
+          <FilterChip
             key={f.value}
+            label={f.label}
+            active={statusFilter === f.value}
             onPress={() => setStatusFilter(f.value)}
-            style={[styles.filterChip, statusFilter === f.value && styles.filterChipActive]}
-          >
-            <Text
-              style={[styles.filterLabel, statusFilter === f.value && styles.filterLabelActive]}
-            >
-              {f.label}
-            </Text>
-          </Pressable>
+            variant="subtle"
+          />
         ))}
       </View>
 
@@ -431,26 +430,6 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingHorizontal: 16,
     paddingBottom: 12,
-  },
-  filterChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    backgroundColor: Colors.dark.bgCard,
-    borderWidth: 1,
-    borderColor: Colors.dark.border,
-  },
-  filterChipActive: {
-    backgroundColor: "#0D2A2A",
-    borderColor: Colors.brand.tealLight,
-  },
-  filterLabel: {
-    fontSize: 13,
-    fontFamily: "Inter_500Medium",
-    color: Colors.dark.textSecondary,
-  },
-  filterLabelActive: {
-    color: Colors.brand.tealLight,
   },
   listContent: {
     paddingHorizontal: 16,

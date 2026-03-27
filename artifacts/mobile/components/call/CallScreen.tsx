@@ -10,6 +10,7 @@ import {
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
+import { useTheme } from "@/contexts/ThemeContext";
 import { useTwilioCall } from "@/contexts/TwilioCallContext";
 import type { CallState } from "@/contexts/TwilioCallContext";
 
@@ -30,6 +31,7 @@ function callStateLabel(state: CallState): string {
 }
 
 export function CallScreen() {
+  const { theme, isDark } = useTheme();
   const { activeCall, hangUp, toggleMute, toggleSpeaker } = useTwilioCall();
 
   useEffect(() => {
@@ -50,10 +52,10 @@ export function CallScreen() {
       presentationStyle="fullScreen"
       statusBarTranslucent
     >
-      <StatusBar barStyle="light-content" backgroundColor={styles.container.backgroundColor} />
+      <StatusBar barStyle="light-content" backgroundColor="#071A1A" />
       <View style={styles.container}>
         <View style={styles.topSection}>
-          <View style={styles.avatarContainer}>
+          <View style={[styles.avatarContainer, { backgroundColor: theme.activeBg }]}>
             <Text style={styles.avatarText}>
               {activeCall.prospectName
                 .split(" ")
@@ -64,8 +66,8 @@ export function CallScreen() {
             </Text>
           </View>
 
-          <Text style={styles.name}>{activeCall.prospectName}</Text>
-          <Text style={styles.phone}>{activeCall.prospectPhone}</Text>
+          <Text style={[styles.name, { color: theme.text }]}>{activeCall.prospectName}</Text>
+          <Text style={[styles.phone, { color: theme.textMuted }]}>{activeCall.prospectPhone}</Text>
 
           <View style={styles.statusRow}>
             {isConnecting && (
@@ -75,14 +77,14 @@ export function CallScreen() {
           </View>
 
           {isConnected && (
-            <Text style={styles.timer}>{formatElapsed(activeCall.elapsedSeconds)}</Text>
+            <Text style={[styles.timer, { color: theme.text }]}>{formatElapsed(activeCall.elapsedSeconds)}</Text>
           )}
         </View>
 
         <View style={styles.controlsSection}>
           <View style={styles.controlRow}>
             <Pressable
-              style={[styles.controlBtn, activeCall.isMuted && styles.controlBtnActive]}
+              style={[styles.controlBtn, { backgroundColor: theme.activeBg }, activeCall.isMuted && styles.controlBtnActive]}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 toggleMute();
@@ -92,15 +94,15 @@ export function CallScreen() {
               <Feather
                 name={activeCall.isMuted ? "mic-off" : "mic"}
                 size={24}
-                color={activeCall.isMuted ? Colors.dark.bg : Colors.dark.text}
+                color={activeCall.isMuted ? theme.bg : theme.text}
               />
-              <Text style={[styles.controlLabel, activeCall.isMuted && styles.controlLabelActive]}>
+              <Text style={[styles.controlLabel, { color: theme.textMuted }, activeCall.isMuted && styles.controlLabelActive]}>
                 {activeCall.isMuted ? "Unmute" : "Mute"}
               </Text>
             </Pressable>
 
             <Pressable
-              style={[styles.controlBtn, activeCall.isSpeakerOn && styles.controlBtnActive]}
+              style={[styles.controlBtn, { backgroundColor: theme.activeBg }, activeCall.isSpeakerOn && styles.controlBtnActive]}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 toggleSpeaker();
@@ -110,9 +112,9 @@ export function CallScreen() {
               <Feather
                 name="volume-2"
                 size={24}
-                color={activeCall.isSpeakerOn ? Colors.dark.bg : Colors.dark.text}
+                color={activeCall.isSpeakerOn ? theme.bg : theme.text}
               />
-              <Text style={[styles.controlLabel, activeCall.isSpeakerOn && styles.controlLabelActive]}>
+              <Text style={[styles.controlLabel, { color: theme.textMuted }, activeCall.isSpeakerOn && styles.controlLabelActive]}>
                 Speaker
               </Text>
             </Pressable>
@@ -129,7 +131,7 @@ export function CallScreen() {
           </Pressable>
 
           {isConnected && (
-            <Text style={styles.transcriptHint}>
+            <Text style={[styles.transcriptHint, { color: theme.textMuted }]}>
               Call is being recorded. A transcript will be available after the call ends.
             </Text>
           )}
@@ -157,7 +159,6 @@ const styles = StyleSheet.create({
     width: 100,
     height: 100,
     borderRadius: 50,
-    backgroundColor: "#0D2A2A",
     borderWidth: 2,
     borderColor: Colors.brand.teal,
     alignItems: "center",
@@ -172,13 +173,11 @@ const styles = StyleSheet.create({
   name: {
     fontSize: 28,
     fontFamily: "Inter_700Bold",
-    color: Colors.dark.text,
     textAlign: "center",
   },
   phone: {
     fontSize: 16,
     fontFamily: "Inter_400Regular",
-    color: Colors.dark.textMuted,
   },
   statusRow: {
     flexDirection: "row",
@@ -201,7 +200,6 @@ const styles = StyleSheet.create({
   timer: {
     fontSize: 32,
     fontFamily: "Inter_400Regular",
-    color: Colors.dark.text,
     letterSpacing: 2,
     marginTop: 8,
   },
@@ -221,7 +219,6 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: "#0D2A2A",
     borderWidth: 1,
     borderColor: "#164444",
     justifyContent: "center",
@@ -233,7 +230,6 @@ const styles = StyleSheet.create({
   controlLabel: {
     fontSize: 12,
     fontFamily: "Inter_500Medium",
-    color: Colors.dark.textMuted,
     position: "absolute",
     bottom: -22,
     width: 80,
@@ -258,7 +254,6 @@ const styles = StyleSheet.create({
   transcriptHint: {
     fontSize: 12,
     fontFamily: "Inter_400Regular",
-    color: Colors.dark.textMuted,
     textAlign: "center",
     lineHeight: 18,
     paddingHorizontal: 16,

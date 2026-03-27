@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useFocusEffect } from "expo-router";
 import Colors from "@/constants/colors";
+import { useTheme } from "@/contexts/ThemeContext";
 import { api } from "@/lib/api";
 
 const OBSERVATION_TYPES = [
@@ -54,6 +55,7 @@ interface ObservationsData {
 }
 
 function ObservationTypeBadge({ type }: { type: string }) {
+  const { theme } = useTheme();
   const colors: Record<string, string> = {
     workflow_friction: "#F59E0B",
     product_idea: Colors.brand.tealLight,
@@ -63,7 +65,7 @@ function ObservationTypeBadge({ type }: { type: string }) {
     customer_value_signal: Colors.brand.accent,
     future_sales_claim: "#10B981",
   };
-  const color = colors[type] ?? Colors.dark.textMuted;
+  const color = colors[type] ?? theme.textMuted;
   const label = OBSERVATION_TYPES.find((t) => t.value === type)?.label ?? type;
   return (
     <View style={[styles.typeBadge, { borderColor: color }]}>
@@ -81,6 +83,7 @@ function AddObservationModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const { theme } = useTheme();
   const [type, setType] = useState("workflow_friction");
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
@@ -112,47 +115,47 @@ function AddObservationModal({
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-      <View style={styles.modalRoot}>
-        <View style={styles.modalHeader}>
-          <Text style={styles.modalTitle}>Add Observation</Text>
+      <View style={[styles.modalRoot, { backgroundColor: theme.bg }]}>
+        <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}>
+          <Text style={[styles.modalTitle, { color: theme.text }]}>Add Observation</Text>
           <Pressable onPress={onClose}>
-            <Feather name="x" size={22} color={Colors.dark.textSecondary} />
+            <Feather name="x" size={22} color={theme.textSecondary} />
           </Pressable>
         </View>
 
         <ScrollView style={styles.modalScroll} contentContainerStyle={styles.modalScrollContent}>
-          <Text style={styles.fieldLabel}>Type</Text>
+          <Text style={[styles.fieldLabel, { color: theme.textMuted }]}>Type</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.typeRow}>
             {OBSERVATION_TYPES.map((t) => (
               <Pressable
                 key={t.value}
-                style={[styles.typeChip, type === t.value && styles.typeChipActive]}
+                style={[styles.typeChip, { borderColor: theme.border, backgroundColor: theme.bgCard }, type === t.value && styles.typeChipActive]}
                 onPress={() => setType(t.value)}
               >
-                <Text style={[styles.typeChipText, type === t.value && styles.typeChipTextActive]}>
+                <Text style={[styles.typeChipText, { color: theme.textSecondary }, type === t.value && styles.typeChipTextActive]}>
                   {t.label}
                 </Text>
               </Pressable>
             ))}
           </ScrollView>
 
-          <Text style={styles.fieldLabel}>Title</Text>
+          <Text style={[styles.fieldLabel, { color: theme.textMuted }]}>Title</Text>
           <TextInput
-            style={styles.textInput}
+            style={[styles.textInput, { backgroundColor: theme.bgCard, borderColor: theme.border, color: theme.text }]}
             value={title}
             onChangeText={setTitle}
             placeholder="Brief title…"
-            placeholderTextColor={Colors.dark.textMuted}
+            placeholderTextColor={theme.textMuted}
             maxLength={255}
           />
 
-          <Text style={styles.fieldLabel}>Body</Text>
+          <Text style={[styles.fieldLabel, { color: theme.textMuted }]}>Body</Text>
           <TextInput
-            style={[styles.textInput, styles.textArea]}
+            style={[styles.textInput, styles.textArea, { backgroundColor: theme.bgCard, borderColor: theme.border, color: theme.text }]}
             value={body}
             onChangeText={setBody}
             placeholder="Describe the observation in detail…"
-            placeholderTextColor={Colors.dark.textMuted}
+            placeholderTextColor={theme.textMuted}
             multiline
             numberOfLines={6}
             textAlignVertical="top"
@@ -184,6 +187,7 @@ function WeeklyReflectionModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const { theme } = useTheme();
   const [step, setStep] = useState(0);
   const [answers, setAnswers] = useState<string[]>(new Array(WEEKLY_REFLECTION_PROMPTS.length).fill(""));
   const [saving, setSaving] = useState(false);
@@ -246,11 +250,11 @@ function WeeklyReflectionModal({
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-      <View style={styles.modalRoot}>
-        <View style={styles.modalHeader}>
-          <Text style={styles.modalTitle}>Weekly Reflection</Text>
+      <View style={[styles.modalRoot, { backgroundColor: theme.bg }]}>
+        <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}>
+          <Text style={[styles.modalTitle, { color: theme.text }]}>Weekly Reflection</Text>
           <Pressable onPress={onClose}>
-            <Feather name="x" size={22} color={Colors.dark.textSecondary} />
+            <Feather name="x" size={22} color={theme.textSecondary} />
           </Pressable>
         </View>
 
@@ -258,29 +262,29 @@ function WeeklyReflectionModal({
           {WEEKLY_REFLECTION_PROMPTS.map((_, i) => (
             <View
               key={i}
-              style={[styles.progressDot, i <= step && styles.progressDotActive]}
+              style={[styles.progressDot, { backgroundColor: theme.border }, i <= step && styles.progressDotActive]}
             />
           ))}
         </View>
 
         <View style={styles.reflectionContent}>
-          <Text style={styles.reflectionStep}>Question {step + 1} of {WEEKLY_REFLECTION_PROMPTS.length}</Text>
-          <Text style={styles.reflectionPrompt}>{WEEKLY_REFLECTION_PROMPTS[step]}</Text>
+          <Text style={[styles.reflectionStep, { color: theme.textMuted }]}>Question {step + 1} of {WEEKLY_REFLECTION_PROMPTS.length}</Text>
+          <Text style={[styles.reflectionPrompt, { color: theme.text }]}>{WEEKLY_REFLECTION_PROMPTS[step]}</Text>
           <TextInput
-            style={[styles.textInput, styles.textArea, { marginTop: 16 }]}
+            style={[styles.textInput, styles.textArea, { marginTop: 16, backgroundColor: theme.bgCard, borderColor: theme.border, color: theme.text }]}
             value={answers[step]}
             onChangeText={updateAnswer}
             placeholder="Write your answer here…"
-            placeholderTextColor={Colors.dark.textMuted}
+            placeholderTextColor={theme.textMuted}
             multiline
             numberOfLines={8}
             textAlignVertical="top"
           />
         </View>
 
-        <View style={styles.reflectionFooter}>
-          <Pressable style={[styles.reflectionBtn, styles.reflectionBtnSecondary]} onPress={handleBack} disabled={step === 0}>
-            <Text style={[styles.reflectionBtnText, step === 0 && { opacity: 0.3 }]}>Back</Text>
+        <View style={[styles.reflectionFooter, { borderTopColor: theme.border }]}>
+          <Pressable style={[styles.reflectionBtn, styles.reflectionBtnSecondary, { backgroundColor: theme.bgCard, borderColor: theme.border }]} onPress={handleBack} disabled={step === 0}>
+            <Text style={[styles.reflectionBtnText, { color: theme.textSecondary }, step === 0 && { opacity: 0.3 }]}>Back</Text>
           </Pressable>
           {isLast ? (
             <Pressable style={[styles.reflectionBtn, styles.reflectionBtnPrimary, saving && styles.saveBtnDisabled]} onPress={handleFinish} disabled={saving}>
@@ -298,6 +302,7 @@ function WeeklyReflectionModal({
 }
 
 export default function FounderScreen() {
+  const { theme, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const [data, setData] = useState<ObservationsData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -364,11 +369,11 @@ export default function FounderScreen() {
   const aiPerfDetail = aiPerfData as Record<string, unknown> | undefined;
 
   return (
-    <View style={[styles.root, { paddingTop: insets.top }]}>
-      <View style={styles.headerRow}>
+    <View style={[styles.root, { paddingTop: insets.top, backgroundColor: theme.bg }]}>
+      <View style={[styles.headerRow, { borderBottomColor: theme.border }]}>
         <View>
-          <Text style={styles.screenTitle}>Founder</Text>
-          <Text style={styles.screenSub}>Internal analytics & notes</Text>
+          <Text style={[styles.screenTitle, { color: theme.text }]}>Founder</Text>
+          <Text style={[styles.screenSub, { color: theme.textMuted }]}>Internal analytics & notes</Text>
         </View>
         <View style={styles.headerActions}>
           <Pressable style={styles.actionBtn} onPress={() => setShowReflectionModal(true)}>
@@ -382,18 +387,18 @@ export default function FounderScreen() {
         </View>
       </View>
 
-      <View style={styles.tabRow}>
+      <View style={[styles.tabRow, { borderBottomColor: theme.border }]}>
         <Pressable
-          style={[styles.tab, activeTab === "notes" && styles.tabActive]}
+          style={[styles.tab, activeTab === "notes" && [styles.tabActive, { backgroundColor: theme.bgCard, borderColor: theme.border }]]}
           onPress={() => setActiveTab("notes")}
         >
-          <Text style={[styles.tabText, activeTab === "notes" && styles.tabTextActive]}>Observations</Text>
+          <Text style={[styles.tabText, { color: theme.textSecondary }, activeTab === "notes" && [styles.tabTextActive, { color: theme.text }]]}>Observations</Text>
         </Pressable>
         <Pressable
-          style={[styles.tab, activeTab === "analytics" && styles.tabActive]}
+          style={[styles.tab, activeTab === "analytics" && [styles.tabActive, { backgroundColor: theme.bgCard, borderColor: theme.border }]]}
           onPress={() => setActiveTab("analytics")}
         >
-          <Text style={[styles.tabText, activeTab === "analytics" && styles.tabTextActive]}>Analytics</Text>
+          <Text style={[styles.tabText, { color: theme.textSecondary }, activeTab === "analytics" && [styles.tabTextActive, { color: theme.text }]]}>Analytics</Text>
         </Pressable>
       </View>
 
@@ -422,38 +427,38 @@ export default function FounderScreen() {
               <>
                 {data.recurringTypes.length > 0 && (
                   <View style={styles.section}>
-                    <Text style={styles.sectionHeader}>Recurring Issues</Text>
-                    <View style={styles.card}>
+                    <Text style={[styles.sectionHeader, { color: theme.textMuted }]}>Recurring Issues</Text>
+                    <View style={[styles.card, { backgroundColor: theme.bgCard, borderColor: theme.border }]}>
                       {data.recurringTypes.map((t) => (
                         <View key={t.type} style={styles.recurringRow}>
                           <ObservationTypeBadge type={t.type} />
-                          <Text style={styles.recurringCount}>{t.count}x</Text>
+                          <Text style={[styles.recurringCount, { color: theme.textSecondary }]}>{t.count}x</Text>
                         </View>
                       ))}
                     </View>
                   </View>
                 )}
 
-                <Text style={styles.sectionHeader}>Latest Observations</Text>
+                <Text style={[styles.sectionHeader, { color: theme.textMuted }]}>Latest Observations</Text>
                 {data.observations.length === 0 ? (
                   <View style={styles.emptyState}>
-                    <Feather name="clipboard" size={32} color={Colors.dark.textMuted} />
-                    <Text style={styles.emptyTitle}>No observations yet</Text>
-                    <Text style={styles.emptySubtext}>
+                    <Feather name="clipboard" size={32} color={theme.textMuted} />
+                    <Text style={[styles.emptyTitle, { color: theme.text }]}>No observations yet</Text>
+                    <Text style={[styles.emptySubtext, { color: theme.textSecondary }]}>
                       Tap "Note" to capture friction, ideas, or product signals as you use the app.
                     </Text>
                   </View>
                 ) : (
                   data.observations.map((obs) => (
-                    <View key={obs.id} style={styles.observationCard}>
+                    <View key={obs.id} style={[styles.observationCard, { backgroundColor: theme.bgCard, borderColor: theme.border }]}>
                       <View style={styles.observationHeader}>
                         <ObservationTypeBadge type={obs.observationType} />
-                        <Text style={styles.observationDate}>
+                        <Text style={[styles.observationDate, { color: theme.textMuted }]}>
                           {new Date(obs.createdAt).toLocaleDateString()}
                         </Text>
                       </View>
-                      <Text style={styles.observationTitle}>{obs.title}</Text>
-                      <Text style={styles.observationBody}>{obs.body}</Text>
+                      <Text style={[styles.observationTitle, { color: theme.text }]}>{obs.title}</Text>
+                      <Text style={[styles.observationBody, { color: theme.textSecondary }]}>{obs.body}</Text>
                     </View>
                   ))
                 )}
@@ -467,7 +472,7 @@ export default function FounderScreen() {
             {dashboardLoading && (
               <View style={styles.centered}>
                 <ActivityIndicator size="large" color={Colors.brand.tealLight} />
-                <Text style={styles.loadingText}>Loading analytics…</Text>
+                <Text style={[styles.loadingText, { color: theme.textSecondary }]}>Loading analytics…</Text>
               </View>
             )}
             {dashboardError && !dashboardLoading && (
@@ -480,144 +485,144 @@ export default function FounderScreen() {
             )}
             {!dashboardLoading && !dashboardError && dashboardData && (
               <>
-                <Text style={styles.sectionHeader}>A. Summary</Text>
+                <Text style={[styles.sectionHeader, { color: theme.textMuted }]}>A. Summary</Text>
                 <View style={styles.kpiGrid}>
-                  <View style={styles.kpiCard}>
-                    <Text style={styles.kpiValue}>{String(summary?.leadsToday ?? 0)}</Text>
-                    <Text style={styles.kpiLabel}>Leads Today</Text>
+                  <View style={[styles.kpiCard, { backgroundColor: theme.bgCard, borderColor: theme.border }]}>
+                    <Text style={[styles.kpiValue, { color: theme.text }]}>{String(summary?.leadsToday ?? 0)}</Text>
+                    <Text style={[styles.kpiLabel, { color: theme.textSecondary }]}>Leads Today</Text>
                   </View>
-                  <View style={styles.kpiCard}>
-                    <Text style={styles.kpiValue}>{String(summary?.leadsThisWeek ?? 0)}</Text>
-                    <Text style={styles.kpiLabel}>Leads This Week</Text>
+                  <View style={[styles.kpiCard, { backgroundColor: theme.bgCard, borderColor: theme.border }]}>
+                    <Text style={[styles.kpiValue, { color: theme.text }]}>{String(summary?.leadsThisWeek ?? 0)}</Text>
+                    <Text style={[styles.kpiLabel, { color: theme.textSecondary }]}>Leads This Week</Text>
                   </View>
-                  <View style={styles.kpiCard}>
-                    <Text style={styles.kpiValue}>{String(summary?.backlog ?? 0)}</Text>
-                    <Text style={styles.kpiLabel}>Backlog</Text>
+                  <View style={[styles.kpiCard, { backgroundColor: theme.bgCard, borderColor: theme.border }]}>
+                    <Text style={[styles.kpiValue, { color: theme.text }]}>{String(summary?.backlog ?? 0)}</Text>
+                    <Text style={[styles.kpiLabel, { color: theme.textSecondary }]}>Backlog</Text>
                   </View>
-                  <View style={styles.kpiCard}>
-                    <Text style={styles.kpiValue}>{String(summary?.exportReady ?? 0)}</Text>
-                    <Text style={styles.kpiLabel}>Export Ready</Text>
+                  <View style={[styles.kpiCard, { backgroundColor: theme.bgCard, borderColor: theme.border }]}>
+                    <Text style={[styles.kpiValue, { color: theme.text }]}>{String(summary?.exportReady ?? 0)}</Text>
+                    <Text style={[styles.kpiLabel, { color: theme.textSecondary }]}>Export Ready</Text>
                   </View>
-                  <View style={styles.kpiCard}>
-                    <Text style={styles.kpiValue}>
+                  <View style={[styles.kpiCard, { backgroundColor: theme.bgCard, borderColor: theme.border }]}>
+                    <Text style={[styles.kpiValue, { color: theme.text }]}>
                       {summary?.avgReviewSeconds != null ? `${Math.round(Number(summary.avgReviewSeconds))}s` : "—"}
                     </Text>
-                    <Text style={styles.kpiLabel}>Avg Review Time</Text>
+                    <Text style={[styles.kpiLabel, { color: theme.textSecondary }]}>Avg Review Time</Text>
                   </View>
-                  <View style={styles.kpiCard}>
-                    <Text style={styles.kpiValue}>
+                  <View style={[styles.kpiCard, { backgroundColor: theme.bgCard, borderColor: theme.border }]}>
+                    <Text style={[styles.kpiValue, { color: theme.text }]}>
                       {summary?.aiAcceptanceRate != null ? `${summary.aiAcceptanceRate}%` : "—"}
                     </Text>
-                    <Text style={styles.kpiLabel}>AI Acceptance</Text>
+                    <Text style={[styles.kpiLabel, { color: theme.textSecondary }]}>AI Acceptance</Text>
                   </View>
                 </View>
 
-                <Text style={styles.sectionHeader}>B. Funnel Snapshot</Text>
-                <View style={styles.card}>
+                <Text style={[styles.sectionHeader, { color: theme.textMuted }]}>B. Funnel Snapshot</Text>
+                <View style={[styles.card, { backgroundColor: theme.bgCard, borderColor: theme.border }]}>
                   {funnel && Object.entries(funnel).map(([status, count]) => (
                     <View key={status} style={styles.funnelRow}>
-                      <Text style={styles.funnelLabel}>{status.charAt(0).toUpperCase() + status.slice(1)}</Text>
-                      <View style={styles.funnelBarBg}>
+                      <Text style={[styles.funnelLabel, { color: theme.textSecondary }]}>{status.charAt(0).toUpperCase() + status.slice(1)}</Text>
+                      <View style={[styles.funnelBarBg, { backgroundColor: theme.bgElevated }]}>
                         <View style={[styles.funnelBarFill, {
                           width: `${Math.min((count / Math.max(...Object.values(funnel), 1)) * 100, 100)}%`,
                         }]} />
                       </View>
-                      <Text style={styles.funnelCount}>{count}</Text>
+                      <Text style={[styles.funnelCount, { color: theme.text }]}>{count}</Text>
                     </View>
                   ))}
                 </View>
 
-                <Text style={styles.sectionHeader}>C. Property Performance</Text>
-                <View style={styles.card}>
+                <Text style={[styles.sectionHeader, { color: theme.textMuted }]}>C. Property Performance</Text>
+                <View style={[styles.card, { backgroundColor: theme.bgCard, borderColor: theme.border }]}>
                   {propertyPerf && propertyPerf.length > 0 ? (
                     propertyPerf.map((p, i) => (
                       <View key={String(p.propertyId)} style={styles.propRow}>
-                        <Text style={styles.propRank}>#{i + 1}</Text>
-                        <Text style={styles.propName} numberOfLines={1}>{String(p.propertyName)}</Text>
-                        <Text style={styles.propCount}>{String(p.inboundLeads)} leads</Text>
+                        <Text style={[styles.propRank, { color: theme.textMuted }]}>#{i + 1}</Text>
+                        <Text style={[styles.propName, { color: theme.text }]} numberOfLines={1}>{String(p.propertyName)}</Text>
+                        <Text style={[styles.propCount, { color: theme.textSecondary }]}>{String(p.inboundLeads)} leads</Text>
                       </View>
                     ))
                   ) : (
-                    <Text style={styles.emptySubtext}>No property data yet.</Text>
+                    <Text style={[styles.emptySubtext, { color: theme.textSecondary }]}>No property data yet.</Text>
                   )}
                 </View>
 
-                <Text style={styles.sectionHeader}>D. AI Performance</Text>
+                <Text style={[styles.sectionHeader, { color: theme.textMuted }]}>D. AI Performance</Text>
                 <View style={styles.kpiGrid}>
-                  <View style={styles.kpiCard}>
-                    <Text style={styles.kpiValue}>{String(aiPerf?.extractionSuccessRate ?? 0)}%</Text>
-                    <Text style={styles.kpiLabel}>Extraction Success</Text>
+                  <View style={[styles.kpiCard, { backgroundColor: theme.bgCard, borderColor: theme.border }]}>
+                    <Text style={[styles.kpiValue, { color: theme.text }]}>{String(aiPerf?.extractionSuccessRate ?? 0)}%</Text>
+                    <Text style={[styles.kpiLabel, { color: theme.textSecondary }]}>Extraction Success</Text>
                   </View>
-                  <View style={styles.kpiCard}>
-                    <Text style={styles.kpiValue}>
+                  <View style={[styles.kpiCard, { backgroundColor: theme.bgCard, borderColor: theme.border }]}>
+                    <Text style={[styles.kpiValue, { color: theme.text }]}>
                       {aiPerfDetail?.avgConfidence != null ? String(aiPerfDetail.avgConfidence) : "—"}
                     </Text>
-                    <Text style={styles.kpiLabel}>Avg Confidence</Text>
+                    <Text style={[styles.kpiLabel, { color: theme.textSecondary }]}>Avg Confidence</Text>
                   </View>
                 </View>
                 {aiPerfDetail?.topCorrectedFields && (
-                  <View style={styles.card}>
-                    <Text style={styles.cardLabel}>Top Corrected Fields</Text>
+                  <View style={[styles.card, { backgroundColor: theme.bgCard, borderColor: theme.border }]}>
+                    <Text style={[styles.cardLabel, { color: theme.textMuted }]}>Top Corrected Fields</Text>
                     {(aiPerfDetail.topCorrectedFields as Array<{ field: string; editCount: number }>).length === 0 ? (
-                      <Text style={styles.emptySubtext}>No field edits recorded yet.</Text>
+                      <Text style={[styles.emptySubtext, { color: theme.textSecondary }]}>No field edits recorded yet.</Text>
                     ) : (
                       (aiPerfDetail.topCorrectedFields as Array<{ field: string; editCount: number }>).map((f) => (
                         <View key={f.field} style={styles.correctedRow}>
-                          <Text style={styles.correctedField}>{f.field}</Text>
-                          <Text style={styles.correctedCount}>{f.editCount} edits</Text>
+                          <Text style={[styles.correctedField, { color: theme.text }]}>{f.field}</Text>
+                          <Text style={[styles.correctedCount, { color: theme.textSecondary }]}>{f.editCount} edits</Text>
                         </View>
                       ))
                     )}
                     {aiPerfDetail?.summaryEditRate != null && (
-                      <Text style={styles.metaText}>Summary edit rate: {String(aiPerfDetail.summaryEditRate)}%</Text>
+                      <Text style={[styles.metaText, { color: theme.textMuted }]}>Summary edit rate: {String(aiPerfDetail.summaryEditRate)}%</Text>
                     )}
                   </View>
                 )}
 
-                <Text style={styles.sectionHeader}>E. Workflow Friction</Text>
+                <Text style={[styles.sectionHeader, { color: theme.textMuted }]}>E. Workflow Friction</Text>
                 <View style={styles.kpiGrid}>
-                  <View style={styles.kpiCard}>
-                    <Text style={styles.kpiValue}>{String(friction?.editsPerLead ?? 0)}</Text>
-                    <Text style={styles.kpiLabel}>Edits Per Lead</Text>
+                  <View style={[styles.kpiCard, { backgroundColor: theme.bgCard, borderColor: theme.border }]}>
+                    <Text style={[styles.kpiValue, { color: theme.text }]}>{String(friction?.editsPerLead ?? 0)}</Text>
+                    <Text style={[styles.kpiLabel, { color: theme.textSecondary }]}>Edits Per Lead</Text>
                   </View>
-                  <View style={styles.kpiCard}>
-                    <Text style={styles.kpiValue}>{String(friction?.stuckLeads ?? 0)}</Text>
-                    <Text style={styles.kpiLabel}>Stuck &gt;24h</Text>
+                  <View style={[styles.kpiCard, { backgroundColor: theme.bgCard, borderColor: theme.border }]}>
+                    <Text style={[styles.kpiValue, { color: theme.text }]}>{String(friction?.stuckLeads ?? 0)}</Text>
+                    <Text style={[styles.kpiLabel, { color: theme.textSecondary }]}>Stuck &gt;24h</Text>
                   </View>
                 </View>
 
-                <Text style={styles.sectionHeader}>F. Export Pipeline</Text>
+                <Text style={[styles.sectionHeader, { color: theme.textMuted }]}>F. Export Pipeline</Text>
                 <View style={styles.kpiGrid}>
-                  <View style={styles.kpiCard}>
-                    <Text style={styles.kpiValue}>{String(exportPipeline?.exportReady ?? 0)}</Text>
-                    <Text style={styles.kpiLabel}>Export Ready</Text>
+                  <View style={[styles.kpiCard, { backgroundColor: theme.bgCard, borderColor: theme.border }]}>
+                    <Text style={[styles.kpiValue, { color: theme.text }]}>{String(exportPipeline?.exportReady ?? 0)}</Text>
+                    <Text style={[styles.kpiLabel, { color: theme.textSecondary }]}>Export Ready</Text>
                   </View>
-                  <View style={styles.kpiCard}>
-                    <Text style={styles.kpiValue}>{String(exportPipeline?.exported ?? 0)}</Text>
-                    <Text style={styles.kpiLabel}>Exported</Text>
+                  <View style={[styles.kpiCard, { backgroundColor: theme.bgCard, borderColor: theme.border }]}>
+                    <Text style={[styles.kpiValue, { color: theme.text }]}>{String(exportPipeline?.exported ?? 0)}</Text>
+                    <Text style={[styles.kpiLabel, { color: theme.textSecondary }]}>Exported</Text>
                   </View>
-                  <View style={styles.kpiCard}>
-                    <Text style={styles.kpiValue}>{String(exportPipeline?.exportableRate ?? 0)}%</Text>
-                    <Text style={styles.kpiLabel}>Exportable Rate</Text>
+                  <View style={[styles.kpiCard, { backgroundColor: theme.bgCard, borderColor: theme.border }]}>
+                    <Text style={[styles.kpiValue, { color: theme.text }]}>{String(exportPipeline?.exportableRate ?? 0)}%</Text>
+                    <Text style={[styles.kpiLabel, { color: theme.textSecondary }]}>Exportable Rate</Text>
                   </View>
                 </View>
 
-                <Text style={styles.sectionHeader}>G. Founder Notes</Text>
+                <Text style={[styles.sectionHeader, { color: theme.textMuted }]}>G. Founder Notes</Text>
                 {data?.observations.slice(0, 3).map((obs) => (
-                  <View key={obs.id} style={styles.observationCard}>
+                  <View key={obs.id} style={[styles.observationCard, { backgroundColor: theme.bgCard, borderColor: theme.border }]}>
                     <View style={styles.observationHeader}>
                       <ObservationTypeBadge type={obs.observationType} />
-                      <Text style={styles.observationDate}>
+                      <Text style={[styles.observationDate, { color: theme.textMuted }]}>
                         {new Date(obs.createdAt).toLocaleDateString()}
                       </Text>
                     </View>
-                    <Text style={styles.observationTitle}>{obs.title}</Text>
-                    <Text style={styles.observationBody} numberOfLines={2}>{obs.body}</Text>
+                    <Text style={[styles.observationTitle, { color: theme.text }]}>{obs.title}</Text>
+                    <Text style={[styles.observationBody, { color: theme.textSecondary }]} numberOfLines={2}>{obs.body}</Text>
                   </View>
                 ))}
                 {(!data || data.observations.length === 0) && (
-                  <View style={styles.card}>
-                    <Text style={styles.emptySubtext}>No founder notes yet. Switch to Observations tab to add one.</Text>
+                  <View style={[styles.card, { backgroundColor: theme.bgCard, borderColor: theme.border }]}>
+                    <Text style={[styles.emptySubtext, { color: theme.textSecondary }]}>No founder notes yet. Switch to Observations tab to add one.</Text>
                   </View>
                 )}
               </>
@@ -1049,9 +1054,9 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
   },
   progressDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
     backgroundColor: Colors.dark.border,
   },
   progressDotActive: {

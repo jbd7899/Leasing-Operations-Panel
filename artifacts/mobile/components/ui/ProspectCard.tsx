@@ -2,6 +2,7 @@ import React, { type ComponentProps } from "react";
 import { View, Text, StyleSheet, Pressable } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
+import { useTheme } from "@/contexts/ThemeContext";
 import { Badge } from "./Badge";
 import type { Prospect } from "@workspace/api-client-react";
 
@@ -42,6 +43,7 @@ function sentimentIcon(sentiment?: string | null): { name: FeatherIconName; colo
 }
 
 export function ProspectCard({ prospect, onPress, selected, onLongPress, hasConflicts }: ProspectCardProps) {
+  const { theme, isDark } = useTheme();
   const sentiment = sentimentIcon(prospect.latestSentiment);
   const name = prospect.fullName || prospect.phonePrimary;
   const initials = prospect.fullName
@@ -54,11 +56,12 @@ export function ProspectCard({ prospect, onPress, selected, onLongPress, hasConf
       onLongPress={onLongPress}
       style={({ pressed }) => [
         styles.card,
+        { backgroundColor: theme.bgCard, borderColor: theme.border },
         pressed && styles.cardPressed,
-        selected && styles.cardSelected,
+        selected && [styles.cardSelected, { backgroundColor: theme.activeBg }],
       ]}
     >
-      <View style={[styles.avatar, selected && styles.avatarSelected]}>
+      <View style={[styles.avatar, { borderColor: theme.borderLight }, selected && styles.avatarSelected]}>
         {selected ? (
           <Feather name="check" size={18} color="#fff" />
         ) : (
@@ -68,7 +71,7 @@ export function ProspectCard({ prospect, onPress, selected, onLongPress, hasConf
 
       <View style={styles.content}>
         <View style={styles.row}>
-          <Text style={styles.name} numberOfLines={1}>{name}</Text>
+          <Text style={[styles.name, { color: theme.text }]} numberOfLines={1}>{name}</Text>
           <View style={styles.badgeRow}>
             {needsFollowUp(prospect) && (
               <View style={styles.followUpBadge}>
@@ -86,29 +89,29 @@ export function ProspectCard({ prospect, onPress, selected, onLongPress, hasConf
           </View>
         </View>
 
-        <Text style={styles.phone}>{formatPhone(prospect.phonePrimary)}</Text>
+        <Text style={[styles.phone, { color: theme.textSecondary }]}>{formatPhone(prospect.phonePrimary)}</Text>
 
         {prospect.latestSummary && (
-          <Text style={styles.summary} numberOfLines={2}>{prospect.latestSummary}</Text>
+          <Text style={[styles.summary, { color: theme.textSecondary }]} numberOfLines={2}>{prospect.latestSummary}</Text>
         )}
 
         <View style={styles.metaRow}>
           {prospect.desiredBedrooms && (
-            <View style={styles.metaChip}>
-              <Feather name="home" size={11} color={Colors.dark.textMuted} />
-              <Text style={styles.metaText}>{prospect.desiredBedrooms}bd</Text>
+            <View style={[styles.metaChip, { backgroundColor: theme.bgElevated, borderColor: theme.border }]}>
+              <Feather name="home" size={11} color={theme.textMuted} />
+              <Text style={[styles.metaText, { color: theme.textSecondary }]}>{prospect.desiredBedrooms}bd</Text>
             </View>
           )}
           {prospect.desiredMoveInDate && (
-            <View style={styles.metaChip}>
-              <Feather name="calendar" size={11} color={Colors.dark.textMuted} />
-              <Text style={styles.metaText}>{prospect.desiredMoveInDate}</Text>
+            <View style={[styles.metaChip, { backgroundColor: theme.bgElevated, borderColor: theme.border }]}>
+              <Feather name="calendar" size={11} color={theme.textMuted} />
+              <Text style={[styles.metaText, { color: theme.textSecondary }]}>{prospect.desiredMoveInDate}</Text>
             </View>
           )}
           {(prospect.budgetMin || prospect.budgetMax) && (
-            <View style={styles.metaChip}>
-              <Feather name="dollar-sign" size={11} color={Colors.dark.textMuted} />
-              <Text style={styles.metaText}>
+            <View style={[styles.metaChip, { backgroundColor: theme.bgElevated, borderColor: theme.border }]}>
+              <Feather name="dollar-sign" size={11} color={theme.textMuted} />
+              <Text style={[styles.metaText, { color: theme.textSecondary }]}>
                 {prospect.budgetMin && prospect.budgetMax
                   ? `$${prospect.budgetMin}–$${prospect.budgetMax}`
                   : prospect.budgetMax
@@ -117,13 +120,13 @@ export function ProspectCard({ prospect, onPress, selected, onLongPress, hasConf
               </Text>
             </View>
           )}
-          <View style={[styles.metaChip, styles.sentimentChip]}>
+          <View style={[styles.metaChip, styles.sentimentChip, { backgroundColor: theme.bgElevated, borderColor: theme.border }]}>
             <Feather name={sentiment.name} size={11} color={sentiment.color} />
           </View>
         </View>
       </View>
 
-      <Feather name="chevron-right" size={16} color={Colors.dark.textMuted} />
+      <Feather name="chevron-right" size={16} color={theme.textMuted} />
     </Pressable>
   );
 }
@@ -133,12 +136,10 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
-    backgroundColor: Colors.dark.bgCard,
     borderRadius: 16,
     padding: 14,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: Colors.dark.border,
   },
   cardPressed: {
     opacity: 0.75,
@@ -146,7 +147,6 @@ const styles = StyleSheet.create({
   },
   cardSelected: {
     borderColor: Colors.brand.tealLight,
-    backgroundColor: "#0D2A2A",
   },
   avatar: {
     width: 44,
@@ -154,7 +154,6 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     backgroundColor: Colors.brand.navy,
     borderWidth: 1,
-    borderColor: Colors.dark.borderLight,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -180,18 +179,15 @@ const styles = StyleSheet.create({
   name: {
     fontSize: 15,
     fontFamily: "Inter_600SemiBold",
-    color: Colors.dark.text,
     flex: 1,
   },
   phone: {
     fontSize: 12,
     fontFamily: "Inter_400Regular",
-    color: Colors.dark.textSecondary,
   },
   summary: {
     fontSize: 12,
     fontFamily: "Inter_400Regular",
-    color: Colors.dark.textSecondary,
     lineHeight: 17,
     marginTop: 2,
   },
@@ -205,12 +201,10 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 3,
-    backgroundColor: Colors.dark.bgElevated,
     borderRadius: 6,
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderWidth: 1,
-    borderColor: Colors.dark.border,
   },
   sentimentChip: {
     paddingHorizontal: 5,
@@ -218,7 +212,6 @@ const styles = StyleSheet.create({
   metaText: {
     fontSize: 11,
     fontFamily: "Inter_400Regular",
-    color: Colors.dark.textSecondary,
   },
   badgeRow: {
     flexDirection: "row",

@@ -2,6 +2,7 @@ import React, { type ComponentProps } from "react";
 import { View, Text, StyleSheet, Pressable } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
+import { useTheme } from "@/contexts/ThemeContext";
 import { Badge } from "./Badge";
 import type { InboxItem as InboxItemType } from "@workspace/api-client-react";
 import { useListTwilioNumbers, getListTwilioNumbersQueryKey } from "@workspace/api-client-react";
@@ -33,6 +34,7 @@ const SOURCE_ICONS: Record<string, FeatherIconName> = {
 };
 
 export function InboxItem({ item, onPress }: InboxItemProps) {
+  const { theme, isDark } = useTheme();
   const { interaction, prospect, property, messageCount } = item;
   const isStale = (item as any).isStale ?? false;
   const { startCall } = useTwilioCall();
@@ -64,24 +66,29 @@ export function InboxItem({ item, onPress }: InboxItemProps) {
   return (
     <Pressable
       onPress={onPress}
-      style={({ pressed }) => [styles.card, isStale && styles.staleCard, pressed && styles.pressed]}
+      style={({ pressed }) => [
+        styles.card,
+        { backgroundColor: theme.bgCard, borderColor: theme.border },
+        isStale && styles.staleCard,
+        pressed && styles.pressed,
+      ]}
     >
-      <View style={styles.iconWrap}>
+      <View style={[styles.iconWrap, { backgroundColor: theme.activeBg }]}>
         <Feather name={sourceIcon} size={18} color={Colors.brand.tealLight} />
       </View>
 
       <View style={styles.content}>
         <View style={styles.topRow}>
           <View style={styles.fromBlock}>
-            <Text style={styles.fromName} numberOfLines={1}>
+            <Text style={[styles.fromName, { color: theme.text }]} numberOfLines={1}>
               {prospect?.fullName ?? interaction.fromNumber}
             </Text>
             {property && (
-              <Text style={styles.propertyName} numberOfLines={1}>{property.name}</Text>
+              <Text style={[styles.propertyName, { color: theme.textMuted }]} numberOfLines={1}>{property.name}</Text>
             )}
           </View>
           <View style={styles.rightMeta}>
-            <Text style={styles.time}>{timeAgo(interaction.occurredAt)}</Text>
+            <Text style={[styles.time, { color: theme.textMuted }]}>{timeAgo(interaction.occurredAt)}</Text>
             {isStale && (
               <View style={styles.staleBadge}>
                 <Text style={styles.staleBadgeText}>Needs follow-up</Text>
@@ -99,16 +106,16 @@ export function InboxItem({ item, onPress }: InboxItemProps) {
         </View>
 
         {(interaction.summary ?? interaction.rawText ?? interaction.transcript) ? (
-          <Text style={styles.preview} numberOfLines={2}>
+          <Text style={[styles.preview, { color: theme.textSecondary }]} numberOfLines={2}>
             {interaction.summary ?? interaction.rawText ?? interaction.transcript}
           </Text>
         ) : null}
 
         {/* Quick action row */}
         {canCall && (
-          <View style={styles.quickActions}>
+          <View style={[styles.quickActions, { borderTopColor: theme.border }]}>
             <Pressable
-              style={[styles.quickAction, !primaryTwilioNumber && styles.quickActionDisabled]}
+              style={[styles.quickAction, { backgroundColor: theme.activeBg }, !primaryTwilioNumber && styles.quickActionDisabled]}
               onPress={(e) => {
                 e.stopPropagation?.();
                 handleCall();
@@ -119,9 +126,9 @@ export function InboxItem({ item, onPress }: InboxItemProps) {
               <Feather
                 name="phone"
                 size={14}
-                color={primaryTwilioNumber ? Colors.brand.tealLight : Colors.dark.textMuted}
+                color={primaryTwilioNumber ? Colors.brand.tealLight : theme.textMuted}
               />
-              <Text style={[styles.quickActionLabel, !primaryTwilioNumber && styles.quickActionLabelDisabled]}>
+              <Text style={[styles.quickActionLabel, !primaryTwilioNumber && { color: theme.textMuted }]}>
                 Call
               </Text>
             </Pressable>
@@ -136,12 +143,10 @@ const styles = StyleSheet.create({
   card: {
     flexDirection: "row",
     gap: 12,
-    backgroundColor: Colors.dark.bgCard,
     borderRadius: 14,
     padding: 13,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: Colors.dark.border,
   },
   pressed: {
     opacity: 0.75,
@@ -165,7 +170,6 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: "#0D2A2A",
     borderWidth: 1,
     borderColor: "#164444",
     alignItems: "center",
@@ -188,12 +192,10 @@ const styles = StyleSheet.create({
   fromName: {
     fontSize: 14,
     fontFamily: "Inter_600SemiBold",
-    color: Colors.dark.text,
   },
   propertyName: {
     fontSize: 11,
     fontFamily: "Inter_400Regular",
-    color: Colors.dark.textMuted,
     marginTop: 1,
   },
   rightMeta: {
@@ -203,7 +205,6 @@ const styles = StyleSheet.create({
   time: {
     fontSize: 11,
     fontFamily: "Inter_400Regular",
-    color: Colors.dark.textMuted,
   },
   messageBadge: {
     backgroundColor: Colors.brand.tealLight,
@@ -222,7 +223,6 @@ const styles = StyleSheet.create({
   preview: {
     fontSize: 13,
     fontFamily: "Inter_400Regular",
-    color: Colors.dark.textSecondary,
     lineHeight: 18,
   },
   quickActions: {
@@ -231,16 +231,15 @@ const styles = StyleSheet.create({
     marginTop: 6,
     paddingTop: 8,
     borderTopWidth: 1,
-    borderTopColor: Colors.dark.border,
   },
   quickAction: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 5,
-    paddingVertical: 4,
-    paddingHorizontal: 8,
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    minHeight: 36,
     borderRadius: 8,
-    backgroundColor: "#0D2A2A",
     borderWidth: 1,
     borderColor: "#164444",
   },
@@ -251,8 +250,5 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: "Inter_500Medium",
     color: Colors.brand.tealLight,
-  },
-  quickActionLabelDisabled: {
-    color: Colors.dark.textMuted,
   },
 });

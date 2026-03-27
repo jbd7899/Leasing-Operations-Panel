@@ -26,6 +26,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
+import { useTheme } from "@/contexts/ThemeContext";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Badge } from "@/components/ui/Badge";
 
@@ -54,6 +55,7 @@ function ProspectQueueRow({
   selected: boolean;
   onToggle: () => void;
 }) {
+  const { theme } = useTheme();
   const name = prospect.fullName || prospect.phonePrimary;
   const initials = prospect.fullName
     ? prospect.fullName.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase()
@@ -64,11 +66,12 @@ function ProspectQueueRow({
       onPress={onToggle}
       style={({ pressed }) => [
         styles.queueRow,
-        selected && styles.queueRowSelected,
+        { backgroundColor: theme.bgCard, borderColor: theme.border },
+        selected && [styles.queueRowSelected, { backgroundColor: theme.activeBg }],
         pressed && styles.queueRowPressed,
       ]}
     >
-      <View style={[styles.queueAvatar, selected && styles.queueAvatarSelected]}>
+      <View style={[styles.queueAvatar, { borderColor: theme.borderLight }, selected && styles.queueAvatarSelected]}>
         {selected ? (
           <Feather name="check" size={16} color="#fff" />
         ) : (
@@ -76,10 +79,10 @@ function ProspectQueueRow({
         )}
       </View>
       <View style={styles.queueInfo}>
-        <Text style={styles.queueName} numberOfLines={1}>{name}</Text>
-        <Text style={styles.queuePhone}>{prospect.phonePrimary}</Text>
+        <Text style={[styles.queueName, { color: theme.text }]} numberOfLines={1}>{name}</Text>
+        <Text style={[styles.queuePhone, { color: theme.textSecondary }]}>{prospect.phonePrimary}</Text>
         {prospect.latestSummary && (
-          <Text style={styles.queueSummary} numberOfLines={1}>{prospect.latestSummary}</Text>
+          <Text style={[styles.queueSummary, { color: theme.textMuted }]} numberOfLines={1}>{prospect.latestSummary}</Text>
         )}
       </View>
       <Badge label={prospect.status} value={prospect.status} />
@@ -88,6 +91,7 @@ function ProspectQueueRow({
 }
 
 function ExportRow({ batch }: { batch: ExportBatch }) {
+  const { theme } = useTheme();
   const handleDownload = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const url = getDownloadUrl(batch.id);
@@ -95,8 +99,8 @@ function ExportRow({ batch }: { batch: ExportBatch }) {
   };
 
   return (
-    <View style={styles.exportRow}>
-      <View style={styles.exportIcon}>
+    <View style={[styles.exportRow, { backgroundColor: theme.bgCard, borderColor: theme.border }]}>
+      <View style={[styles.exportIcon, { backgroundColor: theme.activeBg }]}>
         <Feather
           name={batch.format === "csv" ? "file-text" : "code"}
           size={20}
@@ -105,19 +109,19 @@ function ExportRow({ batch }: { batch: ExportBatch }) {
       </View>
       <View style={styles.exportInfo}>
         <View style={styles.exportTopRow}>
-          <Text style={styles.exportTitle}>{batch.format.toUpperCase()} Export</Text>
+          <Text style={[styles.exportTitle, { color: theme.text }]}>{batch.format.toUpperCase()} Export</Text>
           <Badge label={batch.status} value={batch.status} />
         </View>
-        <Text style={styles.exportMeta}>
+        <Text style={[styles.exportMeta, { color: theme.textSecondary }]}>
           {batch.recordCount} prospect{batch.recordCount !== 1 ? "s" : ""} · {formatDate(batch.createdAt)}
         </Text>
         {batch.targetSystem && (
-          <Text style={styles.exportTarget}>{batch.targetSystem}</Text>
+          <Text style={[styles.exportTarget, { color: theme.textMuted }]}>{batch.targetSystem}</Text>
         )}
       </View>
       <Pressable
         onPress={handleDownload}
-        style={({ pressed }) => [styles.downloadBtn, pressed && styles.downloadBtnPressed]}
+        style={({ pressed }) => [styles.downloadBtn, { backgroundColor: theme.bgElevated, borderColor: theme.border }, pressed && styles.downloadBtnPressed]}
         hitSlop={8}
       >
         <Feather name="download" size={18} color={Colors.brand.tealLight} />
@@ -127,6 +131,7 @@ function ExportRow({ batch }: { batch: ExportBatch }) {
 }
 
 export default function ExportsScreen() {
+  const { theme } = useTheme();
   const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === "web";
   const topPad = isWeb ? Math.max(insets.top, 67) : insets.top;
@@ -225,17 +230,17 @@ export default function ExportsScreen() {
   const isRefreshing = (queueFetching && !queueLoading) || (historyFetching && !historyLoading);
 
   return (
-    <View style={[styles.container, { paddingTop: topPad }]}>
+    <View style={[styles.container, { paddingTop: topPad, backgroundColor: theme.bg }]}>
       <View style={styles.header}>
         <View>
-          <Text style={styles.screenTitle}>Exports</Text>
-          <Text style={styles.screenSubtitle}>AppFolio-ready CSV & JSON</Text>
+          <Text style={[styles.screenTitle, { color: theme.text }]}>Exports</Text>
+          <Text style={[styles.screenSubtitle, { color: theme.textMuted }]}>AppFolio-ready CSV & JSON</Text>
         </View>
-        <Pressable style={styles.refreshBtn} onPress={handleRefresh} disabled={isRefreshing}>
+        <Pressable style={[styles.refreshBtn, { backgroundColor: theme.bgCard, borderColor: theme.border }]} onPress={handleRefresh} disabled={isRefreshing}>
           <Feather
             name="refresh-cw"
             size={18}
-            color={isRefreshing ? Colors.dark.textMuted : Colors.brand.tealLight}
+            color={isRefreshing ? theme.textMuted : Colors.brand.tealLight}
           />
         </Pressable>
       </View>
@@ -265,7 +270,7 @@ export default function ExportsScreen() {
         {/* Export Queue */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>EXPORT QUEUE</Text>
+            <Text style={[styles.sectionTitle, { color: theme.textMuted }]}>EXPORT QUEUE</Text>
             {pendingProspects.length > 0 && (
               <Pressable onPress={toggleAll} style={styles.selectAllBtn}>
                 <Text style={styles.selectAllText}>
@@ -278,10 +283,10 @@ export default function ExportsScreen() {
           {queueLoading ? (
             <ActivityIndicator size="small" color={Colors.brand.tealLight} style={{ marginVertical: 20 }} />
           ) : pendingProspects.length === 0 ? (
-            <View style={styles.emptyQueue}>
+            <View style={[styles.emptyQueue, { backgroundColor: theme.bgCard, borderColor: theme.border }]}>
               <Feather name="check-circle" size={32} color={Colors.brand.tealLight} />
-              <Text style={styles.emptyQueueText}>No prospects pending export</Text>
-              <Text style={styles.emptyQueueSub}>New SMS/voice prospects will appear here</Text>
+              <Text style={[styles.emptyQueueText, { color: theme.text }]}>No prospects pending export</Text>
+              <Text style={[styles.emptyQueueSub, { color: theme.textMuted }]}>New SMS/voice prospects will appear here</Text>
             </View>
           ) : (
             <View style={styles.queueList}>
@@ -298,7 +303,7 @@ export default function ExportsScreen() {
 
           {selectedIds.size > 0 && (
             <View style={styles.exportActions}>
-              <Text style={styles.selectedCount}>
+              <Text style={[styles.selectedCount, { color: theme.textSecondary }]}>
                 {selectedIds.size} selected
               </Text>
               <View style={styles.exportBtns}>
@@ -338,14 +343,14 @@ export default function ExportsScreen() {
         {/* Export History */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>EXPORT HISTORY</Text>
+            <Text style={[styles.sectionTitle, { color: theme.textMuted }]}>EXPORT HISTORY</Text>
           </View>
 
           {historyLoading ? (
             <ActivityIndicator size="small" color={Colors.brand.tealLight} style={{ marginVertical: 20 }} />
           ) : exportHistory.length === 0 ? (
             <View style={styles.emptyHistory}>
-              <Text style={styles.emptyHistoryText}>No exports yet</Text>
+              <Text style={[styles.emptyHistoryText, { color: theme.textMuted }]}>No exports yet</Text>
             </View>
           ) : (
             <View style={styles.historyList}>

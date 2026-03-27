@@ -1,7 +1,7 @@
 import React from "react";
 import { View, TextInput, StyleSheet, Pressable } from "react-native";
 import { Feather } from "@expo/vector-icons";
-import Colors from "@/constants/colors";
+import { useTheme } from "@/contexts/ThemeContext";
 
 interface SearchBarProps {
   value: string;
@@ -10,15 +10,17 @@ interface SearchBarProps {
 }
 
 export function SearchBar({ value, onChangeText, placeholder = "Search..." }: SearchBarProps) {
+  const { theme } = useTheme();
+
   return (
-    <View style={styles.container}>
-      <Feather name="search" size={16} color={Colors.dark.textMuted} />
+    <View style={[styles.container, { backgroundColor: theme.bgInput, borderColor: theme.border }]}>
+      <Feather name="search" size={16} color={theme.textMuted} />
       <TextInput
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
-        placeholderTextColor={Colors.dark.textMuted}
-        style={styles.input}
+        placeholderTextColor={theme.textMuted}
+        style={[styles.input, { color: theme.text }]}
         autoCapitalize="none"
         autoCorrect={false}
         returnKeyType="search"
@@ -26,7 +28,7 @@ export function SearchBar({ value, onChangeText, placeholder = "Search..." }: Se
       />
       {value.length > 0 && (
         <Pressable onPress={() => onChangeText("")} hitSlop={8}>
-          <Feather name="x-circle" size={16} color={Colors.dark.textMuted} />
+          <Feather name="x-circle" size={16} color={theme.textMuted} />
         </Pressable>
       )}
     </View>
@@ -38,18 +40,15 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    backgroundColor: Colors.dark.bgInput,
     borderRadius: 12,
     paddingHorizontal: 13,
     paddingVertical: 11,
     borderWidth: 1,
-    borderColor: Colors.dark.border,
   },
   input: {
     flex: 1,
     fontSize: 15,
     fontFamily: "Inter_400Regular",
-    color: Colors.dark.text,
     padding: 0,
   },
 });

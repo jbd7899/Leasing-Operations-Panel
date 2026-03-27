@@ -16,6 +16,7 @@ import {
   type WeeklyTrendEntry,
 } from "@workspace/api-client-react";
 import Colors from "@/constants/colors";
+import { useTheme } from "@/contexts/ThemeContext";
 
 type Period = "7d" | "30d" | "90d" | "all";
 
@@ -40,6 +41,7 @@ const FUNNEL_COLORS: Record<string, string> = {
 };
 
 function DonutChart({ data }: { data: { label: string; value: number; color: string }[] }) {
+  const { theme } = useTheme();
   const total = data.reduce((s, d) => s + d.value, 0);
   const size = 140;
   const radius = 54;
@@ -51,10 +53,10 @@ function DonutChart({ data }: { data: { label: string; value: number; color: str
     return (
       <View style={styles.donutEmpty}>
         <Svg width={size} height={size}>
-          <Circle cx={cx} cy={cy} r={radius} fill="none" stroke={Colors.dark.border} strokeWidth={strokeWidth} />
+          <Circle cx={cx} cy={cy} r={radius} fill="none" stroke={theme.border} strokeWidth={strokeWidth} />
         </Svg>
         <View style={styles.donutCenterAbsolute}>
-          <Text style={styles.donutCenterLabel}>No data</Text>
+          <Text style={[styles.donutCenterLabel, { color: theme.textMuted }]}>No data</Text>
         </View>
       </View>
     );
@@ -87,21 +89,21 @@ function DonutChart({ data }: { data: { label: string; value: number; color: str
     <View style={styles.donutContainer}>
       <View style={styles.donutWrapper}>
         <Svg width={size} height={size}>
-          <Circle cx={cx} cy={cy} r={radius} fill="none" stroke={Colors.dark.bgCard} strokeWidth={strokeWidth + 4} />
+          <Circle cx={cx} cy={cy} r={radius} fill="none" stroke={theme.bgCard} strokeWidth={strokeWidth + 4} />
           <G>{segments}</G>
-          <Circle cx={cx} cy={cy} r={radius - strokeWidth / 2} fill={Colors.dark.bgCard} />
+          <Circle cx={cx} cy={cy} r={radius - strokeWidth / 2} fill={theme.bgCard} />
         </Svg>
         <View style={styles.donutCenterAbsolute}>
-          <Text style={styles.donutCenterNumber}>{total}</Text>
-          <Text style={styles.donutCenterLabel}>total</Text>
+          <Text style={[styles.donutCenterNumber, { color: theme.text }]}>{total}</Text>
+          <Text style={[styles.donutCenterLabel, { color: theme.textMuted }]}>total</Text>
         </View>
       </View>
       <View style={styles.donutLegend}>
         {data.map((d) => (
           <View key={d.label} style={styles.legendRow}>
             <View style={[styles.legendDot, { backgroundColor: d.color }]} />
-            <Text style={styles.legendLabel}>{d.label}</Text>
-            <Text style={styles.legendValue}>{d.value}</Text>
+            <Text style={[styles.legendLabel, { color: theme.textSecondary }]}>{d.label}</Text>
+            <Text style={[styles.legendValue, { color: theme.text }]}>{d.value}</Text>
           </View>
         ))}
       </View>
@@ -110,6 +112,7 @@ function DonutChart({ data }: { data: { label: string; value: number; color: str
 }
 
 function FunnelBars({ funnel }: { funnel: AnalyticsOverview["statusFunnel"] }) {
+  const { theme } = useTheme();
   const stages = [
     { key: "new", label: "New" },
     { key: "contacted", label: "Contacted" },
@@ -126,11 +129,11 @@ function FunnelBars({ funnel }: { funnel: AnalyticsOverview["statusFunnel"] }) {
         const color = FUNNEL_COLORS[s.key];
         return (
           <View key={s.key} style={styles.funnelRow}>
-            <Text style={styles.funnelLabel}>{s.label}</Text>
-            <View style={styles.funnelBarBg}>
+            <Text style={[styles.funnelLabel, { color: theme.textSecondary }]}>{s.label}</Text>
+            <View style={[styles.funnelBarBg, { backgroundColor: theme.bgElevated }]}>
               <View style={[styles.funnelBarFill, { width: `${Math.max(pct * 100, count > 0 ? 3 : 0)}%`, backgroundColor: color }]} />
             </View>
-            <Text style={styles.funnelCount}>{count}</Text>
+            <Text style={[styles.funnelCount, { color: theme.text }]}>{count}</Text>
           </View>
         );
       })}
@@ -187,20 +190,23 @@ function Sparkline({ trend }: { trend: WeeklyTrendEntry[] }) {
 }
 
 function KpiCard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
+  const { theme } = useTheme();
   return (
-    <View style={styles.kpiCard}>
-      <Text style={styles.kpiValue}>{value}</Text>
-      <Text style={styles.kpiLabel}>{label}</Text>
-      {sub ? <Text style={styles.kpiSub}>{sub}</Text> : null}
+    <View style={[styles.kpiCard, { backgroundColor: theme.bgCard, borderColor: theme.border }]}>
+      <Text style={[styles.kpiValue, { color: theme.text }]}>{value}</Text>
+      <Text style={[styles.kpiLabel, { color: theme.textSecondary }]}>{label}</Text>
+      {sub ? <Text style={[styles.kpiSub, { color: theme.textMuted }]}>{sub}</Text> : null}
     </View>
   );
 }
 
 function SectionHeader({ title }: { title: string }) {
-  return <Text style={styles.sectionHeader}>{title}</Text>;
+  const { theme } = useTheme();
+  return <Text style={[styles.sectionHeader, { color: theme.textMuted }]}>{title}</Text>;
 }
 
 export default function AnalyticsScreen() {
+  const { theme, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const [period, setPeriod] = useState<Period>("30d");
   const { data, isLoading, isError, refetch } = useGetAnalyticsOverview(period);
@@ -217,17 +223,17 @@ export default function AnalyticsScreen() {
   const isEmptyState = !isLoading && !isError && data && data.leadVolume.total === 0;
 
   return (
-    <View style={[styles.root, { paddingTop: insets.top }]}>
-      <View style={styles.headerRow}>
-        <Text style={styles.screenTitle}>Analytics</Text>
+    <View style={[styles.root, { paddingTop: insets.top, backgroundColor: theme.bg }]}>
+      <View style={[styles.headerRow, { borderBottomColor: theme.border }]}>
+        <Text style={[styles.screenTitle, { color: theme.text }]}>Analytics</Text>
         <View style={styles.periodRow}>
           {PERIODS.map((p) => (
             <Pressable
               key={p.value}
-              style={[styles.periodChip, period === p.value && styles.periodChipActive]}
+              style={[styles.periodChip, { borderColor: theme.border, backgroundColor: theme.bgCard }, period === p.value && styles.periodChipActive]}
               onPress={() => setPeriod(p.value)}
             >
-              <Text style={[styles.periodChipText, period === p.value && styles.periodChipTextActive]}>
+              <Text style={[styles.periodChipText, { color: theme.textSecondary }, period === p.value && styles.periodChipTextActive]}>
                 {p.label}
               </Text>
             </Pressable>
@@ -238,7 +244,7 @@ export default function AnalyticsScreen() {
       {isLoading && (
         <View style={styles.centered}>
           <ActivityIndicator size="large" color={Colors.brand.tealLight} />
-          <Text style={styles.loadingText}>Loading analytics…</Text>
+          <Text style={[styles.loadingText, { color: theme.textSecondary }]}>Loading analytics…</Text>
         </View>
       )}
 
@@ -253,8 +259,8 @@ export default function AnalyticsScreen() {
 
       {isEmptyState && (
         <View style={styles.emptyState}>
-          <Text style={styles.emptyTitle}>No leads yet</Text>
-          <Text style={styles.emptySubtext}>
+          <Text style={[styles.emptyTitle, { color: theme.text }]}>No leads yet</Text>
+          <Text style={[styles.emptySubtext, { color: theme.textSecondary }]}>
             Once your Twilio numbers receive SMS or calls, lead data will appear here. Add a property and link a Twilio number in Settings to get started.
           </Text>
         </View>
@@ -278,27 +284,27 @@ export default function AnalyticsScreen() {
             <KpiCard label="Last 7 Days" value={data.leadVolume.last7d} />
             <KpiCard label="Last 30 Days" value={data.leadVolume.last30d} />
           </View>
-          <View style={styles.card}>
-            <Text style={styles.cardLabel}>4-Week Trend</Text>
+          <View style={[styles.card, { backgroundColor: theme.bgCard, borderColor: theme.border }]}>
+            <Text style={[styles.cardLabel, { color: theme.textMuted }]}>4-Week Trend</Text>
             <Sparkline trend={data.leadVolume.weeklyTrend} />
           </View>
 
           <SectionHeader title="Source Breakdown" />
-          <View style={styles.card}>
+          <View style={[styles.card, { backgroundColor: theme.bgCard, borderColor: theme.border }]}>
             {sourceData.length === 0 ? (
-              <Text style={styles.emptySubtext}>No interaction sources recorded for this period.</Text>
+              <Text style={[styles.emptySubtext, { color: theme.textSecondary }]}>No interaction sources recorded for this period.</Text>
             ) : (
               <DonutChart data={sourceData} />
             )}
           </View>
 
           <SectionHeader title="Status Funnel" />
-          <View style={styles.card}>
+          <View style={[styles.card, { backgroundColor: theme.bgCard, borderColor: theme.border }]}>
             <FunnelBars funnel={data.statusFunnel} />
           </View>
 
           <SectionHeader title="Qualification Rate" />
-          <View style={styles.card}>
+          <View style={[styles.card, { backgroundColor: theme.bgCard, borderColor: theme.border }]}>
             <View style={styles.qualRow}>
               <View style={styles.qualRateRow}>
                 <Text style={styles.qualRate}>{data.qualificationRate}%</Text>
@@ -316,27 +322,27 @@ export default function AnalyticsScreen() {
                   </View>
                 )}
               </View>
-              <Text style={styles.qualLabel}>of leads reached Qualified status</Text>
+              <Text style={[styles.qualLabel, { color: theme.textSecondary }]}>of leads reached Qualified status</Text>
             </View>
           </View>
 
           {data.propertiesRanked.length > 0 && (
             <>
               <SectionHeader title="Properties by Leads" />
-              <View style={styles.card}>
+              <View style={[styles.card, { backgroundColor: theme.bgCard, borderColor: theme.border }]}>
                 {data.propertiesRanked.map((p, idx) => {
                   const max = data.propertiesRanked[0].count;
                   const pct = max > 0 ? (p.count / max) * 100 : 0;
                   return (
                     <View key={p.propertyId || "unassigned"} style={styles.propRow}>
-                      <Text style={styles.propRank}>#{idx + 1}</Text>
+                      <Text style={[styles.propRank, { color: theme.textMuted }]}>#{idx + 1}</Text>
                       <View style={styles.propInfo}>
-                        <Text style={styles.propName} numberOfLines={1}>{p.propertyName}</Text>
-                        <View style={styles.propBarBg}>
+                        <Text style={[styles.propName, { color: theme.text }]} numberOfLines={1}>{p.propertyName}</Text>
+                        <View style={[styles.propBarBg, { backgroundColor: theme.bgElevated }]}>
                           <View style={[styles.propBarFill, { width: `${pct}%` }]} />
                         </View>
                       </View>
-                      <Text style={styles.propCount}>{p.count}</Text>
+                      <Text style={[styles.propCount, { color: theme.text }]}>{p.count}</Text>
                     </View>
                   );
                 })}

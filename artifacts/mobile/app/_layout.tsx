@@ -26,6 +26,7 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { initApiClient, api } from "@/lib/api";
 import { AuthProvider, useAuth } from "@/lib/auth";
 import Colors from "@/constants/colors";
+import { ThemeProvider, useTheme } from "@/contexts/ThemeContext";
 import { TwilioCallProvider } from "@/contexts/TwilioCallContext";
 import { CallScreen } from "@/components/call/CallScreen";
 
@@ -57,6 +58,7 @@ function LoginScreen() {
   const [step, setStep] = useState<"email" | "code">("email");
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
+  const { theme, isDark } = useTheme();
 
   const handleSendCode = async () => {
     if (!signInLoaded) return;
@@ -90,19 +92,18 @@ function LoginScreen() {
       setIsLoading(false);
     }
   };
-
   return (
-    <View style={loginStyles.container}>
+    <View style={[loginStyles.container, { backgroundColor: theme.bg }]}>
       <View style={loginStyles.logoRow}>
-        <View style={loginStyles.logoMark}>
+        <View style={[loginStyles.logoMark, { backgroundColor: theme.activeBg }]}>
           <Text style={loginStyles.logoMarkText}>MRC</Text>
         </View>
       </View>
-      <Text style={loginStyles.brand}>MyRentCard</Text>
-      <Text style={loginStyles.tagline}>Leasing Operations Panel</Text>
+      <Text style={[loginStyles.brand, { color: theme.text }]}>MyRentCard</Text>
+      <Text style={[loginStyles.tagline, { color: theme.textSecondary }]}>Leasing Operations Panel</Text>
 
-      <View style={loginStyles.card}>
-        <Text style={loginStyles.cardTitle}>Sign in to continue</Text>
+      <View style={[loginStyles.card, { backgroundColor: theme.bgCard, borderColor: theme.border }]}>
+        <Text style={[loginStyles.cardTitle, { color: theme.text }]}>Sign in to continue</Text>
 
         {step === "email" ? (
           <>
@@ -168,7 +169,7 @@ function LoginScreen() {
         {errorMsg ? <Text style={loginStyles.errorText}>{errorMsg}</Text> : null}
       </View>
 
-      <Text style={loginStyles.footer}>MyRentCard · Secured by Clerk</Text>
+      <Text style={[loginStyles.footer, { color: theme.textMuted }]}>MyRentCard · Secured by Clerk</Text>
     </View>
   );
 }
@@ -196,6 +197,7 @@ function usePushNotificationSetup() {
 function RootLayoutNav() {
   const { isLoading, isAuthenticated } = useAuth();
   usePushNotificationSetup();
+  const { theme } = useTheme();
 
   if (isLoading) return <LoadingScreen />;
   if (!isAuthenticated) return <LoginScreen />;
@@ -209,9 +211,9 @@ function RootLayoutNav() {
           headerShown: true,
           headerTitle: "Prospect",
           headerBackTitle: "Back",
-          headerStyle: { backgroundColor: "#080E1C" },
-          headerTintColor: "#14A0A0",
-          headerTitleStyle: { fontFamily: "Inter_600SemiBold", color: "#F1F5F9" },
+          headerStyle: { backgroundColor: theme.bg },
+          headerTintColor: theme.tint,
+          headerTitleStyle: { fontFamily: "Inter_600SemiBold", color: theme.text },
           presentation: "card",
         }}
       />
@@ -221,9 +223,9 @@ function RootLayoutNav() {
           headerShown: true,
           headerTitle: "Interaction",
           headerBackTitle: "Back",
-          headerStyle: { backgroundColor: "#080E1C" },
-          headerTintColor: "#14A0A0",
-          headerTitleStyle: { fontFamily: "Inter_600SemiBold", color: "#F1F5F9" },
+          headerStyle: { backgroundColor: theme.bg },
+          headerTintColor: theme.tint,
+          headerTitleStyle: { fontFamily: "Inter_600SemiBold", color: theme.text },
           presentation: "card",
         }}
       />
@@ -263,10 +265,12 @@ export default function RootLayout() {
           <GestureHandlerRootView style={{ flex: 1 }}>
             <KeyboardProvider>
               <AuthProvider>
-                <TwilioCallProvider>
-                  <RootLayoutNav />
-                  <CallScreen />
-                </TwilioCallProvider>
+                <ThemeProvider>
+                  <TwilioCallProvider>
+                    <RootLayoutNav />
+                    <CallScreen />
+                  </TwilioCallProvider>
+                </ThemeProvider>
               </AuthProvider>
             </KeyboardProvider>
           </GestureHandlerRootView>
