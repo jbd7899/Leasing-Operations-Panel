@@ -42,6 +42,81 @@ function getWebhookBaseUrl(): string {
   return domain ? `https://${domain}` : "";
 }
 
+function crossPlatformAlert(
+  title: string,
+  message: string,
+  buttons?: { text: string; style?: string; onPress?: () => void }[],
+) {
+  if (Platform.OS === "web") {
+    if (buttons && buttons.length > 1) {
+      const action = buttons.find((b) => b.style === "destructive" || b.style !== "cancel");
+      if (window.confirm(`${title}\n${message}`)) {
+        action?.onPress?.();
+      }
+    } else {
+      window.alert(`${title}: ${message}`);
+    }
+  } else {
+    Alert.alert(title, message, buttons);
+  }
+}
+
+function WebToggle({
+  value,
+  onValueChange,
+  trackColor,
+  thumbColor,
+  disabled,
+}: {
+  value: boolean;
+  onValueChange: (v: boolean) => void;
+  trackColor?: { false: string; true: string };
+  thumbColor?: string;
+  disabled?: boolean;
+}) {
+  const track = value ? trackColor?.true ?? Colors.brand.teal : trackColor?.false ?? Colors.dark.bgElevated;
+  const thumb = thumbColor ?? (value ? Colors.brand.tealLight : Colors.dark.textMuted);
+  return (
+    <Pressable
+      onPress={() => !disabled && onValueChange(!value)}
+      style={{
+        width: 48,
+        height: 28,
+        borderRadius: 14,
+        backgroundColor: track,
+        justifyContent: "center",
+        paddingHorizontal: 2,
+        opacity: disabled ? 0.4 : 1,
+      }}
+    >
+      <View
+        style={{
+          width: 24,
+          height: 24,
+          borderRadius: 12,
+          backgroundColor: thumb,
+          alignSelf: value ? "flex-end" : "flex-start",
+        }}
+      />
+    </Pressable>
+  );
+}
+
+function CrossPlatformSwitch(props: React.ComponentProps<typeof Switch>) {
+  if (Platform.OS === "web") {
+    return (
+      <WebToggle
+        value={props.value ?? false}
+        onValueChange={props.onValueChange ?? (() => {})}
+        trackColor={props.trackColor as { false: string; true: string } | undefined}
+        thumbColor={props.thumbColor}
+        disabled={props.disabled}
+      />
+    );
+  }
+  return <Switch {...props} />;
+}
+
 function SectionHeader({ title }: { title: string }) {
   return <Text style={styles.sectionHeader}>{title}</Text>;
 }
@@ -98,7 +173,7 @@ function AddPropertyModal({
         setCity("");
         setState("");
       },
-      onError: (err: unknown) => Alert.alert("Error", String(err)),
+      onError: (err: unknown) => crossPlatformAlert("Error", String(err)),
     },
   });
 
@@ -589,7 +664,7 @@ function TwilioIntegrationModal({
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: getGetAccountSettingsQueryKey() });
       },
-      onError: (err: unknown) => Alert.alert("Error", String(err)),
+      onError: (err: unknown) => crossPlatformAlert("Error", String(err)),
     },
   });
 
@@ -605,7 +680,7 @@ function TwilioIntegrationModal({
     const sid = accountSid.trim();
     const token = authToken.trim();
     if (!sid || !token) {
-      Alert.alert("Missing fields", "Enter both Account SID and Auth Token to test.");
+      crossPlatformAlert("Missing fields", "Enter both Account SID and Auth Token to test.");
       return;
     }
     setIsTesting(true);
@@ -627,16 +702,16 @@ function TwilioIntegrationModal({
   function handleSaveAccount() {
     const sid = accountSid.trim();
     const token = authToken.trim();
-    if (!sid) { Alert.alert("Missing field", "Account SID is required."); return; }
-    if (!token) { Alert.alert("Missing field", "Auth Token is required."); return; }
+    if (!sid) { crossPlatformAlert("Missing field", "Account SID is required."); return; }
+    if (!token) { crossPlatformAlert("Missing field", "Auth Token is required."); return; }
     updateMutation.mutate(
       { data: { twilioAccountSid: sid, twilioAuthToken: token } },
-      { onSuccess: () => Alert.alert("Saved", "Your Twilio credentials have been saved.") }
+      { onSuccess: () => crossPlatformAlert("Saved", "Your Twilio credentials have been saved.") }
     );
   }
 
   function handleDisconnectAccount() {
-    Alert.alert(
+    crossPlatformAlert(
       "Disconnect Twilio",
       "This will remove your Twilio credentials. Outbound SMS will stop working until you reconnect.",
       [
@@ -656,19 +731,19 @@ function TwilioIntegrationModal({
     const sid = apiKeySid.trim();
     const secret = apiKeySecret.trim();
     const appSid = twimlAppSid.trim();
-    if (!sid) { Alert.alert("Missing field", "API Key SID is required."); return; }
-    if (!sid.startsWith("SK")) { Alert.alert("Invalid", "API Key SID must start with 'SK'."); return; }
-    if (!secret) { Alert.alert("Missing field", "API Key Secret is required."); return; }
-    if (!appSid) { Alert.alert("Missing field", "TwiML App SID is required."); return; }
-    if (!appSid.startsWith("AP")) { Alert.alert("Invalid", "TwiML App SID must start with 'AP'."); return; }
+    if (!sid) { crossPlatformAlert("Missing field", "API Key SID is required."); return; }
+    if (!sid.startsWith("SK")) { crossPlatformAlert("Invalid", "API Key SID must start with 'SK'."); return; }
+    if (!secret) { crossPlatformAlert("Missing field", "API Key Secret is required."); return; }
+    if (!appSid) { crossPlatformAlert("Missing field", "TwiML App SID is required."); return; }
+    if (!appSid.startsWith("AP")) { crossPlatformAlert("Invalid", "TwiML App SID must start with 'AP'."); return; }
     updateMutation.mutate(
       { data: { twilioApiKeySid: sid, twilioApiKeySecret: secret, twilioTwimlAppSid: appSid } },
-      { onSuccess: () => Alert.alert("Saved", "Twilio Voice credentials saved.") }
+      { onSuccess: () => crossPlatformAlert("Saved", "Twilio Voice credentials saved.") }
     );
   }
 
   function handleDisconnectVoice() {
-    Alert.alert(
+    crossPlatformAlert(
       "Remove Voice Credentials",
       "This will disable in-app calling for all agents until you re-enter credentials.",
       [
@@ -1134,7 +1209,7 @@ export default function SettingsScreen() {
       },
       onError: (_err, _vars) => {
         setAiAssistToggle(accountSettingsData?.aiAssistEnabled ?? false);
-        Alert.alert("Error", "Failed to update AI Assist setting.");
+        crossPlatformAlert("Error", "Failed to update AI Assist setting.");
       },
     },
   });
@@ -1213,7 +1288,7 @@ export default function SettingsScreen() {
             label="Sign Out"
             destructive
             onPress={() =>
-              Alert.alert("Sign Out", "Are you sure you want to sign out?", [
+              crossPlatformAlert("Sign Out", "Are you sure you want to sign out?", [
                 { text: "Cancel", style: "cancel" },
                 { text: "Sign Out", style: "destructive", onPress: logout },
               ])
@@ -1329,7 +1404,7 @@ export default function SettingsScreen() {
                       onPress={() => {
                         const url = `${getWebhookBaseUrl()}/api/webhooks/twilio/sms`;
                         Clipboard.setStringAsync(url).then(() => {
-                          Alert.alert("Copied", "SMS webhook URL copied.");
+                          crossPlatformAlert("Copied", "SMS webhook URL copied.");
                         });
                       }}
                     >
@@ -1346,7 +1421,7 @@ export default function SettingsScreen() {
                       onPress={() => {
                         const url = `${getWebhookBaseUrl()}/api/webhooks/twilio/voice`;
                         Clipboard.setStringAsync(url).then(() => {
-                          Alert.alert("Copied", "Voice webhook URL copied.");
+                          crossPlatformAlert("Copied", "Voice webhook URL copied.");
                         });
                       }}
                     >
@@ -1416,7 +1491,7 @@ export default function SettingsScreen() {
                 AI pre-fills a suggested reply when you open the compose window
               </Text>
             </View>
-            <Switch
+            <CrossPlatformSwitch
               value={aiAssistToggle ?? false}
               onValueChange={handleAiAssistToggle}
               trackColor={{ false: Colors.dark.bgElevated, true: Colors.brand.teal }}
@@ -1447,7 +1522,7 @@ export default function SettingsScreen() {
                 Auto-send an acknowledgment when prospects text you
               </Text>
             </View>
-            <Switch
+            <CrossPlatformSwitch
               value={autoReplyEnabled ?? false}
               onValueChange={handleAutoReplyToggle}
               trackColor={{ false: Colors.dark.bgElevated, true: Colors.brand.teal }}
@@ -1468,7 +1543,7 @@ export default function SettingsScreen() {
                     Only auto-reply outside business hours
                   </Text>
                 </View>
-                <Switch
+                <CrossPlatformSwitch
                   value={autoReplyAfterHoursOnly}
                   onValueChange={handleAutoReplyAfterHoursToggle}
                   trackColor={{ false: Colors.dark.bgElevated, true: Colors.brand.teal }}
