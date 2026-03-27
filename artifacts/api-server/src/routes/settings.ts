@@ -30,6 +30,12 @@ function buildAccountSettingsResponse(account: {
   twilioApiKeySecret: string | null;
   twilioTwimlAppSid: string | null;
   aiAssistEnabled: boolean;
+  autoReplyEnabled: boolean;
+  autoReplyMessage: string | null;
+  autoReplyAfterHoursOnly: boolean;
+  businessHoursStart: string;
+  businessHoursEnd: string;
+  businessTimezone: string;
 }) {
   return {
     id: account.id,
@@ -47,6 +53,12 @@ function buildAccountSettingsResponse(account: {
     twilioApiKeySecretMasked: maskToken(account.twilioApiKeySecret),
     twilioTwimlAppSid: account.twilioTwimlAppSid ?? null,
     aiAssistEnabled: account.aiAssistEnabled ?? false,
+    autoReplyEnabled: account.autoReplyEnabled,
+    autoReplyMessage: account.autoReplyMessage,
+    autoReplyAfterHoursOnly: account.autoReplyAfterHoursOnly,
+    businessHoursStart: account.businessHoursStart,
+    businessHoursEnd: account.businessHoursEnd,
+    businessTimezone: account.businessTimezone,
   };
 }
 
@@ -60,6 +72,12 @@ const ACCOUNT_SELECT_FIELDS = {
   twilioApiKeySecret: accountsTable.twilioApiKeySecret,
   twilioTwimlAppSid: accountsTable.twilioTwimlAppSid,
   aiAssistEnabled: accountsTable.aiAssistEnabled,
+  autoReplyEnabled: accountsTable.autoReplyEnabled,
+  autoReplyMessage: accountsTable.autoReplyMessage,
+  autoReplyAfterHoursOnly: accountsTable.autoReplyAfterHoursOnly,
+  businessHoursStart: accountsTable.businessHoursStart,
+  businessHoursEnd: accountsTable.businessHoursEnd,
+  businessTimezone: accountsTable.businessTimezone,
 } as const;
 
 router.get("/settings/account", async (req: Request, res: Response) => {
@@ -90,6 +108,12 @@ router.put("/settings/account", async (req: Request, res: Response) => {
     twilioApiKeySecret,
     twilioTwimlAppSid,
     aiAssistEnabled,
+    autoReplyEnabled,
+    autoReplyMessage,
+    autoReplyAfterHoursOnly,
+    businessHoursStart,
+    businessHoursEnd,
+    businessTimezone,
   } = req.body as {
     twilioAccountSid?: string | null;
     twilioAuthToken?: string | null;
@@ -97,6 +121,12 @@ router.put("/settings/account", async (req: Request, res: Response) => {
     twilioApiKeySecret?: string | null;
     twilioTwimlAppSid?: string | null;
     aiAssistEnabled?: boolean;
+    autoReplyEnabled?: boolean;
+    autoReplyMessage?: string | null;
+    autoReplyAfterHoursOnly?: boolean;
+    businessHoursStart?: string;
+    businessHoursEnd?: string;
+    businessTimezone?: string;
   };
 
   const incomingSid = twilioAccountSid !== undefined ? (twilioAccountSid?.trim() || null) : undefined;
@@ -135,6 +165,12 @@ router.put("/settings/account", async (req: Request, res: Response) => {
   if (incomingApiKeySecret !== undefined) updates.twilioApiKeySecret = incomingApiKeySecret;
   if (incomingTwimlAppSid !== undefined) updates.twilioTwimlAppSid = incomingTwimlAppSid;
   if (aiAssistEnabled !== undefined) updates.aiAssistEnabled = aiAssistEnabled;
+  if (autoReplyEnabled !== undefined) updates.autoReplyEnabled = autoReplyEnabled;
+  if (autoReplyMessage !== undefined) updates.autoReplyMessage = autoReplyMessage;
+  if (autoReplyAfterHoursOnly !== undefined) updates.autoReplyAfterHoursOnly = autoReplyAfterHoursOnly;
+  if (businessHoursStart !== undefined) updates.businessHoursStart = businessHoursStart;
+  if (businessHoursEnd !== undefined) updates.businessHoursEnd = businessHoursEnd;
+  if (businessTimezone !== undefined) updates.businessTimezone = businessTimezone;
 
   const [account] = await db
     .update(accountsTable)

@@ -16,6 +16,7 @@ import settingsRouter from "./settings";
 import legalRouter from "./legal";
 import voiceRouter from "./voice";
 import founderRouter from "./founder";
+import pushRouter from "./push";
 
 const router: IRouter = Router();
 
@@ -36,5 +37,6 @@ router.use(exportsRouter);
 router.use(analyticsRouter);
 router.use(settingsRouter);
 router.use(founderRouter);
+router.use(pushRouter);
 
 export default router;

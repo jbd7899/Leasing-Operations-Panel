@@ -13,6 +13,7 @@ export const twilioNumbersTable = pgTable("twilio_numbers", {
   friendlyName: varchar("friendly_name", { length: 255 }),
   purpose: varchar("purpose", { length: 100 }),
   isActive: boolean("is_active").notNull().default(true),
+  autoReplyEnabled: boolean("auto_reply_enabled"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 }, (table) => [

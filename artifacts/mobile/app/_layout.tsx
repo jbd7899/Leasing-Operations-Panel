@@ -23,7 +23,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { useSignIn } from "@clerk/clerk-expo";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { initApiClient } from "@/lib/api";
+import { initApiClient, api } from "@/lib/api";
 import { AuthProvider, useAuth } from "@/lib/auth";
 import Colors from "@/constants/colors";
 import { TwilioCallProvider } from "@/contexts/TwilioCallContext";
@@ -173,8 +173,29 @@ function LoginScreen() {
   );
 }
 
+function usePushNotificationSetup() {
+  const { isAuthenticated } = useAuth();
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    (async () => {
+      try {
+        const { registerForPushNotifications } = await import("@/lib/pushNotifications");
+        const token = await registerForPushNotifications();
+        if (token) {
+          await api.post("/push-token", { token });
+        }
+      } catch (err) {
+        console.warn("Push notification setup failed:", err);
+      }
+    })();
+  }, [isAuthenticated]);
+}
+
 function RootLayoutNav() {
   const { isLoading, isAuthenticated } = useAuth();
+  usePushNotificationSetup();
 
   if (isLoading) return <LoadingScreen />;
   if (!isAuthenticated) return <LoginScreen />;

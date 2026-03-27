@@ -1093,18 +1093,39 @@ export default function SettingsScreen() {
   const [twilioExpanded, setTwilioExpanded] = useState(false);
   const [usersExpanded, setUsersExpanded] = useState(false);
   const [aiAssistToggle, setAiAssistToggle] = useState<boolean | null>(null);
+  const [autoReplyEnabled, setAutoReplyEnabled] = useState<boolean | null>(null);
+  const [autoReplyAfterHoursOnly, setAutoReplyAfterHoursOnly] = useState(true);
+  const [autoReplyMessage, setAutoReplyMessage] = useState("");
+  const [businessHoursStart, setBusinessHoursStart] = useState("09:00");
+  const [businessHoursEnd, setBusinessHoursEnd] = useState("18:00");
 
   const { data: authUserData } = useGetCurrentAuthUser();
   const currentRole = authUserData?.user?.role ?? null;
   const isAdminOrOwner = currentRole === "owner" || currentRole === "admin";
 
-  const { data: accountSettingsData } = useGetAccountSettings();
+  const { data: accountSettingsRaw } = useGetAccountSettings();
+  // Cast to include auto-reply fields (API returns them, Orval types not yet regenerated)
+  const accountSettingsData = accountSettingsRaw as (typeof accountSettingsRaw & {
+    autoReplyEnabled?: boolean;
+    autoReplyMessage?: string | null;
+    autoReplyAfterHoursOnly?: boolean;
+    businessHoursStart?: string;
+    businessHoursEnd?: string;
+    businessTimezone?: string;
+  }) | undefined;
 
   useEffect(() => {
     if (accountSettingsData?.aiAssistEnabled !== undefined && aiAssistToggle === null) {
       setAiAssistToggle(accountSettingsData.aiAssistEnabled ?? false);
     }
-  }, [accountSettingsData?.aiAssistEnabled]);
+    if (accountSettingsData && autoReplyEnabled === null) {
+      setAutoReplyEnabled(accountSettingsData.autoReplyEnabled ?? false);
+      setAutoReplyAfterHoursOnly(accountSettingsData.autoReplyAfterHoursOnly ?? true);
+      setAutoReplyMessage(accountSettingsData.autoReplyMessage ?? "");
+      setBusinessHoursStart(accountSettingsData.businessHoursStart ?? "09:00");
+      setBusinessHoursEnd(accountSettingsData.businessHoursEnd ?? "18:00");
+    }
+  }, [accountSettingsData?.aiAssistEnabled, accountSettingsData?.autoReplyEnabled]);
 
   const updateSettingsMutation = useUpdateAccountSettings({
     mutation: {
@@ -1121,6 +1142,24 @@ export default function SettingsScreen() {
   function handleAiAssistToggle(value: boolean) {
     setAiAssistToggle(value);
     updateSettingsMutation.mutate({ data: { aiAssistEnabled: value } });
+  }
+
+  function handleAutoReplyToggle(value: boolean) {
+    setAutoReplyEnabled(value);
+    updateSettingsMutation.mutate({ data: { autoReplyEnabled: value } as any });
+  }
+
+  function handleAutoReplyAfterHoursToggle(value: boolean) {
+    setAutoReplyAfterHoursOnly(value);
+    updateSettingsMutation.mutate({ data: { autoReplyAfterHoursOnly: value } as any });
+  }
+
+  function handleAutoReplyMessageSave() {
+    updateSettingsMutation.mutate({ data: { autoReplyMessage: autoReplyMessage } as any });
+  }
+
+  function handleBusinessHoursSave() {
+    updateSettingsMutation.mutate({ data: { businessHoursStart, businessHoursEnd } as any });
   }
 
   const { data: propertiesData, isLoading: propertiesLoading } = useListProperties();
@@ -1392,6 +1431,98 @@ export default function SettingsScreen() {
                 AI drafts are suggestions only — you always review and send manually.
               </Text>
             </View>
+          )}
+        </View>
+
+        {/* Auto-Reply */}
+        <View style={styles.card}>
+          <SectionHeader title="AUTO-REPLY" />
+          <View style={aiAssistStyles.row}>
+            <View style={aiAssistStyles.iconWrap}>
+              <Feather name="message-circle" size={16} color={Colors.brand.tealLight} />
+            </View>
+            <View style={aiAssistStyles.info}>
+              <Text style={aiAssistStyles.label}>Smart Auto-Reply</Text>
+              <Text style={aiAssistStyles.desc}>
+                Auto-send an acknowledgment when prospects text you
+              </Text>
+            </View>
+            <Switch
+              value={autoReplyEnabled ?? false}
+              onValueChange={handleAutoReplyToggle}
+              trackColor={{ false: Colors.dark.bgElevated, true: Colors.brand.teal }}
+              thumbColor={autoReplyEnabled ? Colors.brand.tealLight : Colors.dark.textMuted}
+              disabled={updateSettingsMutation.isPending || autoReplyEnabled === null}
+            />
+          </View>
+
+          {autoReplyEnabled && (
+            <>
+              <View style={[aiAssistStyles.row, { marginTop: 12 }]}>
+                <View style={aiAssistStyles.iconWrap}>
+                  <Feather name="clock" size={16} color={Colors.brand.tealLight} />
+                </View>
+                <View style={aiAssistStyles.info}>
+                  <Text style={aiAssistStyles.label}>After Hours Only</Text>
+                  <Text style={aiAssistStyles.desc}>
+                    Only auto-reply outside business hours
+                  </Text>
+                </View>
+                <Switch
+                  value={autoReplyAfterHoursOnly}
+                  onValueChange={handleAutoReplyAfterHoursToggle}
+                  trackColor={{ false: Colors.dark.bgElevated, true: Colors.brand.teal }}
+                  thumbColor={autoReplyAfterHoursOnly ? Colors.brand.tealLight : Colors.dark.textMuted}
+                  disabled={updateSettingsMutation.isPending}
+                />
+              </View>
+
+              {autoReplyAfterHoursOnly && (
+                <View style={{ flexDirection: "row", gap: 12, marginTop: 12, paddingHorizontal: 4 }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={aiAssistStyles.desc}>Start</Text>
+                    <TextInput
+                      style={[modalStyles.input, { marginTop: 4 }]}
+                      value={businessHoursStart}
+                      onChangeText={setBusinessHoursStart}
+                      onBlur={handleBusinessHoursSave}
+                      placeholder="09:00"
+                      placeholderTextColor={Colors.dark.textMuted}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={aiAssistStyles.desc}>End</Text>
+                    <TextInput
+                      style={[modalStyles.input, { marginTop: 4 }]}
+                      value={businessHoursEnd}
+                      onChangeText={setBusinessHoursEnd}
+                      onBlur={handleBusinessHoursSave}
+                      placeholder="18:00"
+                      placeholderTextColor={Colors.dark.textMuted}
+                    />
+                  </View>
+                </View>
+              )}
+
+              <View style={{ marginTop: 12, paddingHorizontal: 4 }}>
+                <Text style={aiAssistStyles.desc}>Reply Message</Text>
+                <TextInput
+                  style={[modalStyles.input, { marginTop: 4, minHeight: 60, textAlignVertical: "top" }]}
+                  value={autoReplyMessage}
+                  onChangeText={setAutoReplyMessage}
+                  onBlur={handleAutoReplyMessageSave}
+                  multiline
+                  placeholder="Hi {firstName}! Thanks for reaching out about {propertyName}..."
+                  placeholderTextColor={Colors.dark.textMuted}
+                />
+                <View style={[aiAssistStyles.hint, { marginTop: 6 }]}>
+                  <Feather name="info" size={12} color={Colors.dark.textMuted} />
+                  <Text style={aiAssistStyles.hintText}>
+                    Use {"{firstName}"} and {"{propertyName}"} as placeholders
+                  </Text>
+                </View>
+              </View>
+            </>
           )}
         </View>
 

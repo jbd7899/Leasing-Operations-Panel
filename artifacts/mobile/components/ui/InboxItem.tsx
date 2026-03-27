@@ -10,7 +10,7 @@ import { useTwilioCall } from "@/contexts/TwilioCallContext";
 type FeatherIconName = ComponentProps<typeof Feather>["name"];
 
 interface InboxItemProps {
-  item: InboxItemType;
+  item: InboxItemType & { isStale?: boolean };
   onPress: () => void;
 }
 
@@ -34,6 +34,7 @@ const SOURCE_ICONS: Record<string, FeatherIconName> = {
 
 export function InboxItem({ item, onPress }: InboxItemProps) {
   const { interaction, prospect, property, messageCount } = item;
+  const isStale = (item as any).isStale ?? false;
   const { startCall } = useTwilioCall();
 
   const { data: twilioNumbersData } = useListTwilioNumbers({
@@ -63,7 +64,7 @@ export function InboxItem({ item, onPress }: InboxItemProps) {
   return (
     <Pressable
       onPress={onPress}
-      style={({ pressed }) => [styles.card, pressed && styles.pressed]}
+      style={({ pressed }) => [styles.card, isStale && styles.staleCard, pressed && styles.pressed]}
     >
       <View style={styles.iconWrap}>
         <Feather name={sourceIcon} size={18} color={Colors.brand.tealLight} />
@@ -81,6 +82,11 @@ export function InboxItem({ item, onPress }: InboxItemProps) {
           </View>
           <View style={styles.rightMeta}>
             <Text style={styles.time}>{timeAgo(interaction.occurredAt)}</Text>
+            {isStale && (
+              <View style={styles.staleBadge}>
+                <Text style={styles.staleBadgeText}>Needs follow-up</Text>
+              </View>
+            )}
             {showMessageBadge && (
               <View style={styles.messageBadge}>
                 <Text style={styles.messageBadgeText}>{messageCount}</Text>
@@ -139,6 +145,21 @@ const styles = StyleSheet.create({
   },
   pressed: {
     opacity: 0.75,
+  },
+  staleCard: {
+    borderLeftWidth: 3,
+    borderLeftColor: "#F59E0B",
+  },
+  staleBadge: {
+    backgroundColor: "#F59E0B20",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  staleBadgeText: {
+    fontSize: 10,
+    fontFamily: "Inter_500Medium",
+    color: "#F59E0B",
   },
   iconWrap: {
     width: 40,

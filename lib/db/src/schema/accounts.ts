@@ -14,6 +14,12 @@ export const accountsTable = pgTable("accounts", {
   twilioApiKeySecret: varchar("twilio_api_key_secret", { length: 100 }),
   twilioTwimlAppSid: varchar("twilio_twiml_app_sid", { length: 100 }),
   aiAssistEnabled: boolean("ai_assist_enabled").notNull().default(false),
+  autoReplyEnabled: boolean("auto_reply_enabled").notNull().default(false),
+  autoReplyMessage: text("auto_reply_message").default("Hi {firstName}! Thanks for reaching out about {propertyName}. We'll get back to you shortly."),
+  autoReplyAfterHoursOnly: boolean("auto_reply_after_hours_only").notNull().default(true),
+  businessHoursStart: varchar("business_hours_start", { length: 5 }).notNull().default("09:00"),
+  businessHoursEnd: varchar("business_hours_end", { length: 5 }).notNull().default("18:00"),
+  businessTimezone: varchar("business_timezone", { length: 50 }).notNull().default("America/New_York"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
