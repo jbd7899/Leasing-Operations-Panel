@@ -7,6 +7,7 @@ import React, { useState, useEffect } from "react";
 import { Platform, StyleSheet, View, Text, Pressable, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Colors from "@/constants/colors";
+import { useTheme } from "@/contexts/ThemeContext";
 import { api } from "@/lib/api";
 
 const WEB_SIDEBAR_BREAKPOINT = 768;
@@ -70,6 +71,7 @@ function useIsOwner(): boolean {
 }
 
 function WebSidebarLayout() {
+  const { theme, isDark } = useTheme();
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
@@ -89,11 +91,11 @@ function WebSidebarLayout() {
   const activeKey = activeTab?.name ?? "index";
 
   return (
-    <View style={sidebarStyles.root}>
-      <View style={[sidebarStyles.sidebar, { paddingTop: Math.max(insets.top, 20) }]}>
+    <View style={[sidebarStyles.root, { backgroundColor: theme.bg }]}>
+      <View style={[sidebarStyles.sidebar, { paddingTop: Math.max(insets.top, 20), backgroundColor: theme.bgCard, borderRightColor: theme.border }]}>
         <View style={sidebarStyles.logoRow}>
           <View style={sidebarStyles.logoDot} />
-          <Text style={sidebarStyles.logoText}>MyRentCard</Text>
+          <Text style={[sidebarStyles.logoText, { color: theme.text }]}>MyRentCard</Text>
         </View>
 
         <View style={sidebarStyles.navList}>
@@ -102,7 +104,7 @@ function WebSidebarLayout() {
             return (
               <Pressable
                 key={item.name}
-                style={[sidebarStyles.navItem, isActive && sidebarStyles.navItemActive]}
+                style={[sidebarStyles.navItem, isActive && [sidebarStyles.navItemActive, { backgroundColor: theme.activeBg }]]}
                 onPress={() => {
                   if (item.name === "index") {
                     router.push("/(tabs)");
@@ -114,11 +116,12 @@ function WebSidebarLayout() {
                 <Feather
                   name={item.icon}
                   size={18}
-                  color={isActive ? Colors.brand.tealLight : Colors.dark.textSecondary}
+                  color={isActive ? Colors.brand.tealLight : theme.textSecondary}
                 />
                 <Text
                   style={[
                     sidebarStyles.navLabel,
+                    { color: theme.textSecondary },
                     isActive && sidebarStyles.navLabelActive,
                   ]}
                 >
@@ -182,6 +185,7 @@ function NativeTabLayout() {
 }
 
 function ClassicTabLayout() {
+  const { theme, isDark } = useTheme();
   const isIOS = Platform.OS === "ios";
   const isWeb = Platform.OS === "web";
   const safeAreaInsets = useSafeAreaInsets();
@@ -192,12 +196,12 @@ function ClassicTabLayout() {
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: Colors.brand.tealLight,
-        tabBarInactiveTintColor: Colors.dark.tabIconDefault,
+        tabBarInactiveTintColor: theme.tabIconDefault,
         tabBarStyle: {
           position: "absolute",
-          backgroundColor: isIOS ? "transparent" : Colors.dark.bgCard,
+          backgroundColor: isIOS ? "transparent" : theme.bgCard,
           borderTopWidth: 1,
-          borderTopColor: Colors.dark.border,
+          borderTopColor: theme.border,
           elevation: 0,
           paddingBottom: safeAreaInsets.bottom,
           ...(isWeb ? { height: 84 } : {}),
@@ -206,11 +210,11 @@ function ClassicTabLayout() {
           isIOS ? (
             <BlurView
               intensity={80}
-              tint="dark"
+              tint={isDark ? "dark" : "light"}
               style={StyleSheet.absoluteFill}
             />
           ) : isWeb ? (
-            <View style={[StyleSheet.absoluteFill, { backgroundColor: Colors.dark.bgCard }]} />
+            <View style={[StyleSheet.absoluteFill, { backgroundColor: theme.bgCard }]} />
           ) : null,
       }}
     >

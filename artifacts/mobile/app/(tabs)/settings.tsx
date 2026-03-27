@@ -18,7 +18,9 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Colors from "@/constants/colors";
+import { useTheme } from "@/contexts/ThemeContext";
 import { useAuth } from "@/lib/auth";
+import TwilioWizard from "@/components/settings/TwilioWizard";
 import {
   useListProperties,
   useListTwilioNumbers,
@@ -29,7 +31,7 @@ import {
   useCreateUser,
   useGetAccountSettings,
   useUpdateAccountSettings,
-  useTestTwilioCredentials,
+
   getListPropertiesQueryKey,
   getListTwilioNumbersQueryKey,
   getListUsersQueryKey,
@@ -118,7 +120,8 @@ function CrossPlatformSwitch(props: React.ComponentProps<typeof Switch>) {
 }
 
 function SectionHeader({ title }: { title: string }) {
-  return <Text style={styles.sectionHeader}>{title}</Text>;
+  const { theme, isDark } = useTheme();
+  return <Text style={[styles.sectionHeader, { color: theme.textMuted }]}>{title}</Text>;
 }
 
 function SettingRow({
@@ -134,16 +137,17 @@ function SettingRow({
   onPress?: () => void;
   destructive?: boolean;
 }) {
+  const { theme, isDark } = useTheme();
   return (
-    <Pressable style={styles.settingRow} onPress={onPress} disabled={!onPress}>
-      <View style={styles.settingIconWrap}>
+    <Pressable style={[styles.settingRow, { borderTopColor: theme.border }]} onPress={onPress} disabled={!onPress}>
+      <View style={[styles.settingIconWrap, { backgroundColor: theme.bgElevated }]}>
         <Feather name={icon} size={16} color={destructive ? "#FF6B6B" : Colors.brand.tealLight} />
       </View>
-      <Text style={[styles.settingLabel, destructive && styles.destructiveLabel]}>{label}</Text>
+      <Text style={[styles.settingLabel, { color: theme.text }, destructive && styles.destructiveLabel]}>{label}</Text>
       {value ? (
-        <Text style={styles.settingValue}>{value}</Text>
+        <Text style={[styles.settingValue, { color: theme.textMuted }]}>{value}</Text>
       ) : (
-        onPress && <Feather name="chevron-right" size={16} color={Colors.dark.textMuted} />
+        onPress && <Feather name="chevron-right" size={16} color={theme.textMuted} />
       )}
     </Pressable>
   );
@@ -162,6 +166,8 @@ function AddPropertyModal({
   const [address, setAddress] = useState("");
   const [city, setCity] = useState("");
   const [state, setState] = useState("");
+
+  const { theme, isDark } = useTheme();
 
   const createMutation = useCreateProperty({
     mutation: {
@@ -188,54 +194,54 @@ function AddPropertyModal({
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
-        <View style={modalStyles.container}>
-          <View style={modalStyles.header}>
-            <Text style={modalStyles.title}>Add Property</Text>
+        <View style={[modalStyles.container, { backgroundColor: theme.bg }]}>
+          <View style={[modalStyles.header, { borderBottomColor: theme.border }]}>
+            <Text style={[modalStyles.title, { color: theme.text }]}>Add Property</Text>
             <Pressable onPress={onClose}>
-              <Feather name="x" size={22} color={Colors.dark.textSecondary} />
+              <Feather name="x" size={22} color={theme.textSecondary} />
             </Pressable>
           </View>
 
           <ScrollView style={modalStyles.body} keyboardShouldPersistTaps="handled">
-            <Text style={modalStyles.fieldLabel}>Property Name *</Text>
+            <Text style={[modalStyles.fieldLabel, { color: theme.textSecondary }]}>Property Name *</Text>
             <TextInput
               value={name}
               onChangeText={setName}
               placeholder="e.g. Sunrise Apartments"
-              placeholderTextColor={Colors.dark.textMuted}
-              style={modalStyles.input}
+              placeholderTextColor={theme.textMuted}
+              style={[modalStyles.input, { backgroundColor: theme.bgCard, borderColor: theme.border, color: theme.text }]}
             />
-            <Text style={modalStyles.fieldLabel}>Address</Text>
+            <Text style={[modalStyles.fieldLabel, { color: theme.textSecondary }]}>Address</Text>
             <TextInput
               value={address}
               onChangeText={setAddress}
               placeholder="e.g. 123 Main St"
-              placeholderTextColor={Colors.dark.textMuted}
-              style={modalStyles.input}
+              placeholderTextColor={theme.textMuted}
+              style={[modalStyles.input, { backgroundColor: theme.bgCard, borderColor: theme.border, color: theme.text }]}
             />
-            <Text style={modalStyles.fieldLabel}>City</Text>
+            <Text style={[modalStyles.fieldLabel, { color: theme.textSecondary }]}>City</Text>
             <TextInput
               value={city}
               onChangeText={setCity}
               placeholder="e.g. Austin"
-              placeholderTextColor={Colors.dark.textMuted}
-              style={modalStyles.input}
+              placeholderTextColor={theme.textMuted}
+              style={[modalStyles.input, { backgroundColor: theme.bgCard, borderColor: theme.border, color: theme.text }]}
             />
-            <Text style={modalStyles.fieldLabel}>State</Text>
+            <Text style={[modalStyles.fieldLabel, { color: theme.textSecondary }]}>State</Text>
             <TextInput
               value={state}
               onChangeText={setState}
               placeholder="e.g. TX"
-              placeholderTextColor={Colors.dark.textMuted}
-              style={modalStyles.input}
+              placeholderTextColor={theme.textMuted}
+              style={[modalStyles.input, { backgroundColor: theme.bgCard, borderColor: theme.border, color: theme.text }]}
               maxLength={2}
               autoCapitalize="characters"
             />
           </ScrollView>
 
-          <View style={modalStyles.footer}>
-            <Pressable style={modalStyles.cancelBtn} onPress={onClose}>
-              <Text style={modalStyles.cancelBtnText}>Cancel</Text>
+          <View style={[modalStyles.footer, { borderTopColor: theme.border }]}>
+            <Pressable style={[modalStyles.cancelBtn, { backgroundColor: theme.bgCard, borderColor: theme.border }]} onPress={onClose}>
+              <Text style={[modalStyles.cancelBtnText, { color: theme.textSecondary }]}>Cancel</Text>
             </Pressable>
             <Pressable
               style={[modalStyles.saveBtn, (!name.trim() || createMutation.isPending) && modalStyles.saveBtnDisabled]}
@@ -318,6 +324,8 @@ function AddTwilioNumberModal({
     onClose();
   }
 
+  const { theme, isDark } = useTheme();
+
   function handleSubmit() {
     setTouched(true);
     const err = validatePhone(phoneNumber);
@@ -345,11 +353,11 @@ function AddTwilioNumberModal({
       onRequestClose={handleClose}
     >
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <View style={modalStyles.container}>
-          <View style={modalStyles.header}>
-            <Text style={modalStyles.title}>Add Twilio Number</Text>
+        <View style={[modalStyles.container, { backgroundColor: theme.bg }]}>
+          <View style={[modalStyles.header, { borderBottomColor: theme.border }]}>
+            <Text style={[modalStyles.title, { color: theme.text }]}>Add Twilio Number</Text>
             <Pressable onPress={handleClose}>
-              <Feather name="x" size={22} color={Colors.dark.textSecondary} />
+              <Feather name="x" size={22} color={theme.textSecondary} />
             </Pressable>
           </View>
 
@@ -360,7 +368,7 @@ function AddTwilioNumberModal({
                 <Text style={webhookStyles.errorText}>{apiError}</Text>
               </View>
             ) : null}
-            <Text style={modalStyles.fieldLabel}>Phone Number * (E.164 format)</Text>
+            <Text style={[modalStyles.fieldLabel, { color: theme.textSecondary }]}>Phone Number * (E.164 format)</Text>
             <TextInput
               value={phoneNumber}
               onChangeText={(v) => {
@@ -372,49 +380,49 @@ function AddTwilioNumberModal({
                 setPhoneError(validatePhone(phoneNumber));
               }}
               placeholder="+15035551234"
-              placeholderTextColor={Colors.dark.textMuted}
-              style={[modalStyles.input, (touched && phoneError) ? webhookStyles.inputError : null]}
+              placeholderTextColor={theme.textMuted}
+              style={[modalStyles.input, { backgroundColor: theme.bgCard, borderColor: theme.border, color: theme.text }, (touched && phoneError) ? webhookStyles.inputError : null]}
               keyboardType="phone-pad"
               autoCorrect={false}
             />
             {touched && phoneError ? (
               <Text style={webhookStyles.fieldError}>{phoneError}</Text>
             ) : null}
-            <Text style={modalStyles.fieldLabel}>Friendly Name</Text>
+            <Text style={[modalStyles.fieldLabel, { color: theme.textSecondary }]}>Friendly Name</Text>
             <TextInput
               value={friendlyName}
               onChangeText={setFriendlyName}
               placeholder="e.g. Leasing Office Line"
-              placeholderTextColor={Colors.dark.textMuted}
-              style={modalStyles.input}
+              placeholderTextColor={theme.textMuted}
+              style={[modalStyles.input, { backgroundColor: theme.bgCard, borderColor: theme.border, color: theme.text }]}
             />
-            <Text style={modalStyles.fieldLabel}>Purpose</Text>
+            <Text style={[modalStyles.fieldLabel, { color: theme.textSecondary }]}>Purpose</Text>
             <TextInput
               value={purpose}
               onChangeText={setPurpose}
               placeholder="e.g. Main leasing intake"
-              placeholderTextColor={Colors.dark.textMuted}
-              style={modalStyles.input}
+              placeholderTextColor={theme.textMuted}
+              style={[modalStyles.input, { backgroundColor: theme.bgCard, borderColor: theme.border, color: theme.text }]}
             />
             {properties.length > 0 && (
               <>
-                <Text style={modalStyles.fieldLabel}>Assign to Property (optional)</Text>
+                <Text style={[modalStyles.fieldLabel, { color: theme.textSecondary }]}>Assign to Property (optional)</Text>
                 <View style={webhookStyles.propertyChips}>
                   <Pressable
-                    style={[webhookStyles.propertyChip, !selectedPropertyId && webhookStyles.propertyChipSelected]}
+                    style={[webhookStyles.propertyChip, { borderColor: theme.border, backgroundColor: theme.bgCard }, !selectedPropertyId && webhookStyles.propertyChipSelected]}
                     onPress={() => setSelectedPropertyId(null)}
                   >
-                    <Text style={[webhookStyles.propertyChipText, !selectedPropertyId && webhookStyles.propertyChipTextSelected]}>
+                    <Text style={[webhookStyles.propertyChipText, { color: theme.textSecondary }, !selectedPropertyId && webhookStyles.propertyChipTextSelected]}>
                       None
                     </Text>
                   </Pressable>
                   {properties.map((p) => (
                     <Pressable
                       key={p.id}
-                      style={[webhookStyles.propertyChip, selectedPropertyId === p.id && webhookStyles.propertyChipSelected]}
+                      style={[webhookStyles.propertyChip, { borderColor: theme.border, backgroundColor: theme.bgCard }, selectedPropertyId === p.id && webhookStyles.propertyChipSelected]}
                       onPress={() => setSelectedPropertyId(p.id)}
                     >
-                      <Text style={[webhookStyles.propertyChipText, selectedPropertyId === p.id && webhookStyles.propertyChipTextSelected]}>
+                      <Text style={[webhookStyles.propertyChipText, { color: theme.textSecondary }, selectedPropertyId === p.id && webhookStyles.propertyChipTextSelected]}>
                         {p.name}
                       </Text>
                     </Pressable>
@@ -422,14 +430,14 @@ function AddTwilioNumberModal({
                 </View>
               </>
             )}
-            <Text style={webhookStyles.hint}>
+            <Text style={[webhookStyles.hint, { color: theme.textMuted }]}>
               After adding, expand the Twilio Numbers section to copy webhook URLs for your Twilio console.
             </Text>
           </ScrollView>
 
-          <View style={modalStyles.footer}>
-            <Pressable style={modalStyles.cancelBtn} onPress={handleClose}>
-              <Text style={modalStyles.cancelBtnText}>Cancel</Text>
+          <View style={[modalStyles.footer, { borderTopColor: theme.border }]}>
+            <Pressable style={[modalStyles.cancelBtn, { backgroundColor: theme.bgCard, borderColor: theme.border }]} onPress={handleClose}>
+              <Text style={[modalStyles.cancelBtnText, { color: theme.textSecondary }]}>Cancel</Text>
             </Pressable>
             <Pressable
               style={[
@@ -507,6 +515,8 @@ function AddTeamMemberModal({
     onClose();
   }
 
+  const { theme, isDark } = useTheme();
+
   function handleSubmit() {
     setTouched(true);
     const err = validateEmail(email);
@@ -533,11 +543,11 @@ function AddTeamMemberModal({
       onRequestClose={handleClose}
     >
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <View style={modalStyles.container}>
-          <View style={modalStyles.header}>
-            <Text style={modalStyles.title}>Invite Team Member</Text>
+        <View style={[modalStyles.container, { backgroundColor: theme.bg }]}>
+          <View style={[modalStyles.header, { borderBottomColor: theme.border }]}>
+            <Text style={[modalStyles.title, { color: theme.text }]}>Invite Team Member</Text>
             <Pressable onPress={handleClose}>
-              <Feather name="x" size={22} color={Colors.dark.textSecondary} />
+              <Feather name="x" size={22} color={theme.textSecondary} />
             </Pressable>
           </View>
 
@@ -548,15 +558,15 @@ function AddTeamMemberModal({
                 <Text style={webhookStyles.errorText}>{apiError}</Text>
               </View>
             ) : null}
-            <Text style={modalStyles.fieldLabel}>Full Name</Text>
+            <Text style={[modalStyles.fieldLabel, { color: theme.textSecondary }]}>Full Name</Text>
             <TextInput
               value={name}
               onChangeText={setName}
               placeholder="e.g. Jordan Rivera"
-              placeholderTextColor={Colors.dark.textMuted}
-              style={modalStyles.input}
+              placeholderTextColor={theme.textMuted}
+              style={[modalStyles.input, { backgroundColor: theme.bgCard, borderColor: theme.border, color: theme.text }]}
             />
-            <Text style={modalStyles.fieldLabel}>Email *</Text>
+            <Text style={[modalStyles.fieldLabel, { color: theme.textSecondary }]}>Email *</Text>
             <TextInput
               value={email}
               onChangeText={(v) => {
@@ -568,8 +578,8 @@ function AddTeamMemberModal({
                 setEmailError(validateEmail(email));
               }}
               placeholder="e.g. jordan@yourcompany.com"
-              placeholderTextColor={Colors.dark.textMuted}
-              style={[modalStyles.input, (touched && emailError) ? webhookStyles.inputError : null]}
+              placeholderTextColor={theme.textMuted}
+              style={[modalStyles.input, { backgroundColor: theme.bgCard, borderColor: theme.border, color: theme.text }, (touched && emailError) ? webhookStyles.inputError : null]}
               keyboardType="email-address"
               autoCapitalize="none"
               autoCorrect={false}
@@ -577,28 +587,28 @@ function AddTeamMemberModal({
             {touched && emailError ? (
               <Text style={webhookStyles.fieldError}>{emailError}</Text>
             ) : null}
-            <Text style={modalStyles.fieldLabel}>Role</Text>
+            <Text style={[modalStyles.fieldLabel, { color: theme.textSecondary }]}>Role</Text>
             <View style={webhookStyles.propertyChips}>
               {ROLE_OPTIONS.map((opt) => (
                 <Pressable
                   key={opt.value}
-                  style={[webhookStyles.propertyChip, role === opt.value && webhookStyles.propertyChipSelected]}
+                  style={[webhookStyles.propertyChip, { borderColor: theme.border, backgroundColor: theme.bgCard }, role === opt.value && webhookStyles.propertyChipSelected]}
                   onPress={() => setRole(opt.value as "agent" | "admin")}
                 >
-                  <Text style={[webhookStyles.propertyChipText, role === opt.value && webhookStyles.propertyChipTextSelected]}>
+                  <Text style={[webhookStyles.propertyChipText, { color: theme.textSecondary }, role === opt.value && webhookStyles.propertyChipTextSelected]}>
                     {opt.label}
                   </Text>
                 </Pressable>
               ))}
             </View>
-            <Text style={webhookStyles.hint}>
+            <Text style={[webhookStyles.hint, { color: theme.textMuted }]}>
               This member will be able to sign in with their Replit account using {email || "the email above"} and access your leasing panel.
             </Text>
           </ScrollView>
 
-          <View style={modalStyles.footer}>
-            <Pressable style={modalStyles.cancelBtn} onPress={handleClose}>
-              <Text style={modalStyles.cancelBtnText}>Cancel</Text>
+          <View style={[modalStyles.footer, { borderTopColor: theme.border }]}>
+            <Pressable style={[modalStyles.cancelBtn, { backgroundColor: theme.bgCard, borderColor: theme.border }]} onPress={handleClose}>
+              <Text style={[modalStyles.cancelBtnText, { color: theme.textSecondary }]}>Cancel</Text>
             </Pressable>
             <Pressable
               style={[modalStyles.saveBtn, ((touched && !isFormValid) || createMutation.isPending) && modalStyles.saveBtnDisabled]}
@@ -618,493 +628,28 @@ function AddTeamMemberModal({
   );
 }
 
-function TwilioIntegrationModal({
-  visible,
-  onClose,
-  currentSettings,
-}: {
-  visible: boolean;
-  onClose: () => void;
-  currentSettings: AccountSettings | null;
-}) {
-  const queryClient = useQueryClient();
-
-  const [accountSid, setAccountSid] = useState(currentSettings?.twilioAccountSid ?? "");
-  const [authToken, setAuthToken] = useState("");
-  const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
-  const [isTesting, setIsTesting] = useState(false);
-
-  const [apiKeySid, setApiKeySid] = useState(currentSettings?.twilioApiKeySid ?? "");
-  const [apiKeySecret, setApiKeySecret] = useState("");
-  const [twimlAppSid, setTwimlAppSid] = useState(currentSettings?.twilioTwimlAppSid ?? "");
-  const [copiedVoiceUrl, setCopiedVoiceUrl] = useState(false);
-
-  const isConnected = currentSettings?.twilioConfigured ?? false;
-  const isVoiceConfigured = currentSettings?.twilioVoiceConfigured ?? false;
-
-  useEffect(() => {
-    if (visible) {
-      setAccountSid(currentSettings?.twilioAccountSid ?? "");
-      setAuthToken("");
-      setTestResult(null);
-      setApiKeySid(currentSettings?.twilioApiKeySid ?? "");
-      setApiKeySecret("");
-      setTwimlAppSid(currentSettings?.twilioTwimlAppSid ?? "");
-      setCopiedVoiceUrl(false);
-    }
-  }, [
-    visible,
-    currentSettings?.twilioAccountSid,
-    currentSettings?.twilioApiKeySid,
-    currentSettings?.twilioTwimlAppSid,
-  ]);
-
-  const updateMutation = useUpdateAccountSettings({
-    mutation: {
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: getGetAccountSettingsQueryKey() });
-      },
-      onError: (err: unknown) => crossPlatformAlert("Error", String(err)),
-    },
-  });
-
-  const testMutation = useTestTwilioCredentials();
-
-  function handleClose() {
-    setTestResult(null);
-    setIsTesting(false);
-    onClose();
-  }
-
-  async function handleTest() {
-    const sid = accountSid.trim();
-    const token = authToken.trim();
-    if (!sid || !token) {
-      crossPlatformAlert("Missing fields", "Enter both Account SID and Auth Token to test.");
-      return;
-    }
-    setIsTesting(true);
-    setTestResult(null);
-    try {
-      const result = await testMutation.mutateAsync({ data: { twilioAccountSid: sid, twilioAuthToken: token } });
-      if (result.ok) {
-        setTestResult({ ok: true, message: result.accountFriendlyName ? `Connected: ${result.accountFriendlyName}` : "Connected successfully!" });
-      } else {
-        setTestResult({ ok: false, message: result.error ?? "Connection failed." });
-      }
-    } catch (err) {
-      setTestResult({ ok: false, message: String(err) });
-    } finally {
-      setIsTesting(false);
-    }
-  }
-
-  function handleSaveAccount() {
-    const sid = accountSid.trim();
-    const token = authToken.trim();
-    if (!sid) { crossPlatformAlert("Missing field", "Account SID is required."); return; }
-    if (!token) { crossPlatformAlert("Missing field", "Auth Token is required."); return; }
-    updateMutation.mutate(
-      { data: { twilioAccountSid: sid, twilioAuthToken: token } },
-      { onSuccess: () => crossPlatformAlert("Saved", "Your Twilio credentials have been saved.") }
-    );
-  }
-
-  function handleDisconnectAccount() {
-    crossPlatformAlert(
-      "Disconnect Twilio",
-      "This will remove your Twilio credentials. Outbound SMS will stop working until you reconnect.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Disconnect",
-          style: "destructive",
-          onPress: () => {
-            updateMutation.mutate({ data: { twilioAccountSid: null, twilioAuthToken: null } });
-          },
-        },
-      ]
-    );
-  }
-
-  function handleSaveVoice() {
-    const sid = apiKeySid.trim();
-    const secret = apiKeySecret.trim();
-    const appSid = twimlAppSid.trim();
-    if (!sid) { crossPlatformAlert("Missing field", "API Key SID is required."); return; }
-    if (!sid.startsWith("SK")) { crossPlatformAlert("Invalid", "API Key SID must start with 'SK'."); return; }
-    if (!secret) { crossPlatformAlert("Missing field", "API Key Secret is required."); return; }
-    if (!appSid) { crossPlatformAlert("Missing field", "TwiML App SID is required."); return; }
-    if (!appSid.startsWith("AP")) { crossPlatformAlert("Invalid", "TwiML App SID must start with 'AP'."); return; }
-    updateMutation.mutate(
-      { data: { twilioApiKeySid: sid, twilioApiKeySecret: secret, twilioTwimlAppSid: appSid } },
-      { onSuccess: () => crossPlatformAlert("Saved", "Twilio Voice credentials saved.") }
-    );
-  }
-
-  function handleDisconnectVoice() {
-    crossPlatformAlert(
-      "Remove Voice Credentials",
-      "This will disable in-app calling for all agents until you re-enter credentials.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Remove",
-          style: "destructive",
-          onPress: () => {
-            updateMutation.mutate({ data: { twilioApiKeySid: null, twilioApiKeySecret: null, twilioTwimlAppSid: null } });
-          },
-        },
-      ],
-    );
-  }
-
-  const apiBase = (() => {
-    const domain = process.env.EXPO_PUBLIC_DOMAIN;
-    return domain ? `https://${domain}/api` : "";
-  })();
-  const webhookUrls = [
-    { label: "Incoming SMS", url: `${apiBase}/webhooks/twilio/sms` },
-    { label: "SMS Status Callback", url: `${apiBase}/webhooks/twilio/sms-status` },
-    { label: "Incoming Voice", url: `${apiBase}/webhooks/twilio/voice` },
-  ];
-  const outboundCallWebhook = `${apiBase}/webhooks/twilio/outbound-call`;
-  const [copiedLabel, setCopiedLabel] = useState<string | null>(null);
-
-  function handleCopy(label: string, url: string) {
-    Clipboard.setStringAsync(url).then(() => {
-      setCopiedLabel(label);
-      setTimeout(() => setCopiedLabel(null), 1800);
-    });
-  }
-
-  function handleCopyVoiceWebhook() {
-    Clipboard.setStringAsync(outboundCallWebhook).then(() => {
-      setCopiedVoiceUrl(true);
-      setTimeout(() => setCopiedVoiceUrl(false), 1800);
-    });
-  }
-
-  const canSaveAccount = accountSid.trim().length > 0 && authToken.trim().length > 0;
-  const canSaveVoice = apiKeySid.trim().length > 0 && apiKeySecret.trim().length > 0 && twimlAppSid.trim().length > 0;
-
-  return (
-    <Modal
-      visible={visible}
-      animationType={Platform.OS === "web" ? "fade" : "slide"}
-      presentationStyle={Platform.OS === "web" ? "overFullScreen" : "pageSheet"}
-      onRequestClose={handleClose}
-    >
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <View style={modalStyles.container}>
-          <View style={modalStyles.header}>
-            <Text style={modalStyles.title}>Twilio Integration</Text>
-            <Pressable onPress={handleClose}>
-              <Feather name="x" size={22} color={Colors.dark.textSecondary} />
-            </Pressable>
-          </View>
-
-          <ScrollView style={modalStyles.body} keyboardShouldPersistTaps="handled">
-
-            {/* ── Section 1: Account Connection ── */}
-            <View style={voiceSetupStyles.sectionHeader}>
-              <Text style={voiceSetupStyles.sectionTitle}>Account Connection</Text>
-              <View style={integrationStyles.statusRow}>
-                <View style={[integrationStyles.statusDot, isConnected && integrationStyles.statusDotActive]} />
-                <Text style={integrationStyles.statusText}>
-                  {isConnected ? "Connected" : "Not connected"}
-                </Text>
-              </View>
-            </View>
-
-            {isConnected && currentSettings?.twilioAccountSid && (
-              <View style={integrationStyles.maskedRow}>
-                <Feather name="check-circle" size={14} color={Colors.brand.tealLight} />
-                <Text style={integrationStyles.maskedText}>
-                  SID: {currentSettings.twilioAccountSid}
-                </Text>
-              </View>
-            )}
-            {isConnected && currentSettings?.twilioAuthTokenMasked && (
-              <View style={integrationStyles.maskedRow}>
-                <Feather name="lock" size={14} color={Colors.brand.tealLight} />
-                <Text style={integrationStyles.maskedText}>
-                  Token: {currentSettings.twilioAuthTokenMasked}
-                </Text>
-              </View>
-            )}
-
-            <Text style={[modalStyles.fieldLabel, { marginTop: 16 }]}>
-              {isConnected ? "Update" : "Enter"} Credentials
-            </Text>
-            <Text style={integrationStyles.hint}>
-              Find these in your Twilio Console at console.twilio.com
-            </Text>
-
-            <Text style={modalStyles.fieldLabel}>Account SID</Text>
-            <TextInput
-              value={accountSid}
-              onChangeText={setAccountSid}
-              placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-              placeholderTextColor={Colors.dark.textMuted}
-              style={modalStyles.input}
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-
-            <Text style={modalStyles.fieldLabel}>Auth Token</Text>
-            <TextInput
-              value={authToken}
-              onChangeText={(v) => { setAuthToken(v); setTestResult(null); }}
-              placeholder={isConnected ? "Enter new token to update" : "Your Twilio Auth Token"}
-              placeholderTextColor={Colors.dark.textMuted}
-              style={modalStyles.input}
-              autoCapitalize="none"
-              autoCorrect={false}
-              secureTextEntry
-            />
-
-            {testResult && (
-              <View style={[webhookStyles.errorBanner, testResult.ok && integrationStyles.successBanner]}>
-                <Feather
-                  name={testResult.ok ? "check-circle" : "alert-circle"}
-                  size={14}
-                  color={testResult.ok ? Colors.brand.tealLight : "#FF6B6B"}
-                />
-                <Text style={[webhookStyles.errorText, testResult.ok && integrationStyles.successText]}>
-                  {testResult.message}
-                </Text>
-              </View>
-            )}
-
-            <View style={voiceSetupStyles.accountBtnRow}>
-              <Pressable
-                style={[integrationStyles.testBtn, (isTesting || !canSaveAccount) && integrationStyles.testBtnDisabled]}
-                onPress={handleTest}
-                disabled={isTesting || !canSaveAccount}
-              >
-                {isTesting ? (
-                  <ActivityIndicator size="small" color={Colors.brand.tealLight} />
-                ) : (
-                  <>
-                    <Feather name="zap" size={14} color={Colors.brand.tealLight} />
-                    <Text style={integrationStyles.testBtnText}>Test Connection</Text>
-                  </>
-                )}
-              </Pressable>
-
-              <Pressable
-                style={[modalStyles.saveBtn, (!canSaveAccount || updateMutation.isPending) && modalStyles.saveBtnDisabled, voiceSetupStyles.inlineBtn]}
-                onPress={handleSaveAccount}
-                disabled={!canSaveAccount || updateMutation.isPending}
-              >
-                {updateMutation.isPending ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <Text style={modalStyles.saveBtnText}>Save</Text>
-                )}
-              </Pressable>
-            </View>
-
-            {isConnected && (
-              <Pressable style={integrationStyles.disconnectBtn} onPress={handleDisconnectAccount}>
-                <Feather name="trash-2" size={14} color="#FF6B6B" />
-                <Text style={integrationStyles.disconnectText}>Disconnect Twilio</Text>
-              </Pressable>
-            )}
-
-            <View style={integrationStyles.webhookSection}>
-              <Text style={integrationStyles.webhookSectionTitle}>Webhook URLs</Text>
-              <Text style={integrationStyles.webhookSectionHint}>
-                Paste these into your Twilio phone number settings under "A call comes in" and "A message comes in".
-              </Text>
-              {webhookUrls.map(({ label, url }) => (
-                <View key={label} style={integrationStyles.webhookRow}>
-                  <View style={integrationStyles.webhookRowLeft}>
-                    <Text style={integrationStyles.webhookRowLabel}>{label}</Text>
-                    <Text style={integrationStyles.webhookRowUrl} numberOfLines={1} ellipsizeMode="middle">
-                      {url}
-                    </Text>
-                  </View>
-                  <Pressable
-                    style={integrationStyles.webhookCopyBtn}
-                    onPress={() => handleCopy(label, url)}
-                  >
-                    <Feather
-                      name={copiedLabel === label ? "check" : "copy"}
-                      size={14}
-                      color={copiedLabel === label ? Colors.brand.tealLight : Colors.dark.textSecondary}
-                    />
-                    <Text style={[
-                      integrationStyles.webhookCopyText,
-                      copiedLabel === label && integrationStyles.webhookCopiedText,
-                    ]}>
-                      {copiedLabel === label ? "Copied!" : "Copy"}
-                    </Text>
-                  </Pressable>
-                </View>
-              ))}
-            </View>
-
-            {/* ── Section 2: Voice Calling ── */}
-            <View style={voiceSetupStyles.divider} />
-
-            <View style={voiceSetupStyles.sectionHeader}>
-              <Text style={voiceSetupStyles.sectionTitle}>Voice Calling</Text>
-              <View style={integrationStyles.statusRow}>
-                <View style={[integrationStyles.statusDot, isVoiceConfigured && integrationStyles.statusDotActive]} />
-                <Text style={integrationStyles.statusText}>
-                  {isVoiceConfigured ? "Enabled" : "Not configured"}
-                </Text>
-              </View>
-            </View>
-
-            {isVoiceConfigured && currentSettings?.twilioApiKeySid && (
-              <View style={integrationStyles.maskedRow}>
-                <Feather name="key" size={14} color={Colors.brand.tealLight} />
-                <Text style={integrationStyles.maskedText}>
-                  API Key: {currentSettings.twilioApiKeySid}
-                </Text>
-              </View>
-            )}
-            {isVoiceConfigured && currentSettings?.twilioApiKeySecretMasked && (
-              <View style={integrationStyles.maskedRow}>
-                <Feather name="lock" size={14} color={Colors.brand.tealLight} />
-                <Text style={integrationStyles.maskedText}>
-                  Secret: {currentSettings.twilioApiKeySecretMasked}
-                </Text>
-              </View>
-            )}
-            {isVoiceConfigured && currentSettings?.twilioTwimlAppSid && (
-              <View style={integrationStyles.maskedRow}>
-                <Feather name="layers" size={14} color={Colors.brand.tealLight} />
-                <Text style={integrationStyles.maskedText}>
-                  TwiML App: {currentSettings.twilioTwimlAppSid}
-                </Text>
-              </View>
-            )}
-
-            <View style={voiceSetupStyles.stepBox}>
-              <Text style={voiceSetupStyles.stepTitle}>How to set up in-app calling</Text>
-              <Text style={voiceSetupStyles.stepItem}>
-                {"1."} In Twilio Console → Account → API keys & tokens, create a Standard API Key. Copy the SID (SK...) and Secret below.
-              </Text>
-              <Text style={voiceSetupStyles.stepItem}>
-                {"2."} In Twilio Console → Voice → TwiML Apps, create a TwiML App. Set the Voice Request URL to the outbound webhook below, then copy the App SID (AP...).
-              </Text>
-              <Text style={voiceSetupStyles.stepItem}>
-                {"3."} Enter all three values below and tap Save Voice Settings.
-              </Text>
-            </View>
-
-            <Text style={[modalStyles.fieldLabel, { marginTop: 16 }]}>Outbound Call Webhook URL</Text>
-            <Text style={integrationStyles.hint}>
-              Paste this as the Voice Request URL in your TwiML App (Step 2 above).
-            </Text>
-            <Pressable style={voiceSetupStyles.webhookBox} onPress={handleCopyVoiceWebhook}>
-              <Text style={voiceSetupStyles.webhookUrl} numberOfLines={1} ellipsizeMode="middle">
-                {outboundCallWebhook}
-              </Text>
-              <Feather
-                name={copiedVoiceUrl ? "check" : "copy"}
-                size={14}
-                color={copiedVoiceUrl ? Colors.brand.tealLight : Colors.dark.textSecondary}
-              />
-            </Pressable>
-            {copiedVoiceUrl && <Text style={voiceSetupStyles.copiedHint}>Copied!</Text>}
-
-            <Text style={[modalStyles.fieldLabel, { marginTop: 20 }]}>
-              {isVoiceConfigured ? "Update" : "Enter"} Voice Credentials
-            </Text>
-
-            <Text style={modalStyles.fieldLabel}>API Key SID (starts with SK)</Text>
-            <TextInput
-              value={apiKeySid}
-              onChangeText={setApiKeySid}
-              placeholder="SKxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-              placeholderTextColor={Colors.dark.textMuted}
-              style={modalStyles.input}
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-
-            <Text style={modalStyles.fieldLabel}>API Key Secret</Text>
-            <TextInput
-              value={apiKeySecret}
-              onChangeText={setApiKeySecret}
-              placeholder={isVoiceConfigured ? "Enter new secret to update" : "Your API Key Secret"}
-              placeholderTextColor={Colors.dark.textMuted}
-              style={modalStyles.input}
-              autoCapitalize="none"
-              autoCorrect={false}
-              secureTextEntry
-            />
-
-            <Text style={modalStyles.fieldLabel}>TwiML App SID (starts with AP)</Text>
-            <TextInput
-              value={twimlAppSid}
-              onChangeText={setTwimlAppSid}
-              placeholder="APxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-              placeholderTextColor={Colors.dark.textMuted}
-              style={modalStyles.input}
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-
-            <Pressable
-              style={[modalStyles.saveBtn, (!canSaveVoice || updateMutation.isPending) && modalStyles.saveBtnDisabled, voiceSetupStyles.saveVoiceBtn]}
-              onPress={handleSaveVoice}
-              disabled={!canSaveVoice || updateMutation.isPending}
-            >
-              {updateMutation.isPending ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <Text style={modalStyles.saveBtnText}>Save Voice Settings</Text>
-              )}
-            </Pressable>
-
-            {isVoiceConfigured && (
-              <Pressable style={integrationStyles.disconnectBtn} onPress={handleDisconnectVoice}>
-                <Feather name="trash-2" size={14} color="#FF6B6B" />
-                <Text style={integrationStyles.disconnectText}>Disconnect Voice</Text>
-              </Pressable>
-            )}
-
-            <View style={{ height: 8 }} />
-          </ScrollView>
-
-          <View style={modalStyles.footer}>
-            <Pressable style={[modalStyles.cancelBtn, { flex: 1 }]} onPress={handleClose}>
-              <Text style={modalStyles.cancelBtnText}>Done</Text>
-            </Pressable>
-          </View>
-        </View>
-      </KeyboardAvoidingView>
-    </Modal>
-  );
-}
-
 function PropertyCard({ property }: { property: Property }) {
+  const { theme, isDark } = useTheme();
   return (
-    <View style={styles.propertyCard}>
-      <View style={styles.propertyIconWrap}>
+    <View style={[styles.propertyCard, { borderTopColor: theme.border }]}>
+      <View style={[styles.propertyIconWrap, { backgroundColor: theme.activeBg }]}>
         <Feather name="home" size={16} color={Colors.brand.tealLight} />
       </View>
       <View style={styles.propertyInfo}>
-        <Text style={styles.propertyName}>{property.name}</Text>
+        <Text style={[styles.propertyName, { color: theme.text }]}>{property.name}</Text>
         {(property.city || property.state) && (
-          <Text style={styles.propertyLocation}>
+          <Text style={[styles.propertyLocation, { color: theme.textSecondary }]}>
             {[property.city, property.state].filter(Boolean).join(", ")}
           </Text>
         )}
         {property.address1 && (
-          <Text style={styles.propertyAddress}>{property.address1}</Text>
+          <Text style={[styles.propertyAddress, { color: theme.textMuted }]}>{property.address1}</Text>
         )}
       </View>
       <View
         style={[
           styles.propertyStatusDot,
-          { backgroundColor: property.status === "active" ? Colors.brand.tealLight : Colors.dark.textMuted },
+          { backgroundColor: property.status === "active" ? Colors.brand.tealLight : theme.textMuted },
         ]}
       />
     </View>
@@ -1112,19 +657,20 @@ function PropertyCard({ property }: { property: Property }) {
 }
 
 function TwilioNumberCard({ number }: { number: TwilioNumber }) {
+  const { theme, isDark } = useTheme();
   return (
-    <View style={styles.twilioCard}>
-      <View style={styles.twilioIconWrap}>
+    <View style={[styles.twilioCard, { borderTopColor: theme.border }]}>
+      <View style={[styles.twilioIconWrap, { backgroundColor: theme.activeBg }]}>
         <Feather name="phone" size={14} color={Colors.brand.tealLight} />
       </View>
       <View style={styles.twilioInfo}>
-        <Text style={styles.twilioNumber}>{number.phoneNumber}</Text>
+        <Text style={[styles.twilioNumber, { color: theme.text }]}>{number.phoneNumber}</Text>
         {number.friendlyName && (
-          <Text style={styles.twilioFriendly}>{number.friendlyName}</Text>
+          <Text style={[styles.twilioFriendly, { color: theme.textSecondary }]}>{number.friendlyName}</Text>
         )}
       </View>
-      <View style={[styles.twilioStatus, number.isActive ? styles.twilioStatusActive : {}]}>
-        <Text style={[styles.twilioStatusText, number.isActive ? styles.twilioStatusTextActive : {}]}>
+      <View style={[styles.twilioStatus, { backgroundColor: theme.bgElevated, borderColor: theme.border }, number.isActive ? [styles.twilioStatusActive, { backgroundColor: theme.activeBg }] : {}]}>
+        <Text style={[styles.twilioStatusText, { color: theme.textMuted }, number.isActive ? styles.twilioStatusTextActive : {}]}>
           {number.isActive ? "active" : "inactive"}
         </Text>
       </View>
@@ -1133,23 +679,24 @@ function TwilioNumberCard({ number }: { number: TwilioNumber }) {
 }
 
 function UserCard({ user }: { user: AccountUser }) {
+  const { theme, isDark } = useTheme();
   const displayName = user.name || user.email || "Unknown";
   const initials = displayName[0]?.toUpperCase() ?? "?";
 
   return (
-    <View style={styles.userCard}>
-      <View style={styles.userAvatar}>
-        <Text style={styles.userAvatarText}>{initials}</Text>
+    <View style={[styles.userCard, { borderTopColor: theme.border }]}>
+      <View style={[styles.userAvatar, { backgroundColor: theme.bgElevated, borderColor: theme.border }]}>
+        <Text style={[styles.userAvatarText, { color: theme.textSecondary }]}>{initials}</Text>
       </View>
       <View style={styles.userInfo}>
-        <Text style={styles.userName}>{displayName}</Text>
+        <Text style={[styles.userName, { color: theme.text }]}>{displayName}</Text>
         {user.email && (
-          <Text style={styles.userEmail}>{user.email}</Text>
+          <Text style={[styles.userEmail, { color: theme.textMuted }]}>{user.email}</Text>
         )}
       </View>
       {user.role && (
-        <View style={styles.roleChip}>
-          <Text style={styles.roleChipText}>{user.role}</Text>
+        <View style={[styles.roleChip, { backgroundColor: theme.bgElevated, borderColor: theme.border }]}>
+          <Text style={[styles.roleChipText, { color: theme.textSecondary }]}>{user.role}</Text>
         </View>
       )}
     </View>
@@ -1157,6 +704,7 @@ function UserCard({ user }: { user: AccountUser }) {
 }
 
 export default function SettingsScreen() {
+  const { theme, isDark, mode, setMode } = useTheme();
   const insets = useSafeAreaInsets();
   const { user, logout } = useAuth();
   const queryClient = useQueryClient();
@@ -1259,9 +807,9 @@ export default function SettingsScreen() {
     : "User";
 
   return (
-    <View style={[styles.container, { paddingTop: topPad }]}>
+    <View style={[styles.container, { paddingTop: topPad, backgroundColor: theme.bg }]}>
       <View style={styles.header}>
-        <Text style={styles.screenTitle}>Settings</Text>
+        <Text style={[styles.screenTitle, { color: theme.text }]}>Settings</Text>
       </View>
 
       <ScrollView
@@ -1270,17 +818,17 @@ export default function SettingsScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Account */}
-        <View style={styles.card}>
+        <View style={[styles.card, { backgroundColor: theme.bgCard, borderColor: theme.border }]}>
           <SectionHeader title="ACCOUNT" />
           <View style={styles.accountRow}>
-            <View style={styles.accountAvatar}>
+            <View style={[styles.accountAvatar, { backgroundColor: theme.activeBg }]}>
               <Text style={styles.accountAvatarText}>
                 {displayName.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase()}
               </Text>
             </View>
             <View style={styles.accountInfo}>
-              <Text style={styles.accountName}>{displayName}</Text>
-              {user?.email && <Text style={styles.accountEmail}>{user.email}</Text>}
+              <Text style={[styles.accountName, { color: theme.text }]}>{displayName}</Text>
+              {user?.email && <Text style={[styles.accountEmail, { color: theme.textSecondary }]}>{user.email}</Text>}
             </View>
           </View>
           <SettingRow
@@ -1297,7 +845,7 @@ export default function SettingsScreen() {
         </View>
 
         {/* Properties */}
-        <View style={styles.card}>
+        <View style={[styles.card, { backgroundColor: theme.bgCard, borderColor: theme.border }]}>
           <Pressable
             style={styles.expandHeader}
             onPress={() => setPropertiesExpanded((v) => !v)}
@@ -1306,7 +854,7 @@ export default function SettingsScreen() {
             <Feather
               name={propertiesExpanded ? "chevron-up" : "chevron-down"}
               size={16}
-              color={Colors.dark.textMuted}
+              color={theme.textMuted}
             />
           </Pressable>
 
@@ -1315,12 +863,12 @@ export default function SettingsScreen() {
               {propertiesLoading ? (
                 <ActivityIndicator size="small" color={Colors.brand.tealLight} />
               ) : properties.length === 0 ? (
-                <Text style={styles.emptyText}>No properties yet</Text>
+                <Text style={[styles.emptyText, { color: theme.textMuted }]}>No properties yet</Text>
               ) : (
                 properties.map((p) => <PropertyCard key={p.id} property={p} />)
               )}
               <Pressable
-                style={styles.addBtn}
+                style={[styles.addBtn, { backgroundColor: theme.activeBg }]}
                 onPress={() => setShowAddProperty(true)}
               >
                 <Feather name="plus" size={15} color={Colors.brand.tealLight} />
@@ -1331,22 +879,24 @@ export default function SettingsScreen() {
         </View>
 
         {/* Integrations */}
-        <View style={styles.card}>
+        <View style={[styles.card, { backgroundColor: theme.bgCard, borderColor: theme.border }]}>
           <SectionHeader title="INTEGRATIONS" />
-          <Pressable style={integrationStyles.integrationCard} onPress={() => setShowTwilioIntegration(true)}>
-            <View style={integrationStyles.integrationIconWrap}>
+          <Pressable style={[integrationStyles.integrationCard, { borderTopColor: theme.border }]} onPress={() => setShowTwilioIntegration(true)}>
+            <View style={[integrationStyles.integrationIconWrap, { backgroundColor: theme.activeBg }]}>
               <Feather name="phone-call" size={16} color={Colors.brand.tealLight} />
             </View>
             <View style={integrationStyles.integrationInfo}>
-              <Text style={integrationStyles.integrationName}>Twilio</Text>
-              <Text style={integrationStyles.integrationDesc}>SMS & Voice — account credentials</Text>
+              <Text style={[integrationStyles.integrationName, { color: theme.text }]}>Twilio</Text>
+              <Text style={[integrationStyles.integrationDesc, { color: theme.textSecondary }]}>SMS & Voice — account credentials</Text>
             </View>
             <View style={[
               integrationStyles.integrationBadge,
-              accountSettingsData?.twilioConfigured && integrationStyles.integrationBadgeActive,
+              { backgroundColor: theme.bgElevated, borderColor: theme.border },
+              accountSettingsData?.twilioConfigured && [integrationStyles.integrationBadgeActive, { backgroundColor: theme.activeBg }],
             ]}>
               <Text style={[
                 integrationStyles.integrationBadgeText,
+                { color: theme.textMuted },
                 accountSettingsData?.twilioConfigured && integrationStyles.integrationBadgeTextActive,
               ]}>
                 {accountSettingsData?.twilioConfigured && accountSettingsData?.twilioVoiceConfigured
@@ -1356,12 +906,12 @@ export default function SettingsScreen() {
                     : "Not set"}
               </Text>
             </View>
-            <Feather name="chevron-right" size={16} color={Colors.dark.textMuted} />
+            <Feather name="chevron-right" size={16} color={theme.textMuted} />
           </Pressable>
         </View>
 
         {/* Twilio Numbers */}
-        <View style={styles.card}>
+        <View style={[styles.card, { backgroundColor: theme.bgCard, borderColor: theme.border }]}>
           <Pressable
             style={styles.expandHeader}
             onPress={() => setTwilioExpanded((v) => !v)}
@@ -1370,7 +920,7 @@ export default function SettingsScreen() {
             <Feather
               name={twilioExpanded ? "chevron-up" : "chevron-down"}
               size={16}
-              color={Colors.dark.textMuted}
+              color={theme.textMuted}
             />
           </Pressable>
 
@@ -1379,7 +929,7 @@ export default function SettingsScreen() {
               {twilioLoading ? (
                 <ActivityIndicator size="small" color={Colors.brand.tealLight} />
               ) : twilioNumbers.length === 0 ? (
-                <Text style={styles.emptyText}>No Twilio numbers configured</Text>
+                <Text style={[styles.emptyText, { color: theme.textMuted }]}>No Twilio numbers configured</Text>
               ) : (
                 twilioNumbers.map((n) => <TwilioNumberCard key={n.id} number={n} />)
               )}
@@ -1387,20 +937,20 @@ export default function SettingsScreen() {
               {isAdminOrOwner && (
                 <>
                   <Pressable
-                    style={[styles.addBtn, { marginTop: 8 }]}
+                    style={[styles.addBtn, { marginTop: 8, backgroundColor: theme.activeBg }]}
                     onPress={() => setShowAddTwilioNumber(true)}
                   >
                     <Feather name="plus" size={14} color={Colors.brand.tealLight} />
                     <Text style={styles.addBtnText}>Add Number</Text>
                   </Pressable>
 
-                  <View style={webhookStyles.hintSection}>
-                    <Text style={webhookStyles.hintLabel}>WEBHOOK URLS</Text>
-                    <Text style={webhookStyles.hintSubtitle}>
+                  <View style={[webhookStyles.hintSection, { backgroundColor: theme.bgCard, borderColor: theme.border }]}>
+                    <Text style={[webhookStyles.hintLabel, { color: theme.textMuted }]}>WEBHOOK URLS</Text>
+                    <Text style={[webhookStyles.hintSubtitle, { color: theme.textSecondary }]}>
                       Paste these into each Twilio number's settings (HTTP POST):
                     </Text>
                     <Pressable
-                      style={webhookStyles.urlBox}
+                      style={[webhookStyles.urlBox, { backgroundColor: theme.bgCard, borderColor: theme.border }]}
                       onPress={() => {
                         const url = `${getWebhookBaseUrl()}/api/webhooks/twilio/sms`;
                         Clipboard.setStringAsync(url).then(() => {
@@ -1409,7 +959,7 @@ export default function SettingsScreen() {
                       }}
                     >
                       <View style={{ flex: 1 }}>
-                        <Text style={webhookStyles.urlLabel}>SMS</Text>
+                        <Text style={[webhookStyles.urlLabel, { color: theme.textMuted }]}>SMS</Text>
                         <Text style={webhookStyles.urlText} numberOfLines={1}>
                           {`${getWebhookBaseUrl()}/api/webhooks/twilio/sms`}
                         </Text>
@@ -1417,7 +967,7 @@ export default function SettingsScreen() {
                       <Feather name="copy" size={14} color={Colors.brand.tealLight} />
                     </Pressable>
                     <Pressable
-                      style={[webhookStyles.urlBox, { marginTop: 8 }]}
+                      style={[webhookStyles.urlBox, { marginTop: 8, backgroundColor: theme.bgCard, borderColor: theme.border }]}
                       onPress={() => {
                         const url = `${getWebhookBaseUrl()}/api/webhooks/twilio/voice`;
                         Clipboard.setStringAsync(url).then(() => {
@@ -1426,7 +976,7 @@ export default function SettingsScreen() {
                       }}
                     >
                       <View style={{ flex: 1 }}>
-                        <Text style={webhookStyles.urlLabel}>Voice</Text>
+                        <Text style={[webhookStyles.urlLabel, { color: theme.textMuted }]}>Voice</Text>
                         <Text style={webhookStyles.urlText} numberOfLines={1}>
                           {`${getWebhookBaseUrl()}/api/webhooks/twilio/voice`}
                         </Text>
@@ -1441,7 +991,7 @@ export default function SettingsScreen() {
         </View>
 
         {/* Users / Team */}
-        <View style={styles.card}>
+        <View style={[styles.card, { backgroundColor: theme.bgCard, borderColor: theme.border }]}>
           <Pressable
             style={styles.expandHeader}
             onPress={() => setUsersExpanded((v) => !v)}
@@ -1450,7 +1000,7 @@ export default function SettingsScreen() {
             <Feather
               name={usersExpanded ? "chevron-up" : "chevron-down"}
               size={16}
-              color={Colors.dark.textMuted}
+              color={theme.textMuted}
             />
           </Pressable>
 
@@ -1459,15 +1009,15 @@ export default function SettingsScreen() {
               {usersLoading ? (
                 <ActivityIndicator size="small" color={Colors.brand.tealLight} />
               ) : usersError ? (
-                <Text style={styles.emptyText}>Unable to load team members</Text>
+                <Text style={[styles.emptyText, { color: theme.textMuted }]}>Unable to load team members</Text>
               ) : users.length === 0 ? (
-                <Text style={styles.emptyText}>No team members found</Text>
+                <Text style={[styles.emptyText, { color: theme.textMuted }]}>No team members found</Text>
               ) : (
                 users.map((u) => <UserCard key={u.id} user={u} />)
               )}
               {isAdminOrOwner && (
                 <Pressable
-                  style={[styles.addBtn, { marginTop: 8 }]}
+                  style={[styles.addBtn, { marginTop: 8, backgroundColor: theme.activeBg }]}
                   onPress={() => setShowAddTeamMember(true)}
                 >
                   <Feather name="user-plus" size={14} color={Colors.brand.tealLight} />
@@ -1479,30 +1029,30 @@ export default function SettingsScreen() {
         </View>
 
         {/* AI Assist */}
-        <View style={styles.card}>
+        <View style={[styles.card, { backgroundColor: theme.bgCard, borderColor: theme.border }]}>
           <SectionHeader title="AI ASSIST" />
           <View style={aiAssistStyles.row}>
-            <View style={aiAssistStyles.iconWrap}>
+            <View style={[aiAssistStyles.iconWrap, { backgroundColor: theme.activeBg }]}>
               <Feather name="cpu" size={16} color={Colors.brand.tealLight} />
             </View>
             <View style={aiAssistStyles.info}>
-              <Text style={aiAssistStyles.label}>Draft Reply Suggestions</Text>
-              <Text style={aiAssistStyles.desc}>
+              <Text style={[aiAssistStyles.label, { color: theme.text }]}>Draft Reply Suggestions</Text>
+              <Text style={[aiAssistStyles.desc, { color: theme.textSecondary }]}>
                 AI pre-fills a suggested reply when you open the compose window
               </Text>
             </View>
             <CrossPlatformSwitch
               value={aiAssistToggle ?? false}
               onValueChange={handleAiAssistToggle}
-              trackColor={{ false: Colors.dark.bgElevated, true: Colors.brand.teal }}
-              thumbColor={aiAssistToggle ? Colors.brand.tealLight : Colors.dark.textMuted}
+              trackColor={{ false: theme.bgElevated, true: Colors.brand.teal }}
+              thumbColor={aiAssistToggle ? Colors.brand.tealLight : theme.textMuted}
               disabled={updateSettingsMutation.isPending || aiAssistToggle === null}
             />
           </View>
           {aiAssistToggle && (
-            <View style={aiAssistStyles.hint}>
-              <Feather name="info" size={12} color={Colors.dark.textMuted} />
-              <Text style={aiAssistStyles.hintText}>
+            <View style={[aiAssistStyles.hint, { borderTopColor: theme.border }]}>
+              <Feather name="info" size={12} color={theme.textMuted} />
+              <Text style={[aiAssistStyles.hintText, { color: theme.textMuted }]}>
                 AI drafts are suggestions only — you always review and send manually.
               </Text>
             </View>
@@ -1601,10 +1151,47 @@ export default function SettingsScreen() {
           )}
         </View>
 
+        {/* Appearance */}
+        <View style={[styles.card, { backgroundColor: theme.bgCard, borderColor: theme.border }]}>
+          <SectionHeader title="APPEARANCE" />
+          <View style={{ flexDirection: "row", gap: 8, marginTop: 4 }}>
+            {(["dark", "light", "system"] as const).map((m) => (
+              <Pressable
+                key={m}
+                onPress={() => setMode(m)}
+                style={{
+                  flex: 1,
+                  paddingVertical: 10,
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: mode === m ? Colors.brand.teal : theme.border,
+                  backgroundColor: mode === m ? (theme.activeBg) : theme.bgCard,
+                  alignItems: "center",
+                }}
+              >
+                <Feather
+                  name={m === "dark" ? "moon" : m === "light" ? "sun" : "smartphone"}
+                  size={16}
+                  color={mode === m ? Colors.brand.tealLight : theme.textMuted}
+                  style={{ marginBottom: 4 }}
+                />
+                <Text style={{
+                  fontSize: 13,
+                  fontFamily: "Inter_500Medium",
+                  color: mode === m ? Colors.brand.tealLight : theme.textSecondary,
+                  textTransform: "capitalize",
+                }}>
+                  {m}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+
         {/* App info */}
         <View style={styles.appInfoCard}>
-          <Text style={styles.appInfoText}>MyRentCard Leasing Panel</Text>
-          <Text style={styles.appInfoVersion}>v1.0.0 · MyRentCard</Text>
+          <Text style={[styles.appInfoText, { color: theme.textMuted }]}>MyRentCard Leasing Panel</Text>
+          <Text style={[styles.appInfoVersion, { color: theme.textMuted }]}>v1.0.0 · MyRentCard</Text>
         </View>
 
         <View style={{ height: 120 }} />
@@ -1635,7 +1222,7 @@ export default function SettingsScreen() {
         }}
       />
 
-      <TwilioIntegrationModal
+      <TwilioWizard
         visible={showTwilioIntegration}
         onClose={() => setShowTwilioIntegration(false)}
         currentSettings={accountSettingsData ?? null}
@@ -2333,89 +1920,6 @@ const integrationStyles = StyleSheet.create({
   },
   webhookCopiedText: {
     color: Colors.brand.tealLight,
-  },
-});
-
-const voiceSetupStyles = StyleSheet.create({
-  divider: {
-    height: 1,
-    backgroundColor: Colors.dark.border,
-    marginVertical: 24,
-  },
-  sectionHeader: {
-    gap: 6,
-    marginBottom: 4,
-  },
-  sectionTitle: {
-    fontSize: 13,
-    fontFamily: "Inter_700Bold",
-    color: Colors.dark.text,
-    textTransform: "uppercase",
-    letterSpacing: 0.6,
-  },
-  accountBtnRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    marginTop: 14,
-    flexWrap: "wrap",
-  },
-  inlineBtn: {
-    flex: 0,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-  },
-  saveVoiceBtn: {
-    alignSelf: "flex-start",
-    marginTop: 16,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-  },
-  stepBox: {
-    marginTop: 12,
-    padding: 14,
-    backgroundColor: Colors.dark.bgElevated,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: Colors.dark.border,
-    gap: 8,
-  },
-  stepTitle: {
-    fontSize: 13,
-    fontFamily: "Inter_600SemiBold",
-    color: Colors.dark.textSecondary,
-    marginBottom: 2,
-  },
-  stepItem: {
-    fontSize: 12,
-    fontFamily: "Inter_400Regular",
-    color: Colors.dark.textMuted,
-    lineHeight: 18,
-  },
-  webhookBox: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    backgroundColor: Colors.dark.bgCard,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: Colors.dark.border,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    marginTop: 4,
-  },
-  webhookUrl: {
-    flex: 1,
-    fontSize: 12,
-    fontFamily: "Inter_400Regular",
-    color: Colors.brand.tealLight,
-  },
-  copiedHint: {
-    fontSize: 12,
-    fontFamily: "Inter_400Regular",
-    color: Colors.brand.tealLight,
-    marginTop: 4,
-    marginLeft: 2,
   },
 });
 

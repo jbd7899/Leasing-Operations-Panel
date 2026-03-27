@@ -1,7 +1,7 @@
 import React, { type ComponentProps } from "react";
 import { View, Text, StyleSheet } from "react-native";
 import { Feather } from "@expo/vector-icons";
-import Colors from "@/constants/colors";
+import { useTheme } from "@/contexts/ThemeContext";
 
 type FeatherIconName = ComponentProps<typeof Feather>["name"];
 
@@ -12,13 +12,15 @@ interface EmptyStateProps {
 }
 
 export function EmptyState({ icon, title, subtitle }: EmptyStateProps) {
+  const { theme } = useTheme();
+
   return (
     <View style={styles.container}>
-      <View style={styles.iconWrap}>
-        <Feather name={icon} size={28} color={Colors.dark.textMuted} />
+      <View style={[styles.iconWrap, { backgroundColor: theme.bgElevated, borderColor: theme.border }]}>
+        <Feather name={icon} size={28} color={theme.textMuted} />
       </View>
-      <Text style={styles.title}>{title}</Text>
-      {subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
+      <Text style={[styles.title, { color: theme.textSecondary }]}>{title}</Text>
+      {subtitle && <Text style={[styles.subtitle, { color: theme.textMuted }]}>{subtitle}</Text>}
     </View>
   );
 }
@@ -36,9 +38,7 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 20,
-    backgroundColor: Colors.dark.bgElevated,
     borderWidth: 1,
-    borderColor: Colors.dark.border,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 4,
@@ -46,13 +46,11 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 17,
     fontFamily: "Inter_600SemiBold",
-    color: Colors.dark.textSecondary,
     textAlign: "center",
   },
   subtitle: {
     fontSize: 14,
     fontFamily: "Inter_400Regular",
-    color: Colors.dark.textMuted,
     textAlign: "center",
     lineHeight: 20,
   },

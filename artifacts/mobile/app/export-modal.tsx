@@ -12,6 +12,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
+import { useTheme } from "@/contexts/ThemeContext";
 import {
   useCreateExport,
   CreateExportBodyFormat,
@@ -21,6 +22,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function ExportModal() {
+  const { theme, isDark } = useTheme();
   const { prospectIds: rawIds } = useLocalSearchParams<{ prospectIds: string }>();
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
@@ -44,59 +46,59 @@ export default function ExportModal() {
   });
 
   return (
-    <View style={[styles.container, { paddingBottom: insets.bottom + 24 }]}>
-      <View style={styles.handle} />
+    <View style={[styles.container, { paddingBottom: insets.bottom + 24, backgroundColor: theme.bgCard }]}>
+      <View style={[styles.handle, { backgroundColor: theme.border }]} />
 
       <View style={styles.header}>
         <Feather name="upload" size={24} color={Colors.brand.tealLight} />
-        <Text style={styles.title}>Export Prospects</Text>
-        <Text style={styles.subtitle}>
+        <Text style={[styles.title, { color: theme.text }]}>Export Prospects</Text>
+        <Text style={[styles.subtitle, { color: theme.textSecondary }]}>
           {prospectIds.length} prospect{prospectIds.length !== 1 ? "s" : ""} selected
         </Text>
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionLabel}>FORMAT</Text>
+        <Text style={[styles.sectionLabel, { color: theme.textMuted }]}>FORMAT</Text>
         <View style={styles.formatRow}>
           <Pressable
-            style={[styles.formatBtn, format === "csv" && styles.formatBtnActive]}
+            style={[styles.formatBtn, { backgroundColor: theme.bgElevated, borderColor: theme.border }, format === "csv" && [styles.formatBtnActive, { backgroundColor: theme.activeBg }]]}
             onPress={() => setFormat("csv")}
           >
             <Feather
               name="file-text"
               size={20}
-              color={format === "csv" ? Colors.brand.tealLight : Colors.dark.textMuted}
+              color={format === "csv" ? Colors.brand.tealLight : theme.textMuted}
             />
-            <Text style={[styles.formatLabel, format === "csv" && styles.formatLabelActive]}>
+            <Text style={[styles.formatLabel, { color: theme.textSecondary }, format === "csv" && styles.formatLabelActive]}>
               CSV
             </Text>
-            <Text style={styles.formatSub}>AppFolio-compatible</Text>
+            <Text style={[styles.formatSub, { color: theme.textMuted }]}>AppFolio-compatible</Text>
           </Pressable>
 
           <Pressable
-            style={[styles.formatBtn, format === "json" && styles.formatBtnActive]}
+            style={[styles.formatBtn, { backgroundColor: theme.bgElevated, borderColor: theme.border }, format === "json" && [styles.formatBtnActive, { backgroundColor: theme.activeBg }]]}
             onPress={() => setFormat("json")}
           >
             <Feather
               name="code"
               size={20}
-              color={format === "json" ? Colors.brand.tealLight : Colors.dark.textMuted}
+              color={format === "json" ? Colors.brand.tealLight : theme.textMuted}
             />
-            <Text style={[styles.formatLabel, format === "json" && styles.formatLabelActive]}>
+            <Text style={[styles.formatLabel, { color: theme.textSecondary }, format === "json" && styles.formatLabelActive]}>
               JSON
             </Text>
-            <Text style={styles.formatSub}>API-ready format</Text>
+            <Text style={[styles.formatSub, { color: theme.textMuted }]}>API-ready format</Text>
           </Pressable>
         </View>
       </View>
 
       <View style={styles.actions}>
         <Pressable
-          style={styles.cancelBtn}
+          style={[styles.cancelBtn, { backgroundColor: theme.bgElevated, borderColor: theme.border }]}
           onPress={() => router.back()}
           disabled={mutation.isPending}
         >
-          <Text style={styles.cancelText}>Cancel</Text>
+          <Text style={[styles.cancelText, { color: theme.textSecondary }]}>Cancel</Text>
         </Pressable>
 
         <Pressable

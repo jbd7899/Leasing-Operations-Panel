@@ -23,6 +23,8 @@ const dark = {
   tint: brand.tealLight,
   tabIconDefault: "#4B5E78",
   tabIconSelected: brand.tealLight,
+  activeBg: "#0D2A2A",
+  activeBorder: "#164444",
 };
 
 const light = {
@@ -38,7 +40,18 @@ const light = {
   tint: brand.teal,
   tabIconDefault: "#8EA3BF",
   tabIconSelected: brand.teal,
+  activeBg: "#E0F5F5",
+  activeBorder: "#B2DFDF",
 };
+
+export const spacing = {
+  xs: 4,
+  sm: 8,
+  md: 12,
+  lg: 16,
+  xl: 20,
+  xxl: 24,
+} as const;
 
 export default {
   brand,

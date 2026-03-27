@@ -16,6 +16,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
+import { useTheme } from "@/contexts/ThemeContext";
 import {
   useGetProspect,
   useUpdateProspect,
@@ -39,20 +40,22 @@ import { useTwilioCall } from "@/contexts/TwilioCallContext";
 const STATUS_OPTIONS = ["new", "contacted", "qualified", "disqualified", "archived"];
 
 function SectionHeader({ title }: { title: string }) {
+  const { theme } = useTheme();
   return (
-    <Text style={sectionStyles.header}>{title}</Text>
+    <Text style={[sectionStyles.header, { color: theme.textMuted }]}>{title}</Text>
   );
 }
 
 type FeatherIconName = React.ComponentProps<typeof Feather>["name"];
 
 function InfoRow({ icon, label, value }: { icon: FeatherIconName; label: string; value?: string | null }) {
+  const { theme } = useTheme();
   if (!value) return null;
   return (
     <View style={infoStyles.row}>
-      <Feather name={icon} size={14} color={Colors.dark.textMuted} style={infoStyles.icon} />
-      <Text style={infoStyles.label}>{label}</Text>
-      <Text style={infoStyles.value}>{value}</Text>
+      <Feather name={icon} size={14} color={theme.textMuted} style={infoStyles.icon} />
+      <Text style={[infoStyles.label, { color: theme.textMuted }]}>{label}</Text>
+      <Text style={[infoStyles.value, { color: theme.textSecondary }]}>{value}</Text>
     </View>
   );
 }
@@ -62,12 +65,13 @@ function StatusPicker({ currentStatus, onSelect, isUpdating }: {
   onSelect: (s: string) => void;
   isUpdating: boolean;
 }) {
+  const { theme } = useTheme();
   return (
     <View style={statusStyles.container}>
       {STATUS_OPTIONS.map((s) => (
         <Pressable
           key={s}
-          style={[statusStyles.chip, s === currentStatus && statusStyles.chipActive]}
+          style={[statusStyles.chip, { backgroundColor: theme.bgElevated, borderColor: theme.border }, s === currentStatus && statusStyles.chipActive]}
           onPress={() => onSelect(s)}
           disabled={isUpdating || s === currentStatus}
         >
@@ -75,7 +79,7 @@ function StatusPicker({ currentStatus, onSelect, isUpdating }: {
             <ActivityIndicator size="small" color={Colors.brand.tealLight} />
           ) : (
             <Text
-              style={[statusStyles.chipLabel, s === currentStatus && statusStyles.chipLabelActive]}
+              style={[statusStyles.chipLabel, { color: theme.textMuted }, s === currentStatus && statusStyles.chipLabelActive]}
             >
               {s}
             </Text>
@@ -87,6 +91,7 @@ function StatusPicker({ currentStatus, onSelect, isUpdating }: {
 }
 
 export default function ProspectDetailScreen() {
+  const { theme, isDark } = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const queryClient = useQueryClient();
   const { startCall } = useTwilioCall();
@@ -281,7 +286,7 @@ export default function ProspectDetailScreen() {
 
   if (isLoading) {
     return (
-      <View style={styles.loadingCenter}>
+      <View style={[styles.loadingCenter, { backgroundColor: theme.bg }]}>
         <ActivityIndicator size="large" color={Colors.brand.tealLight} />
       </View>
     );
@@ -289,10 +294,10 @@ export default function ProspectDetailScreen() {
 
   if (isError || !data) {
     return (
-      <View style={styles.loadingCenter}>
-        <Feather name="alert-circle" size={32} color={Colors.dark.textMuted} />
-        <Text style={styles.errorText}>Failed to load prospect</Text>
-        <Pressable style={styles.retryBtn} onPress={() => refetch()}>
+      <View style={[styles.loadingCenter, { backgroundColor: theme.bg }]}>
+        <Feather name="alert-circle" size={32} color={theme.textMuted} />
+        <Text style={[styles.errorText, { color: theme.textSecondary }]}>Failed to load prospect</Text>
+        <Pressable style={[styles.retryBtn, { backgroundColor: theme.bgCard, borderColor: theme.border }]} onPress={() => refetch()}>
           <Text style={styles.retryText}>Retry</Text>
         </Pressable>
       </View>
@@ -308,22 +313,22 @@ export default function ProspectDetailScreen() {
 
   return (
     <KeyboardAvoidingView
-      style={styles.root}
+      style={[styles.root, { backgroundColor: theme.bg }]}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       keyboardVerticalOffset={Platform.OS === "ios" ? 88 : 0}
     >
       {/* Compact Sticky Header */}
-      <View style={styles.compactHeader}>
+      <View style={[styles.compactHeader, { backgroundColor: theme.bgCard, borderBottomColor: theme.border }]}>
         <View style={styles.compactHeaderLeft}>
-          <View style={styles.avatarSm}>
+          <View style={[styles.avatarSm, { backgroundColor: theme.activeBg }]}>
             <Text style={styles.avatarSmText}>
               {name.split(" ").map((w: string) => w[0]).slice(0, 2).join("").toUpperCase()}
             </Text>
           </View>
           <View style={styles.compactHeaderInfo}>
-            <Text style={styles.compactName} numberOfLines={1}>{name}</Text>
+            <Text style={[styles.compactName, { color: theme.text }]} numberOfLines={1}>{name}</Text>
             {assignedPropertyName && (
-              <Text style={styles.compactProperty} numberOfLines={1}>{assignedPropertyName}</Text>
+              <Text style={[styles.compactProperty, { color: theme.textMuted }]} numberOfLines={1}>{assignedPropertyName}</Text>
             )}
           </View>
         </View>
@@ -353,20 +358,20 @@ export default function ProspectDetailScreen() {
       >
         {/* AI Summary */}
         {prospect.latestSummary && (
-          <View style={styles.card}>
+          <View style={[styles.card, { backgroundColor: theme.bgCard, borderColor: theme.border }]}>
             <View style={styles.cardHeaderRow}>
               <SectionHeader title="AI SUMMARY" />
               {prospect.latestSentiment && (
                 <Badge label={prospect.latestSentiment} value={prospect.latestSentiment} />
               )}
             </View>
-            <Text style={styles.summaryText}>{prospect.latestSummary}</Text>
+            <Text style={[styles.summaryText, { color: theme.textSecondary }]}>{prospect.latestSummary}</Text>
           </View>
         )}
 
         {/* Data Conflicts */}
         {conflicts.length > 0 && (
-          <View style={[styles.card, conflictStyles.conflictCard]}>
+          <View style={[styles.card, conflictStyles.conflictCard, { borderColor: theme.border }]}>
             <View style={styles.cardHeaderRow}>
               <View style={conflictStyles.headerLeft}>
                 <Feather name="alert-circle" size={14} color="#FCA84A" />
@@ -376,7 +381,7 @@ export default function ProspectDetailScreen() {
                 <Text style={conflictStyles.countText}>{conflicts.length}</Text>
               </View>
             </View>
-            <Text style={conflictStyles.description}>
+            <Text style={[conflictStyles.description, { color: theme.textMuted }]}>
               The AI extracted values that differ from what's saved. Choose which is correct.
             </Text>
             {conflicts.map((conflict) => {
@@ -384,13 +389,13 @@ export default function ProspectDetailScreen() {
               const isPending = resolveMutation.isPending &&
                 (resolveMutation.variables as { fieldName: string })?.fieldName === conflict.fieldName;
               return (
-                <View key={conflict.id} style={conflictStyles.conflictRow}>
-                  <Text style={conflictStyles.fieldLabel}>
+                <View key={conflict.id} style={[conflictStyles.conflictRow, { borderTopColor: theme.border }]}>
+                  <Text style={[conflictStyles.fieldLabel, { color: theme.textSecondary }]}>
                     {conflict.fieldName.replace(/([A-Z])/g, " $1").trim()}
                   </Text>
                   <View style={conflictStyles.valuesRow}>
                     <Pressable
-                      style={conflictStyles.valueOption}
+                      style={[conflictStyles.valueOption, { backgroundColor: theme.bgElevated, borderColor: theme.border }]}
                       onPress={() => {
                         if (!isPending) {
                           resolveMutation.mutate({
@@ -402,8 +407,8 @@ export default function ProspectDetailScreen() {
                       }}
                       disabled={isPending}
                     >
-                      <Text style={conflictStyles.valueOptionLabel}>Keep existing</Text>
-                      <Text style={conflictStyles.valueOptionValue} numberOfLines={1}>
+                      <Text style={[conflictStyles.valueOptionLabel, { color: theme.textMuted }]}>Keep existing</Text>
+                      <Text style={[conflictStyles.valueOptionValue, { color: theme.textSecondary }]} numberOfLines={1}>
                         {conflict.existingValue ?? "(empty)"}
                       </Text>
                     </Pressable>
@@ -423,7 +428,7 @@ export default function ProspectDetailScreen() {
                       <Text style={[conflictStyles.valueOptionLabel, conflictStyles.valueOptionLabelNew]}>
                         Use AI value
                       </Text>
-                      <Text style={[conflictStyles.valueOptionValue, conflictStyles.valueOptionValueNew]} numberOfLines={1}>
+                      <Text style={[conflictStyles.valueOptionValue, conflictStyles.valueOptionValueNew, { color: theme.text }]} numberOfLines={1}>
                         {conflict.extractedValue}
                       </Text>
                     </Pressable>
@@ -436,8 +441,8 @@ export default function ProspectDetailScreen() {
                           setCustomValues((prev) => ({ ...prev, [conflict.fieldName]: t }))
                         }
                         placeholder="Enter custom value..."
-                        placeholderTextColor={Colors.dark.textMuted}
-                        style={conflictStyles.customInput}
+                        placeholderTextColor={theme.textMuted}
+                        style={[conflictStyles.customInput, { backgroundColor: theme.bgInput, borderColor: theme.border, color: theme.text }]}
                         autoFocus
                       />
                       <Pressable
@@ -461,22 +466,22 @@ export default function ProspectDetailScreen() {
                         )}
                       </Pressable>
                       <Pressable
-                        style={conflictStyles.customCancelBtn}
+                        style={[conflictStyles.customCancelBtn, { backgroundColor: theme.bgElevated, borderColor: theme.border }]}
                         onPress={() => setEditingField(null)}
                       >
-                        <Feather name="x" size={16} color={Colors.dark.textMuted} />
+                        <Feather name="x" size={16} color={theme.textMuted} />
                       </Pressable>
                     </View>
                   ) : (
                     <Pressable
-                      style={conflictStyles.customEditBtn}
+                      style={[conflictStyles.customEditBtn, { backgroundColor: theme.bgElevated, borderColor: theme.border }]}
                       onPress={() => {
                         setEditingField(conflict.fieldName);
                         setCustomValues((prev) => ({ ...prev, [conflict.fieldName]: "" }));
                       }}
                     >
-                      <Feather name="edit-2" size={12} color={Colors.dark.textMuted} />
-                      <Text style={conflictStyles.customEditText}>Enter custom value</Text>
+                      <Feather name="edit-2" size={12} color={theme.textMuted} />
+                      <Text style={[conflictStyles.customEditText, { color: theme.textMuted }]}>Enter custom value</Text>
                     </Pressable>
                   )}
                   {isPending && !isEditing && (
@@ -493,7 +498,7 @@ export default function ProspectDetailScreen() {
         )}
 
         {/* Leasing Details */}
-        <View style={styles.card}>
+        <View style={[styles.card, { backgroundColor: theme.bgCard, borderColor: theme.border }]}>
           <SectionHeader title="LEASING DETAILS" />
           <InfoRow icon="home" label="Bedrooms" value={prospect.desiredBedrooms} />
           <InfoRow icon="calendar" label="Move-in" value={prospect.desiredMoveInDate} />
@@ -518,7 +523,7 @@ export default function ProspectDetailScreen() {
         </View>
 
         {/* Export Status */}
-        <View style={styles.card}>
+        <View style={[styles.card, { backgroundColor: theme.bgCard, borderColor: theme.border }]}>
           <View style={styles.cardHeaderRow}>
             <SectionHeader title="EXPORT" />
             <Badge label={prospect.exportStatus} value={prospect.exportStatus} />
@@ -551,7 +556,7 @@ export default function ProspectDetailScreen() {
 
         {/* Conversation Thread */}
         {(interactions ?? []).length > 0 && (
-          <View style={styles.card}>
+          <View style={[styles.card, { backgroundColor: theme.bgCard, borderColor: theme.border }]}>
             <SectionHeader title={`CONVERSATION (${interactions!.length})`} />
             <View style={chatStyles.thread}>
               {interactions!.map((interaction) => {
@@ -619,15 +624,15 @@ export default function ProspectDetailScreen() {
 
         {/* Tags */}
         {(tags ?? []).length > 0 && (
-          <View style={styles.card}>
+          <View style={[styles.card, { backgroundColor: theme.bgCard, borderColor: theme.border }]}>
             <SectionHeader title="TAGS" />
             <View style={styles.tagsRow}>
               {tags!.map((tag) => (
                 <View
                   key={tag.id}
-                  style={[styles.tagChip, tag.color ? { backgroundColor: `${tag.color}22`, borderColor: `${tag.color}66` } : {}]}
+                  style={[styles.tagChip, { backgroundColor: theme.bgElevated, borderColor: theme.border }, tag.color ? { backgroundColor: `${tag.color}22`, borderColor: `${tag.color}66` } : {}]}
                 >
-                  <Text style={[styles.tagLabel, tag.color ? { color: tag.color } : {}]}>
+                  <Text style={[styles.tagLabel, { color: theme.textSecondary }, tag.color ? { color: tag.color } : {}]}>
                     {tag.name}
                   </Text>
                 </View>
@@ -637,14 +642,14 @@ export default function ProspectDetailScreen() {
         )}
 
         {/* Notes */}
-        <View style={styles.card}>
+        <View style={[styles.card, { backgroundColor: theme.bgCard, borderColor: theme.border }]}>
           <SectionHeader title={`NOTES (${(notes ?? []).length})`} />
           {(notes ?? []).map((note) => (
-            <View key={note.id} style={styles.noteRow}>
-              <Feather name="edit-3" size={13} color={Colors.dark.textMuted} />
+            <View key={note.id} style={[styles.noteRow, { borderTopColor: theme.border }]}>
+              <Feather name="edit-3" size={13} color={theme.textMuted} />
               <View style={styles.noteContent}>
-                <Text style={styles.noteBody}>{note.body}</Text>
-                <Text style={styles.noteTime}>
+                <Text style={[styles.noteBody, { color: theme.textSecondary }]}>{note.body}</Text>
+                <Text style={[styles.noteTime, { color: theme.textMuted }]}>
                   {new Date(note.createdAt).toLocaleDateString("en-US", {
                     month: "short",
                     day: "numeric",
@@ -656,14 +661,14 @@ export default function ProspectDetailScreen() {
             </View>
           ))}
 
-          <View style={styles.noteInputRow}>
+          <View style={[styles.noteInputRow, { borderTopColor: theme.border }]}>
             <TextInput
               ref={noteInputRef}
               value={noteText}
               onChangeText={setNoteText}
               placeholder="Add a note..."
-              placeholderTextColor={Colors.dark.textMuted}
-              style={styles.noteInput}
+              placeholderTextColor={theme.textMuted}
+              style={[styles.noteInput, { backgroundColor: theme.bgInput, borderColor: theme.border, color: theme.text }]}
               multiline
               maxLength={1000}
             />
@@ -689,8 +694,30 @@ export default function ProspectDetailScreen() {
         <View style={{ height: 16 }} />
       </ScrollView>
 
+      {/* Quick Actions Bar */}
+      <View style={{ flexDirection: "row", gap: 10, paddingHorizontal: 16, paddingVertical: 8, backgroundColor: theme.bgCard, borderTopWidth: 1, borderTopColor: theme.border }}>
+        <Pressable
+          style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 8, paddingHorizontal: 14, borderRadius: 10, backgroundColor: theme.bgElevated, opacity: hasPhone && activeTwilioNumbers.length > 0 ? 1 : 0.4 }}
+          onPress={() => handleCall(prospect.phonePrimary)}
+          disabled={!hasPhone || activeTwilioNumbers.length === 0}
+        >
+          <Feather name="phone" size={15} color={Colors.brand.tealLight} />
+          <Text style={{ fontSize: 13, fontFamily: "Inter_500Medium", color: Colors.brand.tealLight }}>Call</Text>
+        </Pressable>
+        <Pressable
+          style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 8, paddingHorizontal: 14, borderRadius: 10, backgroundColor: theme.bgElevated }}
+          onPress={() => {
+            noteInputRef.current?.focus();
+            scrollViewRef.current?.scrollToEnd({ animated: true });
+          }}
+        >
+          <Feather name="edit-3" size={15} color={Colors.brand.tealLight} />
+          <Text style={{ fontSize: 13, fontFamily: "Inter_500Medium", color: Colors.brand.tealLight }}>Add Note</Text>
+        </Pressable>
+      </View>
+
       {/* Pinned Compose Bar */}
-      <View style={composeBarStyles.container}>
+      <View style={[composeBarStyles.container, { backgroundColor: theme.bgCard }]}>
         {/* SMS Header Label */}
         <View style={composeBarStyles.smsHeader}>
           <Feather name="message-square" size={14} color={Colors.brand.tealLight} />
@@ -707,16 +734,16 @@ export default function ProspectDetailScreen() {
           </View>
         ) : activeTwilioNumbers.length > 1 ? (
           <View style={composeBarStyles.fromRow}>
-            <Feather name="phone-outgoing" size={13} color={Colors.dark.textMuted} />
-            <Text style={composeBarStyles.fromLabel}>From:</Text>
+            <Feather name="phone-outgoing" size={13} color={theme.textMuted} />
+            <Text style={[composeBarStyles.fromLabel, { color: theme.textMuted }]}>From:</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={composeBarStyles.numberChips}>
               {activeTwilioNumbers.map((n) => (
                 <Pressable
                   key={n.id}
-                  style={[composeBarStyles.numberChip, (selectedTwilioNumberId ?? activeTwilioNumbers[0]?.id) === n.id && composeBarStyles.numberChipActive]}
+                  style={[composeBarStyles.numberChip, { backgroundColor: theme.bgElevated, borderColor: theme.border }, (selectedTwilioNumberId ?? activeTwilioNumbers[0]?.id) === n.id && composeBarStyles.numberChipActive]}
                   onPress={() => setSelectedTwilioNumberId(n.id)}
                 >
-                  <Text style={[composeBarStyles.numberChipText, (selectedTwilioNumberId ?? activeTwilioNumbers[0]?.id) === n.id && composeBarStyles.numberChipTextActive]}>
+                  <Text style={[composeBarStyles.numberChipText, { color: theme.textMuted }, (selectedTwilioNumberId ?? activeTwilioNumbers[0]?.id) === n.id && composeBarStyles.numberChipTextActive]}>
                     {n.friendlyName ?? n.phoneNumber}
                   </Text>
                 </Pressable>
@@ -725,9 +752,9 @@ export default function ProspectDetailScreen() {
           </View>
         ) : selectedNumber ? (
           <View style={composeBarStyles.fromRowSingle}>
-            <Feather name="phone-outgoing" size={13} color={Colors.dark.textMuted} />
-            <Text style={composeBarStyles.fromLabel}>From:</Text>
-            <Text style={composeBarStyles.fromValue}>{selectedNumber.friendlyName ?? selectedNumber.phoneNumber}</Text>
+            <Feather name="phone-outgoing" size={13} color={theme.textMuted} />
+            <Text style={[composeBarStyles.fromLabel, { color: theme.textMuted }]}>From:</Text>
+            <Text style={[composeBarStyles.fromValue, { color: theme.textSecondary }]}>{selectedNumber.friendlyName ?? selectedNumber.phoneNumber}</Text>
           </View>
         ) : null}
 
@@ -737,7 +764,7 @@ export default function ProspectDetailScreen() {
             {isLoadingDraft ? (
               <>
                 <ActivityIndicator size="small" color={Colors.brand.tealLight} />
-                <Text style={composeBarStyles.aiBadgeText}>Generating AI draft…</Text>
+                <Text style={composeBarStyles.aiBadgeText}>Generating AI draft...</Text>
               </>
             ) : (
               <>
@@ -754,9 +781,9 @@ export default function ProspectDetailScreen() {
             ref={composeInputRef}
             value={composeText}
             onChangeText={setComposeText}
-            placeholder={isLoadingDraft ? "Generating AI draft…" : prospect.firstName ? `Message ${prospect.firstName}…` : "Send a text message…"}
-            placeholderTextColor={Colors.dark.textMuted}
-            style={composeBarStyles.input}
+            placeholder={isLoadingDraft ? "Generating AI draft..." : prospect.firstName ? `Message ${prospect.firstName}...` : "Send a text message..."}
+            placeholderTextColor={theme.textMuted}
+            style={[composeBarStyles.input, { backgroundColor: theme.bgInput, borderColor: theme.border, color: theme.text }]}
             multiline
             maxLength={1600}
             editable={!isLoadingDraft}
@@ -766,6 +793,7 @@ export default function ProspectDetailScreen() {
             <Pressable
               style={[
                 composeBarStyles.aiGenerateBtn,
+                { backgroundColor: theme.bgElevated },
                 (aiDraftMutation.isPending || smsMutation.isPending) && composeBarStyles.aiGenerateBtnDisabled,
               ]}
               onPress={() => aiDraftMutation.mutate({ prospectId: id })}
@@ -794,23 +822,23 @@ export default function ProspectDetailScreen() {
           </Pressable>
         </View>
 
-        <Text style={composeBarStyles.charCount}>{composeText.length}/1600</Text>
+        <Text style={[composeBarStyles.charCount, { color: theme.textMuted }]}>{composeText.length}/1600</Text>
 
-        {/* Status Picker Row — de-emphasized, below the input */}
+        {/* Status Picker Row -- de-emphasized, below the input */}
         <View style={composeBarStyles.statusRow}>
-          <Text style={composeBarStyles.statusLabel}>Status:</Text>
+          <Text style={[composeBarStyles.statusLabel, { color: theme.textMuted }]}>Status:</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={composeBarStyles.statusChips}>
             {STATUS_OPTIONS.map((s) => (
               <Pressable
                 key={s}
-                style={[composeBarStyles.statusChip, s === prospect.status && composeBarStyles.statusChipActive]}
+                style={[composeBarStyles.statusChip, { backgroundColor: theme.bgElevated, borderColor: theme.border }, s === prospect.status && composeBarStyles.statusChipActive]}
                 onPress={() => statusMutation.mutate({ id, data: { status: s } })}
                 disabled={statusMutation.isPending || s === prospect.status}
               >
                 {statusMutation.isPending && s === prospect.status ? (
                   <ActivityIndicator size="small" color={Colors.brand.tealLight} />
                 ) : (
-                  <Text style={[composeBarStyles.statusChipLabel, s === prospect.status && composeBarStyles.statusChipLabelActive]}>
+                  <Text style={[composeBarStyles.statusChipLabel, { color: theme.textMuted }, s === prospect.status && composeBarStyles.statusChipLabelActive]}>
                     {s}
                   </Text>
                 )}
@@ -1092,12 +1120,13 @@ const composeBarStyles = StyleSheet.create({
   },
   statusChips: {
     flexDirection: "row",
-    gap: 5,
+    gap: 8,
   },
   statusChip: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    minHeight: 32,
+    borderRadius: 8,
     backgroundColor: Colors.dark.bgElevated,
     borderWidth: 1,
     borderColor: Colors.dark.border,

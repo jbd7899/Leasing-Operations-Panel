@@ -17,6 +17,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
+import { useTheme } from "@/contexts/ThemeContext";
 import {
   useGetInteraction,
   useGetProspect,
@@ -40,7 +41,8 @@ import { Badge } from "@/components/ui/Badge";
 const STATUS_OPTIONS = ["new", "contacted", "qualified", "disqualified", "archived"];
 
 function SectionHeader({ title }: { title: string }) {
-  return <Text style={styles.sectionHeader}>{title}</Text>;
+  const { theme } = useTheme();
+  return <Text style={[styles.sectionHeader, { color: theme.textMuted }]}>{title}</Text>;
 }
 
 function FieldInput({
@@ -56,15 +58,16 @@ function FieldInput({
   placeholder?: string;
   keyboardType?: "default" | "email-address" | "numeric" | "decimal-pad";
 }) {
+  const { theme } = useTheme();
   return (
     <View style={styles.fieldGroup}>
-      <Text style={styles.fieldLabel}>{label}</Text>
+      <Text style={[styles.fieldLabel, { color: theme.textMuted }]}>{label}</Text>
       <TextInput
         value={value}
         onChangeText={onChange}
         placeholder={placeholder ?? `Enter ${label.toLowerCase()}...`}
-        placeholderTextColor={Colors.dark.textMuted}
-        style={styles.fieldInput}
+        placeholderTextColor={theme.textMuted}
+        style={[styles.fieldInput, { backgroundColor: theme.bgElevated, borderColor: theme.border, color: theme.text }]}
         keyboardType={keyboardType}
       />
     </View>
@@ -84,6 +87,7 @@ function PropertyPickerModal({
   onSelect: (id: string) => void;
   onClose: () => void;
 }) {
+  const { theme, isDark } = useTheme();
   return (
     <Modal
       visible={visible}
@@ -91,19 +95,19 @@ function PropertyPickerModal({
       presentationStyle={Platform.OS === "web" ? "overFullScreen" : "pageSheet"}
       onRequestClose={onClose}
     >
-      <View style={pickerStyles.container}>
-        <View style={pickerStyles.header}>
-          <Text style={pickerStyles.title}>Select Property</Text>
+      <View style={[pickerStyles.container, { backgroundColor: theme.bg }]}>
+        <View style={[pickerStyles.header, { borderBottomColor: theme.border }]}>
+          <Text style={[pickerStyles.title, { color: theme.text }]}>Select Property</Text>
           <Pressable onPress={onClose}>
-            <Feather name="x" size={22} color={Colors.dark.textSecondary} />
+            <Feather name="x" size={22} color={theme.textSecondary} />
           </Pressable>
         </View>
         <ScrollView style={pickerStyles.list}>
           <Pressable
-            style={[pickerStyles.item, !selectedId && pickerStyles.itemSelected]}
+            style={[pickerStyles.item, { borderColor: theme.border, backgroundColor: theme.bgCard }, !selectedId && [pickerStyles.itemSelected, { backgroundColor: theme.activeBg }]]}
             onPress={() => { onSelect(""); onClose(); }}
           >
-            <Text style={[pickerStyles.itemText, !selectedId && pickerStyles.itemTextSelected]}>
+            <Text style={[pickerStyles.itemText, { color: theme.text }, !selectedId && pickerStyles.itemTextSelected]}>
               No property assigned
             </Text>
             {!selectedId && <Feather name="check" size={16} color={Colors.brand.tealLight} />}
@@ -111,15 +115,15 @@ function PropertyPickerModal({
           {properties.map((p) => (
             <Pressable
               key={p.id}
-              style={[pickerStyles.item, selectedId === p.id && pickerStyles.itemSelected]}
+              style={[pickerStyles.item, { borderColor: theme.border, backgroundColor: theme.bgCard }, selectedId === p.id && [pickerStyles.itemSelected, { backgroundColor: theme.activeBg }]]}
               onPress={() => { onSelect(p.id); onClose(); }}
             >
               <View style={pickerStyles.itemContent}>
-                <Text style={[pickerStyles.itemText, selectedId === p.id && pickerStyles.itemTextSelected]}>
+                <Text style={[pickerStyles.itemText, { color: theme.text }, selectedId === p.id && pickerStyles.itemTextSelected]}>
                   {p.name}
                 </Text>
                 {(p.city || p.state) && (
-                  <Text style={pickerStyles.itemSub}>
+                  <Text style={[pickerStyles.itemSub, { color: theme.textMuted }]}>
                     {[p.city, p.state].filter(Boolean).join(", ")}
                   </Text>
                 )}
@@ -146,6 +150,7 @@ function TagPickerModal({
   onToggle: (id: string) => void;
   onClose: () => void;
 }) {
+  const { theme, isDark } = useTheme();
   return (
     <Modal
       visible={visible}
@@ -153,27 +158,27 @@ function TagPickerModal({
       presentationStyle={Platform.OS === "web" ? "overFullScreen" : "pageSheet"}
       onRequestClose={onClose}
     >
-      <View style={pickerStyles.container}>
-        <View style={pickerStyles.header}>
-          <Text style={pickerStyles.title}>Select Tags</Text>
+      <View style={[pickerStyles.container, { backgroundColor: theme.bg }]}>
+        <View style={[pickerStyles.header, { borderBottomColor: theme.border }]}>
+          <Text style={[pickerStyles.title, { color: theme.text }]}>Select Tags</Text>
           <Pressable onPress={onClose}>
-            <Feather name="x" size={22} color={Colors.dark.textSecondary} />
+            <Feather name="x" size={22} color={theme.textSecondary} />
           </Pressable>
         </View>
         <ScrollView style={pickerStyles.list}>
           {allTags.length === 0 && (
-            <Text style={pickerStyles.emptyText}>No tags available</Text>
+            <Text style={[pickerStyles.emptyText, { color: theme.textMuted }]}>No tags available</Text>
           )}
           {allTags.map((tag) => {
             const selected = selectedIds.includes(tag.id);
             return (
               <Pressable
                 key={tag.id}
-                style={[pickerStyles.item, selected && pickerStyles.itemSelected]}
+                style={[pickerStyles.item, { borderColor: theme.border, backgroundColor: theme.bgCard }, selected && [pickerStyles.itemSelected, { backgroundColor: theme.activeBg }]]}
                 onPress={() => onToggle(tag.id)}
               >
-                <View style={[pickerStyles.tagDot, { backgroundColor: tag.color ?? Colors.dark.textMuted }]} />
-                <Text style={[pickerStyles.itemText, selected && pickerStyles.itemTextSelected]}>
+                <View style={[pickerStyles.tagDot, { backgroundColor: tag.color ?? theme.textMuted }]} />
+                <Text style={[pickerStyles.itemText, { color: theme.text }, selected && pickerStyles.itemTextSelected]}>
                   {tag.name}
                 </Text>
                 {selected && <Feather name="check" size={16} color={Colors.brand.tealLight} />}
@@ -181,7 +186,7 @@ function TagPickerModal({
             );
           })}
         </ScrollView>
-        <View style={pickerStyles.doneRow}>
+        <View style={[pickerStyles.doneRow, { borderTopColor: theme.border }]}>
           <Pressable style={pickerStyles.doneBtn} onPress={onClose}>
             <Text style={pickerStyles.doneBtnText}>Done ({selectedIds.length} selected)</Text>
           </Pressable>
@@ -192,6 +197,7 @@ function TagPickerModal({
 }
 
 export default function InteractionScreen() {
+  const { theme, isDark } = useTheme();
   const params = useLocalSearchParams<{ id: string; prospectId?: string }>();
   const interactionId = params.id;
   const queryClient = useQueryClient();
@@ -370,7 +376,7 @@ export default function InteractionScreen() {
 
   if (iLoading) {
     return (
-      <View style={styles.loadingCenter}>
+      <View style={[styles.loadingCenter, { backgroundColor: theme.bg }]}>
         <ActivityIndicator size="large" color={Colors.brand.tealLight} />
       </View>
     );
@@ -378,10 +384,10 @@ export default function InteractionScreen() {
 
   if (iError || !interaction) {
     return (
-      <View style={styles.loadingCenter}>
-        <Feather name="alert-circle" size={32} color={Colors.dark.textMuted} />
-        <Text style={styles.errorText}>Interaction not found</Text>
-        <Pressable style={styles.retryBtn} onPress={() => router.back()}>
+      <View style={[styles.loadingCenter, { backgroundColor: theme.bg }]}>
+        <Feather name="alert-circle" size={32} color={theme.textMuted} />
+        <Text style={[styles.errorText, { color: theme.textSecondary }]}>Interaction not found</Text>
+        <Pressable style={[styles.retryBtn, { backgroundColor: theme.bgCard, borderColor: theme.border }]} onPress={() => router.back()}>
           <Text style={styles.retryText}>Go back</Text>
         </Pressable>
       </View>
@@ -395,15 +401,15 @@ export default function InteractionScreen() {
   return (
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={88}>
       <ScrollView
-        style={styles.container}
+        style={[styles.container, { backgroundColor: theme.bg }]}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
         {/* Interaction Header */}
-        <View style={styles.card}>
+        <View style={[styles.card, { backgroundColor: theme.bgCard, borderColor: theme.border }]}>
           <View style={styles.headerRow}>
-            <View style={[styles.iconWrap, { backgroundColor: "#0D2A2A" }]}>
+            <View style={[styles.iconWrap, { backgroundColor: theme.activeBg }]}>
               <Feather
                 name={interaction.sourceType === "sms" ? "message-square" : interaction.sourceType === "voicemail" ? "mic" : "phone"}
                 size={20}
@@ -416,10 +422,10 @@ export default function InteractionScreen() {
                 <Badge label={interaction.direction} value={interaction.direction} />
                 {interaction.sentiment && <Badge label={interaction.sentiment} value={interaction.sentiment} />}
               </View>
-              <Text style={styles.headerTime}>
+              <Text style={[styles.headerTime, { color: theme.text }]}>
                 {new Date(interaction.occurredAt).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" })}
               </Text>
-              <Text style={styles.headerPhone}>{interaction.fromNumber} → {interaction.toNumber}</Text>
+              <Text style={[styles.headerPhone, { color: theme.textMuted }]}>{interaction.fromNumber} → {interaction.toNumber}</Text>
             </View>
           </View>
         </View>
@@ -427,28 +433,28 @@ export default function InteractionScreen() {
         {/* Prospect link */}
         {prospect && (
           <Pressable
-            style={styles.prospectLink}
+            style={[styles.prospectLink, { backgroundColor: theme.bgCard, borderColor: theme.border }]}
             onPress={() => router.push({ pathname: "/prospect/[id]", params: { id: effectivePId! } })}
           >
             <Feather name="user" size={14} color={Colors.brand.tealLight} />
-            <Text style={styles.prospectLinkText}>{prospect.fullName ?? prospect.phonePrimary}</Text>
-            <Feather name="chevron-right" size={14} color={Colors.dark.textMuted} />
+            <Text style={[styles.prospectLinkText, { color: theme.text }]}>{prospect.fullName ?? prospect.phonePrimary}</Text>
+            <Feather name="chevron-right" size={14} color={theme.textMuted} />
           </Pressable>
         )}
 
         {/* AI Summary */}
         {(interaction.summary || interaction.category || interaction.urgency) && (
-          <View style={styles.card}>
+          <View style={[styles.card, { backgroundColor: theme.bgCard, borderColor: theme.border }]}>
             <SectionHeader title="AI SUMMARY" />
-            {interaction.summary && <Text style={styles.bodyText}>{interaction.summary}</Text>}
+            {interaction.summary && <Text style={[styles.bodyText, { color: theme.textSecondary }]}>{interaction.summary}</Text>}
             {(interaction.category || interaction.urgency) && (
               <View style={styles.chipRow}>
                 {interaction.category && (
-                  <View style={styles.chip}><Text style={styles.chipText}>{interaction.category.replace(/_/g, " ")}</Text></View>
+                  <View style={[styles.chip, { backgroundColor: theme.bgElevated, borderColor: theme.border }]}><Text style={[styles.chipText, { color: theme.textSecondary }]}>{interaction.category.replace(/_/g, " ")}</Text></View>
                 )}
                 {interaction.urgency && (
-                  <View style={[styles.chip, interaction.urgency === "high" && styles.chipHigh]}>
-                    <Text style={styles.chipText}>{interaction.urgency} urgency</Text>
+                  <View style={[styles.chip, { backgroundColor: theme.bgElevated, borderColor: theme.border }, interaction.urgency === "high" && styles.chipHigh]}>
+                    <Text style={[styles.chipText, { color: theme.textSecondary }]}>{interaction.urgency} urgency</Text>
                   </View>
                 )}
               </View>
@@ -458,14 +464,14 @@ export default function InteractionScreen() {
 
         {/* Raw message */}
         {(interaction.rawText || interaction.transcript) && (
-          <View style={styles.card}>
+          <View style={[styles.card, { backgroundColor: theme.bgCard, borderColor: theme.border }]}>
             <SectionHeader title={interaction.transcript ? "TRANSCRIPT" : "MESSAGE"} />
-            <Text style={styles.rawText}>{interaction.transcript ?? interaction.rawText}</Text>
+            <Text style={[styles.rawText, { color: theme.textSecondary, backgroundColor: theme.bgElevated }]}>{interaction.transcript ?? interaction.rawText}</Text>
           </View>
         )}
 
         {/* Editable Prospect Fields */}
-        <View style={styles.card}>
+        <View style={[styles.card, { backgroundColor: theme.bgCard, borderColor: theme.border }]}>
           <SectionHeader title="PROSPECT DETAILS" />
 
           <FieldInput label="First Name" value={form.firstName} onChange={set("firstName")} />
@@ -484,16 +490,16 @@ export default function InteractionScreen() {
 
         {/* Status Picker */}
         {effectivePId && (
-          <View style={styles.card}>
+          <View style={[styles.card, { backgroundColor: theme.bgCard, borderColor: theme.border }]}>
             <SectionHeader title="LEAD STATUS" />
             <View style={styles.statusRow}>
               {STATUS_OPTIONS.map((s) => (
                 <Pressable
                   key={s}
-                  style={[styles.statusChip, form.status === s && styles.statusChipActive]}
+                  style={[styles.statusChip, { backgroundColor: theme.bgElevated, borderColor: theme.border }, form.status === s && [styles.statusChipActive, { backgroundColor: theme.activeBg }]]}
                   onPress={() => setForm((f) => ({ ...f, status: s }))}
                 >
-                  <Text style={[styles.statusChipLabel, form.status === s && styles.statusChipLabelActive]}>
+                  <Text style={[styles.statusChipLabel, { color: theme.textSecondary }, form.status === s && styles.statusChipLabelActive]}>
                     {s}
                   </Text>
                 </Pressable>
@@ -503,34 +509,34 @@ export default function InteractionScreen() {
         )}
 
         {/* Property Selector */}
-        <View style={styles.card}>
+        <View style={[styles.card, { backgroundColor: theme.bgCard, borderColor: theme.border }]}>
           <SectionHeader title="PROPERTY" />
-          <Pressable style={styles.selectorBtn} onPress={() => setShowPropertyPicker(true)}>
+          <Pressable style={[styles.selectorBtn, { backgroundColor: theme.bgElevated, borderColor: theme.border }]} onPress={() => setShowPropertyPicker(true)}>
             <Feather name="home" size={15} color={Colors.brand.tealLight} />
-            <Text style={styles.selectorBtnText}>
+            <Text style={[styles.selectorBtnText, { color: theme.text }]}>
               {selectedProperty ? selectedProperty.name : "No property assigned"}
             </Text>
-            <Feather name="chevron-down" size={15} color={Colors.dark.textMuted} />
+            <Feather name="chevron-down" size={15} color={theme.textMuted} />
           </Pressable>
         </View>
 
         {/* Tags */}
         {effectivePId && (
-          <View style={styles.card}>
+          <View style={[styles.card, { backgroundColor: theme.bgCard, borderColor: theme.border }]}>
             <View style={styles.cardHeaderRow}>
               <SectionHeader title="TAGS" />
               <Pressable onPress={() => setShowTagPicker(true)}>
                 <Text style={styles.editLink}>Edit</Text>
               </Pressable>
             </View>
-            <Pressable style={styles.selectorBtn} onPress={() => setShowTagPicker(true)}>
+            <Pressable style={[styles.selectorBtn, { backgroundColor: theme.bgElevated, borderColor: theme.border }]} onPress={() => setShowTagPicker(true)}>
               {selectedTagObjects.length === 0 ? (
-                <Text style={styles.selectorPlaceholder}>Tap to add tags...</Text>
+                <Text style={[styles.selectorPlaceholder, { color: theme.textMuted }]}>Tap to add tags...</Text>
               ) : (
                 <View style={styles.tagChips}>
                   {selectedTagObjects.map((t) => (
-                    <View key={t.id} style={[styles.tagChip, { borderColor: (t.color ?? Colors.dark.textMuted) + "66", backgroundColor: (t.color ?? Colors.dark.textMuted) + "22" }]}>
-                      <Text style={[styles.tagChipText, { color: t.color ?? Colors.dark.textSecondary }]}>{t.name}</Text>
+                    <View key={t.id} style={[styles.tagChip, { borderColor: (t.color ?? theme.textMuted) + "66", backgroundColor: (t.color ?? theme.textMuted) + "22" }]}>
+                      <Text style={[styles.tagChipText, { color: t.color ?? theme.textSecondary }]}>{t.name}</Text>
                     </View>
                   ))}
                 </View>
@@ -541,31 +547,31 @@ export default function InteractionScreen() {
 
         {/* Notes */}
         {effectivePId && (
-          <View style={styles.card}>
+          <View style={[styles.card, { backgroundColor: theme.bgCard, borderColor: theme.border }]}>
             <SectionHeader title={`NOTES (${prospectData?.notes?.length ?? 0})`} />
             {(prospectData?.notes ?? []).map((note) => (
-              <View key={note.id} style={styles.noteRow}>
-                <Feather name="edit-3" size={13} color={Colors.dark.textMuted} />
+              <View key={note.id} style={[styles.noteRow, { borderTopColor: theme.border }]}>
+                <Feather name="edit-3" size={13} color={theme.textMuted} />
                 <View style={styles.noteContent}>
-                  <Text style={styles.noteBody}>{note.body}</Text>
-                  <Text style={styles.noteTime}>
+                  <Text style={[styles.noteBody, { color: theme.textSecondary }]}>{note.body}</Text>
+                  <Text style={[styles.noteTime, { color: theme.textMuted }]}>
                     {new Date(note.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
                   </Text>
                 </View>
               </View>
             ))}
-            <View style={styles.noteInputRow}>
+            <View style={[styles.noteInputRow, { borderTopColor: theme.border }]}>
               <TextInput
                 value={noteText}
                 onChangeText={setNoteText}
                 placeholder="Add a note..."
-                placeholderTextColor={Colors.dark.textMuted}
-                style={styles.noteInput}
+                placeholderTextColor={theme.textMuted}
+                style={[styles.noteInput, { backgroundColor: theme.bgElevated, borderColor: theme.border, color: theme.text }]}
                 multiline
                 maxLength={1000}
               />
               <Pressable
-                style={[styles.noteSendBtn, (!noteText.trim() || noteMutation.isPending) && styles.noteSendBtnDisabled]}
+                style={[styles.noteSendBtn, (!noteText.trim() || noteMutation.isPending) && [styles.noteSendBtnDisabled, { backgroundColor: theme.bgElevated, borderColor: theme.border }]]}
                 onPress={() => {
                   if (noteText.trim() && effectivePId) {
                     noteMutation.mutate({ id: effectivePId, data: { body: noteText.trim() } });
@@ -581,9 +587,9 @@ export default function InteractionScreen() {
 
         {/* AI Suggestion hint */}
         {ext && Object.keys(ext).length > 0 && (
-          <View style={styles.aiHintCard}>
+          <View style={[styles.aiHintCard, { backgroundColor: theme.activeBg }]}>
             <Feather name="zap" size={14} color={Colors.brand.tealLight} />
-            <Text style={styles.aiHintText}>
+            <Text style={[styles.aiHintText, { color: theme.textSecondary }]}>
               AI extracted fields are pre-filled above. Adjust as needed and tap Save.
             </Text>
           </View>
@@ -608,7 +614,7 @@ export default function InteractionScreen() {
 
           {effectivePId && (
             <Pressable
-              style={[styles.exportBtn, exportMutation.isPending && styles.actionDisabled]}
+              style={[styles.exportBtn, { backgroundColor: theme.bgCard }, exportMutation.isPending && styles.actionDisabled]}
               onPress={() =>
                 exportMutation.mutate({
                   data: { prospectIds: [effectivePId], format: CreateExportBodyFormat.csv },

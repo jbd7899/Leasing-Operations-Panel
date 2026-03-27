@@ -20,10 +20,12 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useQueryClient } from "@tanstack/react-query";
 import Colors from "@/constants/colors";
+import { useTheme } from "@/contexts/ThemeContext";
 import { InboxItem } from "@/components/ui/InboxItem";
 import { SkeletonLoader } from "@/components/ui/SkeletonLoader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SearchBar } from "@/components/ui/SearchBar";
+import { FilterChip } from "@/components/ui/FilterChip";
 import type { TwilioNumber } from "@workspace/api-client-react";
 
 const SOURCE_FILTERS = [
@@ -41,27 +43,6 @@ const STATUS_FILTERS = [
   { label: "Disqualified", value: "disqualified" },
 ];
 
-function FilterChip({
-  label,
-  active,
-  onPress,
-}: {
-  label: string;
-  active: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      style={[styles.filterChip, active && styles.filterChipActive]}
-    >
-      <Text style={[styles.filterLabel, active && styles.filterLabelActive]}>
-        {label}
-      </Text>
-    </Pressable>
-  );
-}
-
 function PropertyBottomSheet({
   visible,
   onClose,
@@ -76,6 +57,7 @@ function PropertyBottomSheet({
   onSelectProperty: (id: string) => void;
 }) {
   const insets = useSafeAreaInsets();
+  const { theme } = useTheme();
   return (
     <Modal
       visible={visible}
@@ -84,12 +66,12 @@ function PropertyBottomSheet({
       onRequestClose={onClose}
     >
       <Pressable style={sheetStyles.backdrop} onPress={onClose} />
-      <View style={[sheetStyles.sheet, { paddingBottom: Math.max(insets.bottom, 24) }]}>
-        <View style={sheetStyles.handle} />
-        <View style={sheetStyles.header}>
-          <Text style={sheetStyles.title}>Filter by Property</Text>
-          <Pressable onPress={onClose} style={sheetStyles.closeBtn}>
-            <Feather name="x" size={18} color={Colors.dark.textMuted} />
+      <View style={[sheetStyles.sheet, { paddingBottom: Math.max(insets.bottom, 24), backgroundColor: theme.bgCard, borderColor: theme.border }]}>
+        <View style={[sheetStyles.handle, { backgroundColor: theme.border }]} />
+        <View style={[sheetStyles.header, { borderBottomColor: theme.border }]}>
+          <Text style={[sheetStyles.title, { color: theme.text }]}>Filter by Property</Text>
+          <Pressable onPress={onClose} style={[sheetStyles.closeBtn, { backgroundColor: theme.bgElevated, borderColor: theme.border }]}>
+            <Feather name="x" size={18} color={theme.textMuted} />
           </Pressable>
         </View>
         <ScrollView
@@ -97,30 +79,30 @@ function PropertyBottomSheet({
           contentContainerStyle={sheetStyles.list}
         >
           <Pressable
-            style={[sheetStyles.propertyRow, propertyFilter === "" && sheetStyles.propertyRowActive]}
+            style={[sheetStyles.propertyRow, propertyFilter === "" && [sheetStyles.propertyRowActive, { backgroundColor: theme.activeBg }]]}
             onPress={() => { onSelectProperty(""); onClose(); }}
           >
-            <View style={sheetStyles.propertyCheck}>
+            <View style={[sheetStyles.propertyCheck, { borderColor: theme.border, backgroundColor: theme.bgElevated }]}>
               {propertyFilter === "" && (
                 <Feather name="check" size={14} color={Colors.brand.tealLight} />
               )}
             </View>
-            <Text style={[sheetStyles.propertyName, propertyFilter === "" && sheetStyles.propertyNameActive]}>
+            <Text style={[sheetStyles.propertyName, { color: theme.textSecondary }, propertyFilter === "" && sheetStyles.propertyNameActive]}>
               All Properties
             </Text>
           </Pressable>
           {properties.map((p) => (
             <Pressable
               key={p.id}
-              style={[sheetStyles.propertyRow, propertyFilter === p.id && sheetStyles.propertyRowActive]}
+              style={[sheetStyles.propertyRow, propertyFilter === p.id && [sheetStyles.propertyRowActive, { backgroundColor: theme.activeBg }]]}
               onPress={() => { onSelectProperty(p.id); onClose(); }}
             >
-              <View style={sheetStyles.propertyCheck}>
+              <View style={[sheetStyles.propertyCheck, { borderColor: theme.border, backgroundColor: theme.bgElevated }]}>
                 {propertyFilter === p.id && (
                   <Feather name="check" size={14} color={Colors.brand.tealLight} />
                 )}
               </View>
-              <Text style={[sheetStyles.propertyName, propertyFilter === p.id && sheetStyles.propertyNameActive]}>
+              <Text style={[sheetStyles.propertyName, { color: theme.textSecondary }, propertyFilter === p.id && sheetStyles.propertyNameActive]}>
                 {p.name}
               </Text>
             </Pressable>
@@ -140,6 +122,7 @@ function NewMessageModal({
   onClose: () => void;
   twilioNumbers: TwilioNumber[];
 }) {
+  const { theme } = useTheme();
   const queryClient = useQueryClient();
   const [toPhone, setToPhone] = useState("");
   const [messageBody, setMessageBody] = useState("");
@@ -194,17 +177,17 @@ function NewMessageModal({
       onRequestClose={handleClose}
     >
       <KeyboardAvoidingView
-        style={newMsgStyles.container}
+        style={[newMsgStyles.container, { backgroundColor: theme.bg }]}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
-        <View style={newMsgStyles.header}>
+        <View style={[newMsgStyles.header, { borderBottomColor: theme.border }]}>
           <Pressable onPress={handleClose} style={newMsgStyles.cancelBtn}>
-            <Text style={newMsgStyles.cancelText}>Cancel</Text>
+            <Text style={[newMsgStyles.cancelText, { color: theme.textSecondary }]}>Cancel</Text>
           </Pressable>
-          <Text style={newMsgStyles.title}>New Message</Text>
+          <Text style={[newMsgStyles.title, { color: theme.text }]}>New Message</Text>
           <Pressable
             onPress={handleSend}
-            style={[newMsgStyles.sendBtn, !canSend && newMsgStyles.sendBtnDisabled]}
+            style={[newMsgStyles.sendBtn, !canSend && [newMsgStyles.sendBtnDisabled, { backgroundColor: theme.bgCard, borderColor: theme.border }]]}
             disabled={!canSend}
           >
             {initiateMutation.isPending ? (
@@ -215,15 +198,15 @@ function NewMessageModal({
           </Pressable>
         </View>
 
-        <View style={newMsgStyles.toRow}>
-          <Feather name="user" size={15} color={Colors.dark.textMuted} />
-          <Text style={newMsgStyles.toLabel}>To:</Text>
+        <View style={[newMsgStyles.toRow, { borderBottomColor: theme.border }]}>
+          <Feather name="user" size={15} color={theme.textMuted} />
+          <Text style={[newMsgStyles.toLabel, { color: theme.textMuted }]}>To:</Text>
           <TextInput
             value={toPhone}
             onChangeText={setToPhone}
             placeholder="Phone number (e.g. 5551234567)"
-            placeholderTextColor={Colors.dark.textMuted}
-            style={newMsgStyles.toInput}
+            placeholderTextColor={theme.textMuted}
+            style={[newMsgStyles.toInput, { color: theme.text }]}
             keyboardType="phone-pad"
             autoFocus
             maxLength={16}
@@ -231,24 +214,24 @@ function NewMessageModal({
         </View>
 
         {twilioNumbers.length === 0 ? (
-          <View style={newMsgStyles.noNumberWarn}>
+          <View style={[newMsgStyles.noNumberWarn, { borderBottomColor: theme.border }]}>
             <Feather name="alert-triangle" size={16} color="#FCA84A" />
             <Text style={newMsgStyles.noNumberWarnText}>
               No Twilio numbers configured. Add one in Settings.
             </Text>
           </View>
         ) : multipleNumbers ? (
-          <View style={newMsgStyles.fromRow}>
-            <Feather name="phone-outgoing" size={15} color={Colors.dark.textMuted} />
-            <Text style={newMsgStyles.fromLabel}>From:</Text>
+          <View style={[newMsgStyles.fromRow, { borderBottomColor: theme.border }]}>
+            <Feather name="phone-outgoing" size={15} color={theme.textMuted} />
+            <Text style={[newMsgStyles.fromLabel, { color: theme.textMuted }]}>From:</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={newMsgStyles.numberChips}>
               {twilioNumbers.map((n) => (
                 <Pressable
                   key={n.id}
-                  style={[newMsgStyles.numberChip, effectiveSelectedId === n.id && newMsgStyles.numberChipActive]}
+                  style={[newMsgStyles.numberChip, { backgroundColor: theme.bgCard, borderColor: theme.border }, effectiveSelectedId === n.id && newMsgStyles.numberChipActive]}
                   onPress={() => setSelectedNumberId(n.id)}
                 >
-                  <Text style={[newMsgStyles.numberChipText, effectiveSelectedId === n.id && newMsgStyles.numberChipTextActive]}>
+                  <Text style={[newMsgStyles.numberChipText, { color: theme.textSecondary }, effectiveSelectedId === n.id && newMsgStyles.numberChipTextActive]}>
                     {n.friendlyName ?? n.phoneNumber}
                   </Text>
                 </Pressable>
@@ -256,32 +239,33 @@ function NewMessageModal({
             </ScrollView>
           </View>
         ) : selectedNumber ? (
-          <View style={newMsgStyles.fromRowSingle}>
-            <Feather name="phone-outgoing" size={15} color={Colors.dark.textMuted} />
-            <Text style={newMsgStyles.fromLabel}>From:</Text>
-            <Text style={newMsgStyles.fromValue}>{selectedNumber.friendlyName ?? selectedNumber.phoneNumber}</Text>
+          <View style={[newMsgStyles.fromRowSingle, { borderBottomColor: theme.border }]}>
+            <Feather name="phone-outgoing" size={15} color={theme.textMuted} />
+            <Text style={[newMsgStyles.fromLabel, { color: theme.textMuted }]}>From:</Text>
+            <Text style={[newMsgStyles.fromValue, { color: theme.textSecondary }]}>{selectedNumber.friendlyName ?? selectedNumber.phoneNumber}</Text>
           </View>
         ) : null}
 
-        <View style={newMsgStyles.divider} />
+        <View style={[newMsgStyles.divider, { backgroundColor: theme.border }]} />
 
         <TextInput
           value={messageBody}
           onChangeText={setMessageBody}
           placeholder="Type your message..."
-          placeholderTextColor={Colors.dark.textMuted}
-          style={newMsgStyles.bodyInput}
+          placeholderTextColor={theme.textMuted}
+          style={[newMsgStyles.bodyInput, { color: theme.text }]}
           multiline
           maxLength={1600}
         />
 
-        <Text style={newMsgStyles.charCount}>{messageBody.length}/1600</Text>
+        <Text style={[newMsgStyles.charCount, { color: theme.textMuted }]}>{messageBody.length}/1600</Text>
       </KeyboardAvoidingView>
     </Modal>
   );
 }
 
 export default function InboxScreen() {
+  const { theme } = useTheme();
   const insets = useSafeAreaInsets();
   const [search, setSearch] = useState("");
   const [sourceFilter, setSourceFilter] = useState("");
@@ -343,7 +327,7 @@ export default function InboxScreen() {
   }, []);
 
   return (
-    <View style={[styles.container, { paddingTop: topPad }]}>
+    <View style={[styles.container, { paddingTop: topPad, backgroundColor: theme.bg }]}>
       <PropertyBottomSheet
         visible={propertySheetOpen}
         onClose={() => setPropertySheetOpen(false)}
@@ -358,11 +342,11 @@ export default function InboxScreen() {
         twilioNumbers={activeTwilioNumbers}
       />
 
-      <View style={styles.stickyHeader}>
+      <View style={[styles.stickyHeader, { backgroundColor: theme.bg, borderBottomColor: theme.border }]}>
         <View style={styles.titleRow}>
           <View>
-            <Text style={styles.screenTitle}>Inbox</Text>
-            <Text style={styles.screenSubtitle}>
+            <Text style={[styles.screenTitle, { color: theme.text }]}>Inbox</Text>
+            <Text style={[styles.screenSubtitle, { color: theme.textMuted }]}>
               {data ? `${data.total} conversation${data.total !== 1 ? "s" : ""}` : "Loading..."}
             </Text>
           </View>
@@ -373,16 +357,16 @@ export default function InboxScreen() {
               </Pressable>
             )}
             <Pressable
-              style={styles.composeBtn}
+              style={[styles.composeBtn, { backgroundColor: theme.bgCard }]}
               onPress={() => setNewMessageOpen(true)}
             >
               <Feather name="edit" size={16} color={Colors.brand.tealLight} />
             </Pressable>
-            <Pressable style={styles.refreshBtn} onPress={() => refetch()} disabled={isFetching}>
+            <Pressable style={[styles.refreshBtn, { backgroundColor: theme.bgCard, borderColor: theme.border }]} onPress={() => refetch()} disabled={isFetching}>
               <Feather
                 name="refresh-cw"
                 size={18}
-                color={isFetching ? Colors.dark.textMuted : Colors.brand.tealLight}
+                color={isFetching ? theme.textMuted : Colors.brand.tealLight}
               />
             </Pressable>
           </View>
@@ -410,7 +394,7 @@ export default function InboxScreen() {
                 onPress={() => setSourceFilter(f.value)}
               />
             ))}
-            <View style={styles.filterDivider} />
+            <View style={[styles.filterDivider, { backgroundColor: theme.border }]} />
             {STATUS_FILTERS.map((f) => (
               <FilterChip
                 key={`st-${f.value}`}
@@ -423,13 +407,13 @@ export default function InboxScreen() {
 
           {properties.length > 0 && (
             <Pressable
-              style={[styles.filterIconBtn, secondaryFilterCount > 0 && styles.filterIconBtnActive]}
+              style={[styles.filterIconBtn, { backgroundColor: theme.bgCard, borderColor: theme.border }, secondaryFilterCount > 0 && [styles.filterIconBtnActive, { backgroundColor: theme.activeBg }]]}
               onPress={() => setPropertySheetOpen(true)}
             >
               <Feather
                 name="sliders"
                 size={15}
-                color={secondaryFilterCount > 0 ? Colors.brand.tealLight : Colors.dark.textSecondary}
+                color={secondaryFilterCount > 0 ? Colors.brand.tealLight : theme.textSecondary}
               />
               {secondaryFilterCount > 0 && (
                 <View style={styles.filterBadge}>
@@ -573,7 +557,7 @@ const styles = StyleSheet.create({
   },
   filterChips: {
     flexDirection: "row",
-    gap: 6,
+    gap: 8,
     paddingHorizontal: 16,
     alignItems: "center",
   },
@@ -583,30 +567,9 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.dark.border,
     marginHorizontal: 4,
   },
-  filterChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    backgroundColor: Colors.dark.bgCard,
-    borderWidth: 1,
-    borderColor: Colors.dark.border,
-  },
-  filterChipActive: {
-    backgroundColor: Colors.brand.teal,
-    borderColor: Colors.brand.teal,
-  },
-  filterLabel: {
-    fontSize: 13,
-    fontFamily: "Inter_500Medium",
-    color: Colors.dark.textSecondary,
-  },
-  filterLabelActive: {
-    color: "#fff",
-    fontFamily: "Inter_600SemiBold",
-  },
   filterIconBtn: {
-    width: 36,
-    height: 32,
+    width: 40,
+    height: 36,
     borderRadius: 10,
     backgroundColor: Colors.dark.bgCard,
     borderWidth: 1,
