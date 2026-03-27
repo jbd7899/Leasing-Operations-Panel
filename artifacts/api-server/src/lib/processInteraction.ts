@@ -339,7 +339,7 @@ async function updateProspectDisplayFields(
     });
     await db
       .update(prospectsTable)
-      .set({ qualificationScore: String(score) })
+      .set({ completenessScore: score })
       .where(and(eq(prospectsTable.id, prospectId), eq(prospectsTable.accountId, accountId)));
   }
 }

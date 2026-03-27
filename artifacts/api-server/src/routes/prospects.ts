@@ -92,7 +92,7 @@ router.get("/prospects/:id", async (req: Request, res: Response) => {
   if (!requireAuth(req, res)) return;
   const { accountId } = req.user!;
 
-  const { id } = req.params;
+  const id = String(req.params.id);
 
   const [prospect] = await db
     .select()
@@ -128,7 +128,7 @@ router.patch("/prospects/:id", async (req: Request, res: Response) => {
   if (!requireAuth(req, res)) return;
   const { accountId } = req.user!;
 
-  const { id } = req.params;
+  const id = String(req.params.id);
   const allowedFields = [
     "firstName", "lastName", "fullName", "email", "phoneSecondary",
     "assignedPropertyId", "desiredMoveInDate", "desiredBedrooms",
@@ -196,11 +196,30 @@ router.patch("/prospects/:id", async (req: Request, res: Response) => {
   res.json(prospect);
 });
 
+router.get("/prospects/:id/notes", async (req: Request, res: Response) => {
+  if (!requireAuth(req, res)) return;
+  const { accountId } = req.user!;
+
+  const id = String(req.params.id);
+
+  const [prospect] = await db.select({ id: prospectsTable.id })
+    .from(prospectsTable)
+    .where(and(eq(prospectsTable.id, id), eq(prospectsTable.accountId, accountId)));
+
+  if (!prospect) { res.status(404).json({ error: "Prospect not found" }); return; }
+
+  const notes = await db.select().from(notesTable)
+    .where(and(eq(notesTable.prospectId, id), eq(notesTable.accountId, accountId)))
+    .orderBy(notesTable.createdAt);
+
+  res.json({ notes });
+});
+
 router.post("/prospects/:id/notes", async (req: Request, res: Response) => {
   if (!requireAuth(req, res)) return;
   const { accountId } = req.user!;
 
-  const { id } = req.params;
+  const id = String(req.params.id);
   const { body: noteBody } = req.body;
   if (!noteBody) { res.status(400).json({ error: "body is required" }); return; }
 
@@ -217,11 +236,38 @@ router.post("/prospects/:id/notes", async (req: Request, res: Response) => {
   res.status(201).json(note);
 });
 
+router.get("/prospects/:id/tags", async (req: Request, res: Response) => {
+  if (!requireAuth(req, res)) return;
+  const { accountId } = req.user!;
+
+  const id = String(req.params.id);
+
+  const [prospect] = await db.select({ id: prospectsTable.id })
+    .from(prospectsTable)
+    .where(and(eq(prospectsTable.id, id), eq(prospectsTable.accountId, accountId)));
+
+  if (!prospect) { res.status(404).json({ error: "Prospect not found" }); return; }
+
+  const prospectTagRows = await db.select().from(prospectTagsTable).where(eq(prospectTagsTable.prospectId, id));
+
+  let tags: typeof tagsTable.$inferSelect[] = [];
+  if (prospectTagRows.length > 0) {
+    const tagIds = prospectTagRows.map((r) => r.tagId);
+    tags = await db.select().from(tagsTable)
+      .where(and(
+        inArray(tagsTable.id, tagIds),
+        eq(tagsTable.accountId, accountId),
+      ));
+  }
+
+  res.json({ tags });
+});
+
 router.post("/prospects/:id/tags", async (req: Request, res: Response) => {
   if (!requireAuth(req, res)) return;
   const { accountId } = req.user!;
 
-  const { id } = req.params;
+  const id = String(req.params.id);
   const { tagIds } = req.body;
   if (!Array.isArray(tagIds)) { res.status(400).json({ error: "tagIds must be an array" }); return; }
 
@@ -260,7 +306,7 @@ router.post("/prospects/:id/tags", async (req: Request, res: Response) => {
 router.get("/prospects/:id/conflicts", async (req: Request, res: Response) => {
   if (!requireAuth(req, res)) return;
   const { accountId } = req.user!;
-  const { id } = req.params;
+  const id = String(req.params.id);
 
   const [prospect] = await db.select({ id: prospectsTable.id })
     .from(prospectsTable)
@@ -284,7 +330,8 @@ router.get("/prospects/:id/conflicts", async (req: Request, res: Response) => {
 router.post("/prospects/:id/conflicts/:fieldName/resolve", async (req: Request, res: Response) => {
   if (!requireAuth(req, res)) return;
   const { accountId } = req.user!;
-  const { id, fieldName } = req.params;
+  const id = String(req.params.id);
+  const fieldName = String(req.params.fieldName);
   const { chosenValue } = req.body;
 
   if (chosenValue === undefined) { res.status(400).json({ error: "chosenValue is required" }); return; }

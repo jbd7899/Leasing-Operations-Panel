@@ -686,10 +686,11 @@ function TwilioIntegrationModal({
 
   const apiBase = (() => {
     const domain = process.env.EXPO_PUBLIC_DOMAIN;
-    return domain ? `https://${domain}/api` : `http://localhost:8080/api`;
+    return domain ? `https://${domain}/api` : "";
   })();
   const webhookUrls = [
     { label: "Incoming SMS", url: `${apiBase}/webhooks/twilio/sms` },
+    { label: "SMS Status Callback", url: `${apiBase}/webhooks/twilio/sms-status` },
     { label: "Incoming Voice", url: `${apiBase}/webhooks/twilio/voice` },
   ];
   const outboundCallWebhook = `${apiBase}/webhooks/twilio/outbound-call`;
@@ -1397,7 +1398,7 @@ export default function SettingsScreen() {
         {/* App info */}
         <View style={styles.appInfoCard}>
           <Text style={styles.appInfoText}>MyRentCard Leasing Panel</Text>
-          <Text style={styles.appInfoVersion}>v1.0.0 · Powered by Replit</Text>
+          <Text style={styles.appInfoVersion}>v1.0.0 · MyRentCard</Text>
         </View>
 
         <View style={{ height: 120 }} />

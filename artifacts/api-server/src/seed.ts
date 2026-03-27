@@ -6,6 +6,7 @@ import {
   prospectsTable,
 } from "@workspace/db";
 import { eq, count } from "drizzle-orm";
+import { computeCompletenessScore } from "./lib/completenessScore";
 
 const DEMO_AGENT_EMAIL = "jordan.rivera@myrentcard.demo";
 
@@ -481,14 +482,7 @@ async function main() {
         languagePreference: prospectSeed.languagePreference,
         latestSummary: `${fullName} is looking for a ${prospectSeed.desiredBedrooms ?? "?"} BR unit. Budget: $${prospectSeed.budgetMin ?? "?"}-$${prospectSeed.budgetMax ?? "?"}/mo.`,
         latestSentiment: "positive",
-        qualificationScore:
-          prospectSeed.status === "qualified"
-            ? "0.85"
-            : prospectSeed.status === "contacted"
-              ? "0.60"
-              : prospectSeed.status === "disqualified"
-                ? "0.20"
-                : "0.40",
+        completenessScore: computeCompletenessScore(prospectSeed),
         status: prospectSeed.status,
         exportStatus: prospectSeed.exportStatus,
       })

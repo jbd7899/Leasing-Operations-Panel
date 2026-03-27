@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, varchar, timestamp, numeric, index, unique } from "drizzle-orm/pg-core";
+import { pgTable, varchar, timestamp, numeric, integer, index, unique } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { accountsTable } from "./accounts";
@@ -26,7 +26,7 @@ export const prospectsTable = pgTable("prospects", {
   languagePreference: varchar("language_preference", { length: 50 }),
   latestSummary: varchar("latest_summary", { length: 2000 }),
   latestSentiment: varchar("latest_sentiment", { length: 50 }),
-  qualificationScore: numeric("qualification_score", { precision: 5, scale: 2 }),
+  completenessScore: integer("completeness_score"),
   status: varchar("status", { length: 50 }).notNull().default("new"),
   exportStatus: varchar("export_status", { length: 50 }).notNull().default("pending"),
   crmExternalId: varchar("crm_external_id", { length: 255 }),

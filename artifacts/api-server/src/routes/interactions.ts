@@ -23,11 +23,11 @@ router.get("/interactions/:id", async (req: Request, res: Response) => {
   if (!requireAuth(req, res)) return;
   const { accountId } = req.user!;
 
-  const { id } = req.params;
+  const id = String(req.params.id);
   const [interaction] = await db
     .select()
     .from(interactionsTable)
-    .where(and(eq(interactionsTable.id, id), eq(interactionsTable.accountId, accountId)));
+    .where(and(eq(interactionsTable.id, String(id)), eq(interactionsTable.accountId, accountId)));
 
   if (!interaction) { res.status(404).json({ error: "Not found" }); return; }
 
@@ -50,11 +50,11 @@ router.patch("/interactions/:id/review", async (req: Request, res: Response) => 
   const { accountId } = reviewUser;
   const userId = reviewUser.id;
 
-  const { id } = req.params;
+  const id = String(req.params.id);
   const { summary, category, propertyId, prospectId, structuredExtractionJson } = req.body;
 
   const [before] = await db.select().from(interactionsTable)
-    .where(and(eq(interactionsTable.id, id), eq(interactionsTable.accountId, accountId)));
+    .where(and(eq(interactionsTable.id, String(id)), eq(interactionsTable.accountId, accountId)));
   if (!before) { res.status(404).json({ error: "Not found" }); return; }
 
   if (propertyId !== undefined) {
@@ -87,7 +87,7 @@ router.patch("/interactions/:id/review", async (req: Request, res: Response) => 
   const [interaction] = await db
     .update(interactionsTable)
     .set({ ...updates, updatedAt: new Date() })
-    .where(and(eq(interactionsTable.id, id), eq(interactionsTable.accountId, accountId)))
+    .where(and(eq(interactionsTable.id, String(id)), eq(interactionsTable.accountId, accountId)))
     .returning();
 
   if (!interaction) { res.status(404).json({ error: "Not found" }); return; }
@@ -251,6 +251,7 @@ router.post("/interactions/initiate-sms", async (req: Request, res: Response) =>
       fromNumber: twilioNumber.phoneNumber,
       toNumber: normalizedPhone,
       rawText: body.trim(),
+      parentThreadKey: [twilioNumber.phoneNumber, normalizedPhone].sort().join("|"),
       extractionStatus: "pending",
       occurredAt: new Date(),
     })
@@ -346,6 +347,7 @@ router.post("/interactions/send-sms", async (req: Request, res: Response) => {
       rawText: body.trim(),
       summary: body.trim(),
       category: "general_question",
+      parentThreadKey: [twilioNumber.phoneNumber, prospect.phonePrimary].sort().join("|"),
       extractionStatus: "skipped",
       occurredAt: new Date(),
     })
@@ -375,20 +377,19 @@ router.post("/interactions/ai-draft", async (req: Request, res: Response) => {
     return;
   }
 
-  const recentInbound = await db
-    .select({ rawText: interactionsTable.rawText, sourceType: interactionsTable.sourceType, occurredAt: interactionsTable.occurredAt })
+  const recentMessages = await db
+    .select({ rawText: interactionsTable.rawText, sourceType: interactionsTable.sourceType, occurredAt: interactionsTable.occurredAt, direction: interactionsTable.direction })
     .from(interactionsTable)
     .where(
       and(
         eq(interactionsTable.prospectId, prospectId),
         eq(interactionsTable.accountId, accountId),
-        eq(interactionsTable.direction, "inbound"),
       ),
     )
     .orderBy(desc(interactionsTable.occurredAt))
-    .limit(10);
+    .limit(50);
 
-  const lastMessage = recentInbound[0]?.rawText ?? null;
+  const lastMessage = recentMessages.find((m) => m.direction === "inbound")?.rawText ?? null;
 
   if (!lastMessage) {
     res.status(200).json({ draft: "" });
@@ -398,10 +399,14 @@ router.post("/interactions/ai-draft", async (req: Request, res: Response) => {
   const completeness = computeCompletenessScore(prospect);
   const missingFields = getMissingFields(prospect);
 
-  const conversationHistory = recentInbound
+  const conversationHistory = recentMessages
     .slice()
     .reverse()
-    .map((i) => `[${new Date(i.occurredAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}] Prospect: ${i.rawText}`)
+    .map((i) => {
+      const dateLabel = new Date(i.occurredAt).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+      const role = i.direction === "inbound" ? "Prospect" : "Agent";
+      return `[${dateLabel}] ${role}: ${i.rawText}`;
+    })
     .join("\n");
 
   const prospectContext = [

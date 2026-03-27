@@ -414,6 +414,31 @@ paths:
               schema:
                 $ref: '#/components/schemas/Prospect'
   /prospects/{id}/notes:
+    get:
+      tags: [Prospects]
+      operationId: listProspectNotes
+      summary: List notes for a prospect
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of notes
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [notes]
+                properties:
+                  notes:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Note'
+        '404':
+          description: Prospect not found
     post:
       tags: [Prospects]
       operationId: addProspectNote
@@ -438,6 +463,25 @@ paths:
               schema:
                 $ref: '#/components/schemas/Note'
   /prospects/{id}/tags:
+    get:
+      tags: [Prospects]
+      operationId: listProspectTags
+      summary: List tags for a prospect
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of tags
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TagList'
+        '404':
+          description: Prospect not found
     post:
       tags: [Prospects]
       operationId: setProspectTags
@@ -1058,8 +1102,9 @@ components:
           type: [string, 'null']
         latestSentiment:
           type: [string, 'null']
-        qualificationScore:
-          type: [number, 'null']
+        completenessScore:
+          type: [integer, 'null']
+          description: Profile completeness percentage (0-100)
         status:
           type: string
         exportStatus:
