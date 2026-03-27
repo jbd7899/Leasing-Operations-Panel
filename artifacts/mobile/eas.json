@@ -11,14 +11,16 @@
       "distribution": "internal",
       "env": {
         "EXPO_PUBLIC_DOMAIN": "myrentcardleasing.replit.app",
-        "EXPO_PUBLIC_REPL_ID": "98770259-d5c7-4ca0-be19-efa4eba0b9ca"
+        "EXPO_PUBLIC_REPL_ID": "98770259-d5c7-4ca0-be19-efa4eba0b9ca",
+        "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_test_c2V0dGxlZC1jaG93LTQ1LmNsZXJrLmFjY291bnRzLmRldiQ"
       }
     },
     "production": {
       "autoIncrement": true,
       "env": {
         "EXPO_PUBLIC_DOMAIN": "myrentcardleasing.replit.app",
-        "EXPO_PUBLIC_REPL_ID": "98770259-d5c7-4ca0-be19-efa4eba0b9ca"
+        "EXPO_PUBLIC_REPL_ID": "98770259-d5c7-4ca0-be19-efa4eba0b9ca",
+        "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_live_Y2xlcmsubXlyZW50Y2FyZGxlYXNpbmcuY29tJA"
       }
     }
   },
