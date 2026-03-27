@@ -30,6 +30,8 @@ export const prospectsTable = pgTable("prospects", {
   status: varchar("status", { length: 50 }).notNull().default("new"),
   exportStatus: varchar("export_status", { length: 50 }).notNull().default("pending"),
   crmExternalId: varchar("crm_external_id", { length: 255 }),
+  lastInboundAt: timestamp("last_inbound_at", { withTimezone: true }),
+  lastOutboundAt: timestamp("last_outbound_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 }, (table) => [
@@ -38,6 +40,7 @@ export const prospectsTable = pgTable("prospects", {
   index("idx_prospects_phone_primary").on(table.phonePrimary),
   index("idx_prospects_status").on(table.status),
   index("idx_prospects_export_status").on(table.exportStatus),
+  index("idx_prospects_last_inbound_at").on(table.lastInboundAt),
 ]);
 
 export const insertProspectSchema = createInsertSchema(prospectsTable).omit({ id: true, createdAt: true, updatedAt: true });

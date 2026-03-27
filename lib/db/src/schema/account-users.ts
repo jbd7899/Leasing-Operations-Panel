@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, varchar, timestamp, index } from "drizzle-orm/pg-core";
+import { pgTable, varchar, timestamp, boolean, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { accountsTable } from "./accounts";
@@ -12,6 +12,8 @@ export const accountUsersTable = pgTable("account_users", {
   name: varchar("name", { length: 255 }),
   email: varchar("email", { length: 255 }),
   role: varchar("role", { length: 50 }).notNull().default("agent"),
+  expoPushToken: varchar("expo_push_token", { length: 255 }),
+  pushDigestEnabled: boolean("push_digest_enabled").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 }, (table) => [

@@ -139,12 +139,33 @@ router.get("/inbox", async (req: Request, res: Response) => {
   const prospectMap = new Map(prospects.map((p) => [p.id, p]));
   const propertyMap = new Map(properties.map((p) => [p.id, p]));
 
-  const items = paged.map((item) => ({
-    interaction: item.interaction,
-    prospect: item.prospectId ? (prospectMap.get(item.prospectId) ?? null) : null,
-    property: item.propertyId ? (propertyMap.get(item.propertyId) ?? null) : null,
-    messageCount: item.messageCount,
-  }));
+  const STALE_THRESHOLD_MS = 48 * 60 * 60 * 1000;
+
+  function isProspectStale(p: typeof prospects[0]): boolean {
+    if (!p.lastInboundAt) return false;
+    if (p.status === "disqualified") return false;
+    const lastIn = new Date(p.lastInboundAt).getTime();
+    const lastOut = p.lastOutboundAt ? new Date(p.lastOutboundAt).getTime() : 0;
+    return lastIn > lastOut && (Date.now() - lastIn > STALE_THRESHOLD_MS);
+  }
+
+  const items = paged.map((item) => {
+    const p = item.prospectId ? (prospectMap.get(item.prospectId) ?? null) : null;
+    return {
+      interaction: item.interaction,
+      prospect: p,
+      property: item.propertyId ? (propertyMap.get(item.propertyId) ?? null) : null,
+      messageCount: item.messageCount,
+      isStale: p ? isProspectStale(p) : false,
+    };
+  });
+
+  // Sort stale items to top, then by recency
+  items.sort((a, b) => {
+    if (a.isStale && !b.isStale) return -1;
+    if (!a.isStale && b.isStale) return 1;
+    return new Date(b.interaction.occurredAt).getTime() - new Date(a.interaction.occurredAt).getTime();
+  });
 
   res.json({ items, total });
 });

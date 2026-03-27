@@ -353,6 +353,12 @@ router.post("/interactions/send-sms", async (req: Request, res: Response) => {
     })
     .returning();
 
+  // Update lastOutboundAt on prospect
+  await db
+    .update(prospectsTable)
+    .set({ lastOutboundAt: new Date() })
+    .where(eq(prospectsTable.id, prospectId));
+
   res.status(201).json(interaction);
 });
 

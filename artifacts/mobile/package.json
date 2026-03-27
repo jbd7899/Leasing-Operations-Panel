@@ -64,6 +64,8 @@
     "expo-auth-session": "^7.0.10",
     "expo-clipboard": "^55.0.9",
     "expo-crypto": "^15.0.8",
+    "expo-device": "^55.0.10",
+    "expo-notifications": "^55.0.13",
     "expo-secure-store": "^15.0.8",
     "lightningcss": "1.31.1",
     "lightningcss-darwin-arm64": "^1.31.1"

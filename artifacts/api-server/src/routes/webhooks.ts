@@ -1,7 +1,8 @@
 import { Router, type IRouter, type Request, type Response } from "express";
-import { db, interactionsTable, twilioNumbersTable } from "@workspace/db";
+import { db, interactionsTable, prospectsTable, twilioNumbersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { processInteraction } from "../lib/processInteraction";
+import { shouldAutoReply, sendAutoReply } from "../lib/autoReply";
 import { logger } from "../lib/logger";
 import { validateTwilioSignature } from "../middlewares/twilioSignature";
 import { normalizePhoneE164, findOrCreateProspectShell } from "../lib/prospectShell";
@@ -89,6 +90,26 @@ router.post(
             metadataJson: { messageSid: MessageSid, from: fromNorm, to: toNorm },
           });
           await processInteraction(interaction.id);
+
+          // Update lastInboundAt on prospect
+          await db
+            .update(prospectsTable)
+            .set({ lastInboundAt: new Date() })
+            .where(eq(prospectsTable.id, prospectId));
+
+          // Auto-reply check (non-blocking)
+          try {
+            if (await shouldAutoReply(twilioNumber.accountId, twilioNumber)) {
+              await sendAutoReply(
+                twilioNumber.accountId,
+                prospectId,
+                twilioNumber.phoneNumber,
+                fromNorm,
+              );
+            }
+          } catch (autoReplyErr) {
+            logger.error({ err: autoReplyErr }, "Auto-reply failed (non-blocking)");
+          }
         } else {
           logger.info({ MessageSid }, "Duplicate SMS webhook — ignoring");
         }
