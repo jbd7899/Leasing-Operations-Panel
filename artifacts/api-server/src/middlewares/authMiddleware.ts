@@ -39,6 +39,21 @@ export async function authMiddleware(
     return;
   }
 
+  // Dev bypass: skip Supabase token verification and use the seeded test user
+  if (process.env.DEV_BYPASS === "true" && token === "dev-bypass-token") {
+    req.user = {
+      id: "usr_test_001",
+      email: "jbd7899@demo.com",
+      firstName: "Jordan",
+      lastName: "Demo",
+      profileImageUrl: null,
+      accountId: "acc_test_001",
+      role: "owner",
+    };
+    next();
+    return;
+  }
+
   let supabaseUserId: string;
   let supabaseEmail: string | null;
   try {

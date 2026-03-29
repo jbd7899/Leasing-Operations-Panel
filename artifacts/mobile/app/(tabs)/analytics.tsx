@@ -212,7 +212,7 @@ export default function AnalyticsScreen() {
   const { data, isLoading, isError, refetch } = useGetAnalyticsOverview(period);
 
   const sourceData = useMemo(() => {
-    if (!data) return [];
+    if (!data?.sourceMix) return [];
     return [
       { label: "SMS", value: data.sourceMix.sms, color: SOURCE_COLORS.sms },
       { label: "Voice", value: data.sourceMix.voice, color: SOURCE_COLORS.voice },
@@ -220,7 +220,7 @@ export default function AnalyticsScreen() {
     ].filter((d) => d.value > 0);
   }, [data]);
 
-  const isEmptyState = !isLoading && !isError && data && data.leadVolume.total === 0;
+  const isEmptyState = !isLoading && !isError && data && (data.leadVolume?.total ?? 0) === 0;
 
   return (
     <View style={[styles.root, { paddingTop: insets.top, backgroundColor: theme.bg }]}>

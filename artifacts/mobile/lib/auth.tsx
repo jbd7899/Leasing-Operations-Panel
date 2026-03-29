@@ -29,11 +29,27 @@ const AuthContext = createContext<AuthContextValue>({
   logout: async () => {},
 });
 
+const DEV_BYPASS = process.env.EXPO_PUBLIC_DEV_BYPASS === "true";
+
+const DEV_USER: User = {
+  id: "usr_test_001",
+  email: "jbd7899@demo.com",
+  firstName: "Jordan",
+  lastName: "Demo",
+  profileImageUrl: null,
+};
+
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [user, setUser] = useState<User | null>(DEV_BYPASS ? DEV_USER : null);
+  const [isLoading, setIsLoading] = useState(!DEV_BYPASS);
 
   useEffect(() => {
+    if (DEV_BYPASS) {
+      // In dev bypass mode, skip Supabase auth entirely
+      setAuthTokenGetter(async () => "dev-bypass-token");
+      return;
+    }
+
     // Wire Supabase session token into the API client
     setAuthTokenGetter(async () => {
       const { data } = await supabase.auth.getSession();
@@ -58,6 +74,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logout = useCallback(async () => {
+    if (DEV_BYPASS) return;
     await supabase.auth.signOut();
   }, []);
 

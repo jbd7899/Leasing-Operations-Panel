@@ -7,16 +7,23 @@ import type { SessionUser } from "./types";
 export const SESSION_COOKIE = "sid";
 export const SESSION_TTL = 7 * 24 * 60 * 60 * 1000;
 
+const DEV_BYPASS = process.env.DEV_BYPASS === "true";
+
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-if (!SUPABASE_URL) throw new Error("SUPABASE_URL must be set.");
-if (!SUPABASE_SERVICE_ROLE_KEY) throw new Error("SUPABASE_SERVICE_ROLE_KEY must be set.");
+if (!DEV_BYPASS) {
+  if (!SUPABASE_URL) throw new Error("SUPABASE_URL must be set.");
+  if (!SUPABASE_SERVICE_ROLE_KEY) throw new Error("SUPABASE_SERVICE_ROLE_KEY must be set.");
+}
 
-const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-  auth: { autoRefreshToken: false, persistSession: false },
-});
+const supabaseAdmin = (SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY)
+  ? createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    })
+  : null;
 
 export async function verifySupabaseToken(token: string): Promise<{ sub: string; email: string | null }> {
+  if (!supabaseAdmin) throw new Error("Supabase not configured");
   const { data, error } = await supabaseAdmin.auth.getUser(token);
   if (error || !data.user) throw new Error(error?.message ?? "Invalid token");
   return { sub: data.user.id, email: data.user.email ?? null };

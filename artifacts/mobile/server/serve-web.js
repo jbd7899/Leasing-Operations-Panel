@@ -9,6 +9,8 @@ const http = require("http");
 const fs = require("fs");
 const path = require("path");
 
+const API_PORT = parseInt(process.env.API_PORT || "3000", 10);
+
 const DIST_ROOT = path.resolve(__dirname, "..", "dist-web");
 const basePath = (process.env.BASE_PATH || "").replace(/\/+$/, "");
 
@@ -50,9 +52,34 @@ function resolveFile(urlPath) {
 
 const indexHtml = path.join(DIST_ROOT, "index.html");
 
+function proxyToApi(req, res) {
+  const options = {
+    hostname: "127.0.0.1",
+    port: API_PORT,
+    path: req.url,
+    method: req.method,
+    headers: { ...req.headers, host: `localhost:${API_PORT}` },
+  };
+  const proxy = http.request(options, (apiRes) => {
+    res.writeHead(apiRes.statusCode, apiRes.headers);
+    apiRes.pipe(res);
+  });
+  proxy.on("error", (e) => {
+    res.writeHead(502, { "content-type": "text/plain" });
+    res.end(`API proxy error: ${e.message}`);
+  });
+  req.pipe(proxy);
+}
+
 const server = http.createServer((req, res) => {
   const url = new URL(req.url || "/", `http://${req.headers.host}`);
   let pathname = url.pathname;
+
+  // Proxy API calls to the API server
+  if (pathname.startsWith("/api/") || pathname === "/users/me/role") {
+    proxyToApi(req, res);
+    return;
+  }
 
   if (basePath && pathname.startsWith(basePath)) {
     pathname = pathname.slice(basePath.length) || "/";
