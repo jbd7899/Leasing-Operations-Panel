@@ -1,25 +1,11 @@
-import React, { createContext, useContext, useCallback, type ReactNode } from "react";
-import { Platform } from "react-native";
-import { ClerkProvider, useAuth as useClerkAuth, useUser } from "@clerk/clerk-expo";
-import * as SecureStore from "expo-secure-store";
-import { setClerkTokenGetter } from "@/lib/api";
+import React, { createContext, useContext, useCallback, useEffect, useState, type ReactNode } from "react";
+import { createClient } from "@supabase/supabase-js";
+import { setAuthTokenGetter } from "@workspace/api-client-react";
 
-const PUBLISHABLE_KEY = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY!;
+const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL!;
+const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
 
-const tokenCache =
-  Platform.OS !== "web"
-    ? {
-        async getToken(key: string) {
-          return SecureStore.getItemAsync(key);
-        },
-        async saveToken(key: string, value: string) {
-          return SecureStore.setItemAsync(key, value);
-        },
-        async clearToken(key: string) {
-          return SecureStore.deleteItemAsync(key);
-        },
-      }
-    : undefined;
+export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 interface User {
   id: string;
@@ -43,50 +29,71 @@ const AuthContext = createContext<AuthContextValue>({
   logout: async () => {},
 });
 
-function ClerkAuthBridge({ children }: { children: ReactNode }) {
-  const { isSignedIn, isLoaded, getToken, signOut } = useClerkAuth();
-  const { user: clerkUser } = useUser();
+const DEV_BYPASS = process.env.EXPO_PUBLIC_DEV_BYPASS === "true";
 
-  // Wire Clerk's session token into the API client for all requests
-  React.useEffect(() => {
-    setClerkTokenGetter(() => getToken());
-  }, [getToken]);
+const DEV_USER: User = {
+  id: "usr_test_001",
+  email: "jbd7899@demo.com",
+  firstName: "Jordan",
+  lastName: "Demo",
+  profileImageUrl: null,
+};
 
-  const user: User | null =
-    isSignedIn && clerkUser
-      ? {
-          id: clerkUser.id,
-          email: clerkUser.primaryEmailAddress?.emailAddress ?? null,
-          firstName: clerkUser.firstName ?? null,
-          lastName: clerkUser.lastName ?? null,
-          profileImageUrl: clerkUser.imageUrl ?? null,
-        }
-      : null;
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [user, setUser] = useState<User | null>(DEV_BYPASS ? DEV_USER : null);
+  const [isLoading, setIsLoading] = useState(!DEV_BYPASS);
+
+  useEffect(() => {
+    if (DEV_BYPASS) {
+      // In dev bypass mode, skip Supabase auth entirely
+      setAuthTokenGetter(async () => "dev-bypass-token");
+      return;
+    }
+
+    // Wire Supabase session token into the API client
+    setAuthTokenGetter(async () => {
+      const { data } = await supabase.auth.getSession();
+      return data.session?.access_token ?? null;
+    });
+
+    // Load existing session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        setUser(sessionToUser(session.user));
+      }
+      setIsLoading(false);
+    });
+
+    // Listen for auth state changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ? sessionToUser(session.user) : null);
+      setIsLoading(false);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
 
   const logout = useCallback(async () => {
-    await signOut();
-  }, [signOut]);
+    if (DEV_BYPASS) return;
+    await supabase.auth.signOut();
+  }, []);
 
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        isLoading: !isLoaded,
-        isAuthenticated: isSignedIn ?? false,
-        logout,
-      }}
-    >
+    <AuthContext.Provider value={{ user, isLoading, isAuthenticated: !!user, logout }}>
       {children}
     </AuthContext.Provider>
   );
 }
 
-export function AuthProvider({ children }: { children: ReactNode }) {
-  return (
-    <ClerkProvider publishableKey={PUBLISHABLE_KEY} tokenCache={tokenCache}>
-      <ClerkAuthBridge>{children}</ClerkAuthBridge>
-    </ClerkProvider>
-  );
+function sessionToUser(u: { id: string; email?: string; user_metadata?: Record<string, unknown> }): User {
+  const meta = u.user_metadata ?? {};
+  return {
+    id: u.id,
+    email: u.email ?? null,
+    firstName: (meta.first_name as string | null) ?? (meta.full_name as string | null)?.split(" ")[0] ?? null,
+    lastName: (meta.last_name as string | null) ?? ((meta.full_name as string | null)?.split(" ").slice(1).join(" ") || null),
+    profileImageUrl: (meta.avatar_url as string | null) ?? null,
+  };
 }
 
 export function useAuth(): AuthContextValue {

@@ -1,4 +1,4 @@
-import { createClerkClient, verifyToken } from "@clerk/backend";
+import { createClient } from "@supabase/supabase-js";
 import { type Request, type Response } from "express";
 import { db, usersTable, accountsTable, accountUsersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
@@ -7,13 +7,26 @@ import type { SessionUser } from "./types";
 export const SESSION_COOKIE = "sid";
 export const SESSION_TTL = 7 * 24 * 60 * 60 * 1000;
 
-const CLERK_SECRET_KEY = process.env.CLERK_SECRET_KEY;
-if (!CLERK_SECRET_KEY) throw new Error("CLERK_SECRET_KEY must be set.");
+const DEV_BYPASS = process.env.DEV_BYPASS === "true";
 
-export const clerkClient = createClerkClient({ secretKey: CLERK_SECRET_KEY });
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+if (!DEV_BYPASS) {
+  if (!SUPABASE_URL) throw new Error("SUPABASE_URL must be set.");
+  if (!SUPABASE_SERVICE_ROLE_KEY) throw new Error("SUPABASE_SERVICE_ROLE_KEY must be set.");
+}
 
-export async function verifyClerkToken(token: string) {
-  return verifyToken(token, { secretKey: CLERK_SECRET_KEY! });
+const supabaseAdmin = (SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY)
+  ? createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    })
+  : null;
+
+export async function verifySupabaseToken(token: string): Promise<{ sub: string; email: string | null }> {
+  if (!supabaseAdmin) throw new Error("Supabase not configured");
+  const { data, error } = await supabaseAdmin.auth.getUser(token);
+  if (error || !data.user) throw new Error(error?.message ?? "Invalid token");
+  return { sub: data.user.id, email: data.user.email ?? null };
 }
 
 export function getAuthToken(req: Request): string | undefined {
@@ -68,5 +81,4 @@ export async function ensureAccountForUser(
   return { accountId: account.id, role: "owner" };
 }
 
-// Keep for type compatibility with routes that still reference SessionUser
 export type { SessionUser };
