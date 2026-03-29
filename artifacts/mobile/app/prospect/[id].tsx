@@ -311,6 +311,15 @@ export default function ProspectDetailScreen() {
     ? (propertiesData?.properties ?? []).find((p) => p.id === prospect.assignedPropertyId)?.name ?? null
     : null;
 
+  // Pull suggestedNextAction from the most recent inbound interaction's extraction JSON
+  const latestInbound = [...(interactions ?? [])]
+    .filter((i) => i.direction === "inbound")
+    .sort((a, b) => new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime())[0];
+  const latestExtraction = latestInbound?.structuredExtractionJson as Record<string, unknown> | null;
+  const suggestedNextAction = typeof latestExtraction?.suggestedNextAction === "string" && latestExtraction.suggestedNextAction
+    ? latestExtraction.suggestedNextAction
+    : null;
+
   return (
     <KeyboardAvoidingView
       style={[styles.root, { backgroundColor: theme.bg }]}
@@ -356,6 +365,17 @@ export default function ProspectDetailScreen() {
           scrollViewRef.current?.scrollToEnd({ animated: false });
         }}
       >
+        {/* Suggested Next Action */}
+        {suggestedNextAction && (
+          <View style={nextActionStyles.card}>
+            <View style={nextActionStyles.headerRow}>
+              <Feather name="zap" size={13} color={Colors.brand.tealLight} />
+              <Text style={nextActionStyles.headerLabel}>SUGGESTED NEXT ACTION</Text>
+            </View>
+            <Text style={nextActionStyles.actionText}>{suggestedNextAction}</Text>
+          </View>
+        )}
+
         {/* AI Summary */}
         {prospect.latestSummary && (
           <View style={[styles.card, { backgroundColor: theme.bgCard, borderColor: theme.border }]}>
@@ -368,6 +388,31 @@ export default function ProspectDetailScreen() {
             <Text style={[styles.summaryText, { color: theme.textSecondary }]}>{prospect.latestSummary}</Text>
           </View>
         )}
+
+        {/* Leasing Details */}
+        <View style={[styles.card, { backgroundColor: theme.bgCard, borderColor: theme.border }]}>
+          <SectionHeader title="LEASING DETAILS" />
+          <InfoRow icon="home" label="Bedrooms" value={prospect.desiredBedrooms} />
+          <InfoRow icon="calendar" label="Move-in" value={prospect.desiredMoveInDate} />
+          <InfoRow
+            icon="dollar-sign"
+            label="Budget"
+            value={
+              prospect.budgetMin || prospect.budgetMax
+                ? `$${prospect.budgetMin ?? "?"} – $${prospect.budgetMax ?? "?"}`
+                : null
+            }
+          />
+          <InfoRow icon="heart" label="Pets" value={prospect.pets} />
+          <InfoRow icon="shield" label="Voucher" value={prospect.voucherType} />
+          <InfoRow icon="briefcase" label="Employment" value={prospect.employmentStatus} />
+          <InfoRow
+            icon="trending-up"
+            label="Income"
+            value={prospect.monthlyIncome ? `$${prospect.monthlyIncome}/mo` : null}
+          />
+          <InfoRow icon="globe" label="Language" value={prospect.languagePreference} />
+        </View>
 
         {/* Data Conflicts */}
         {conflicts.length > 0 && (
@@ -497,31 +542,6 @@ export default function ProspectDetailScreen() {
           </View>
         )}
 
-        {/* Leasing Details */}
-        <View style={[styles.card, { backgroundColor: theme.bgCard, borderColor: theme.border }]}>
-          <SectionHeader title="LEASING DETAILS" />
-          <InfoRow icon="home" label="Bedrooms" value={prospect.desiredBedrooms} />
-          <InfoRow icon="calendar" label="Move-in" value={prospect.desiredMoveInDate} />
-          <InfoRow
-            icon="dollar-sign"
-            label="Budget"
-            value={
-              prospect.budgetMin || prospect.budgetMax
-                ? `$${prospect.budgetMin ?? "?"} – $${prospect.budgetMax ?? "?"}`
-                : null
-            }
-          />
-          <InfoRow icon="heart" label="Pets" value={prospect.pets} />
-          <InfoRow icon="shield" label="Voucher" value={prospect.voucherType} />
-          <InfoRow icon="briefcase" label="Employment" value={prospect.employmentStatus} />
-          <InfoRow
-            icon="trending-up"
-            label="Income"
-            value={prospect.monthlyIncome ? `$${prospect.monthlyIncome}/mo` : null}
-          />
-          <InfoRow icon="globe" label="Language" value={prospect.languagePreference} />
-        </View>
-
         {/* Export Status */}
         <View style={[styles.card, { backgroundColor: theme.bgCard, borderColor: theme.border }]}>
           <View style={styles.cardHeaderRow}>
@@ -549,7 +569,7 @@ export default function ProspectDetailScreen() {
           {prospect.exportStatus === "pending" && (
             <View style={styles.pendingBadge}>
               <Feather name="check-circle" size={14} color={Colors.brand.tealLight} />
-              <Text style={styles.pendingBadgeText}>In Export Queue — use the Exports tab to batch export</Text>
+              <Text style={styles.pendingBadgeText}>In export queue — go to Leads screen to batch export</Text>
             </View>
           )}
         </View>
@@ -1553,5 +1573,33 @@ const chatStyles = StyleSheet.create({
     textAlign: "center",
     paddingHorizontal: 16,
     lineHeight: 17,
+  },
+});
+
+const nextActionStyles = StyleSheet.create({
+  card: {
+    backgroundColor: "#051A1A",
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: Colors.brand.teal,
+    gap: 8,
+  },
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  headerLabel: {
+    fontSize: 11,
+    fontFamily: "Inter_600SemiBold",
+    color: Colors.brand.tealLight,
+    letterSpacing: 0.8,
+  },
+  actionText: {
+    fontSize: 14,
+    fontFamily: "Inter_500Medium",
+    color: Colors.dark.text,
+    lineHeight: 20,
   },
 });

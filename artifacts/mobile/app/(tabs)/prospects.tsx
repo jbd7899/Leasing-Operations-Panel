@@ -161,7 +161,7 @@ export default function ProspectsScreen() {
     <View style={[styles.container, { paddingTop: topPad, backgroundColor: theme.bg }]}>
       <View style={styles.header}>
         <View>
-          <Text style={[styles.screenTitle, { color: theme.text }]}>Prospects</Text>
+          <Text style={[styles.screenTitle, { color: theme.text }]}>Leads</Text>
           <Text style={[styles.screenSubtitle, { color: theme.textMuted }]}>
             {data ? `${data.total} total` : "Loading..."}
           </Text>
@@ -196,13 +196,21 @@ export default function ProspectsScreen() {
             </Pressable>
           </View>
         ) : (
-          <Pressable style={[styles.refreshBtn, { backgroundColor: theme.bgCard, borderColor: theme.border }]} onPress={() => refetch()} disabled={isFetching}>
-            <Feather
-              name="refresh-cw"
-              size={18}
-              color={isFetching ? theme.textMuted : Colors.brand.tealLight}
-            />
-          </Pressable>
+          <View style={styles.headerActions}>
+            <Pressable
+              style={[styles.refreshBtn, { backgroundColor: theme.bgCard, borderColor: theme.border }]}
+              onPress={() => router.push("/(tabs)/exports" as Parameters<typeof router.push>[0])}
+            >
+              <Feather name="upload" size={18} color={theme.textSecondary} />
+            </Pressable>
+            <Pressable style={[styles.refreshBtn, { backgroundColor: theme.bgCard, borderColor: theme.border }]} onPress={() => refetch()} disabled={isFetching}>
+              <Feather
+                name="refresh-cw"
+                size={18}
+                color={isFetching ? theme.textMuted : Colors.brand.tealLight}
+              />
+            </Pressable>
+          </View>
         )}
       </View>
 
@@ -287,8 +295,8 @@ export default function ProspectsScreen() {
           ListEmptyComponent={
             <EmptyState
               icon="users"
-              title="No prospects"
-              subtitle="Prospects from incoming calls and SMS will appear here"
+              title="No leads yet"
+              subtitle="Rental inquiries from SMS and calls will appear here"
             />
           }
           refreshControl={
@@ -329,6 +337,11 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_400Regular",
     color: Colors.dark.textMuted,
     marginTop: 2,
+  },
+  headerActions: {
+    flexDirection: "row",
+    gap: 8,
+    alignItems: "center",
   },
   refreshBtn: {
     width: 40,

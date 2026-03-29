@@ -1,6 +1,7 @@
 import React, { type ComponentProps } from "react";
 import { View, Text, StyleSheet, Pressable } from "react-native";
 import { Feather } from "@expo/vector-icons";
+import { router } from "expo-router";
 import Colors from "@/constants/colors";
 import { useTheme } from "@/contexts/ThemeContext";
 import { Badge } from "./Badge";
@@ -33,6 +34,13 @@ const SOURCE_ICONS: Record<string, FeatherIconName> = {
   call: "phone-call",
 };
 
+function formatBudget(min?: number | null, max?: number | null): string | null {
+  if (!min && !max) return null;
+  if (min && max) return `$${min}–$${max}`;
+  if (max) return `up to $${max}`;
+  return `$${min}+`;
+}
+
 export function InboxItem({ item, onPress }: InboxItemProps) {
   const { theme, isDark } = useTheme();
   const { interaction, prospect, property, messageCount } = item;
@@ -57,10 +65,52 @@ export function InboxItem({ item, onPress }: InboxItemProps) {
   const canCall = !!phoneNumber;
   const showMessageBadge = typeof messageCount === "number" && messageCount > 1;
 
+  // Extract suggested next action from AI extraction JSON
+  const extraction = interaction.structuredExtractionJson as Record<string, unknown> | null;
+  const suggestedNextAction = typeof extraction?.suggestedNextAction === "string"
+    ? extraction.suggestedNextAction
+    : null;
+
+  // Build qualification chips from prospect data
+  const qualChips: string[] = [];
+  if (prospect?.desiredBedrooms) qualChips.push(`${prospect.desiredBedrooms}br`);
+  const budgetStr = formatBudget(
+    prospect?.budgetMin as number | null | undefined,
+    prospect?.budgetMax as number | null | undefined,
+  );
+  if (budgetStr) qualChips.push(budgetStr);
+  if (prospect?.desiredMoveInDate) qualChips.push(prospect.desiredMoveInDate);
+  if (prospect?.pets && prospect.pets.toLowerCase() !== "none") qualChips.push(`pets: ${prospect.pets}`);
+  if (prospect?.voucherType && prospect.voucherType.toLowerCase() !== "none") qualChips.push(prospect.voucherType);
+
   const handleCall = () => {
     if (!phoneNumber) return;
     const name = prospect?.fullName ?? phoneNumber;
     startCall(name, phoneNumber, primaryTwilioNumber);
+  };
+
+  const handleReply = () => {
+    if (prospect?.id) {
+      router.push({ pathname: "/prospect/[id]", params: { id: prospect.id } });
+    } else {
+      onPress();
+    }
+  };
+
+  const handleFollowUp = () => {
+    if (prospect?.id) {
+      router.push({ pathname: "/prospect/[id]", params: { id: prospect.id } });
+    } else {
+      onPress();
+    }
+  };
+
+  const handleQualify = () => {
+    if (prospect?.id) {
+      router.push({ pathname: "/prospect/[id]", params: { id: prospect.id } });
+    } else {
+      onPress();
+    }
   };
 
   return (
@@ -111,29 +161,74 @@ export function InboxItem({ item, onPress }: InboxItemProps) {
           </Text>
         ) : null}
 
+        {/* Qualification chips */}
+        {qualChips.length > 0 && (
+          <View style={styles.qualChipsRow}>
+            {qualChips.map((chip) => (
+              <View key={chip} style={styles.qualChip}>
+                <Text style={styles.qualChipText}>{chip}</Text>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {/* Suggested next action */}
+        {suggestedNextAction && (
+          <View style={styles.nextActionRow}>
+            <Feather name="zap" size={11} color={Colors.brand.tealLight} />
+            <Text style={styles.nextActionText} numberOfLines={1}>{suggestedNextAction}</Text>
+          </View>
+        )}
+
         {/* Quick action row */}
-        {canCall && (
-          <View style={[styles.quickActions, { borderTopColor: theme.border }]}>
+        <View style={[styles.quickActions, { borderTopColor: theme.border }]}>
+          <Pressable
+            style={[styles.quickAction, { backgroundColor: theme.activeBg }]}
+            onPress={(e) => { e.stopPropagation?.(); handleReply(); }}
+            hitSlop={8}
+          >
+            <Feather name="message-square" size={13} color={Colors.brand.tealLight} />
+            <Text style={styles.quickActionLabel}>Reply</Text>
+          </Pressable>
+
+          {canCall && (
             <Pressable
               style={[styles.quickAction, { backgroundColor: theme.activeBg }, !primaryTwilioNumber && styles.quickActionDisabled]}
-              onPress={(e) => {
-                e.stopPropagation?.();
-                handleCall();
-              }}
+              onPress={(e) => { e.stopPropagation?.(); handleCall(); }}
               hitSlop={8}
               disabled={!primaryTwilioNumber}
             >
               <Feather
                 name="phone"
-                size={14}
+                size={13}
                 color={primaryTwilioNumber ? Colors.brand.tealLight : theme.textMuted}
               />
               <Text style={[styles.quickActionLabel, !primaryTwilioNumber && { color: theme.textMuted }]}>
                 Call
               </Text>
             </Pressable>
-          </View>
-        )}
+          )}
+
+          <Pressable
+            style={styles.quickAction}
+            onPress={(e) => { e.stopPropagation?.(); handleFollowUp(); }}
+            hitSlop={8}
+          >
+            <Feather name="clock" size={13} color={Colors.brand.tealLight} />
+            <Text style={styles.quickActionLabel}>Follow-up</Text>
+          </Pressable>
+
+          {prospect?.status !== "qualified" && (
+            <Pressable
+              style={styles.quickAction}
+              onPress={(e) => { e.stopPropagation?.(); handleQualify(); }}
+              hitSlop={8}
+            >
+              <Feather name="check-circle" size={13} color={Colors.brand.tealLight} />
+              <Text style={styles.quickActionLabel}>Qualify</Text>
+            </Pressable>
+          )}
+        </View>
       </View>
     </Pressable>
   );
@@ -178,7 +273,7 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    gap: 4,
+    gap: 5,
   },
   topRow: {
     flexDirection: "row",
@@ -225,10 +320,46 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_400Regular",
     lineHeight: 18,
   },
+  qualChipsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 5,
+    marginTop: 1,
+  },
+  qualChip: {
+    backgroundColor: "#0D1E2A",
+    borderWidth: 1,
+    borderColor: "#1A3344",
+    borderRadius: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+  },
+  qualChipText: {
+    fontSize: 11,
+    fontFamily: "Inter_500Medium",
+    color: Colors.dark.textSecondary,
+  },
+  nextActionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: "#091E1E",
+    borderWidth: 1,
+    borderColor: "#0D3333",
+    borderRadius: 7,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  nextActionText: {
+    fontSize: 12,
+    fontFamily: "Inter_500Medium",
+    color: Colors.brand.tealLight,
+    flex: 1,
+  },
   quickActions: {
     flexDirection: "row",
-    gap: 12,
-    marginTop: 6,
+    gap: 8,
+    marginTop: 4,
     paddingTop: 8,
     borderTopWidth: 1,
   },
@@ -247,7 +378,7 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   quickActionLabel: {
-    fontSize: 12,
+    fontSize: 11,
     fontFamily: "Inter_500Medium",
     color: Colors.brand.tealLight,
   },

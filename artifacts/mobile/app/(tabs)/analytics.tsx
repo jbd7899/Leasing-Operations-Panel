@@ -225,7 +225,7 @@ export default function AnalyticsScreen() {
   return (
     <View style={[styles.root, { paddingTop: insets.top, backgroundColor: theme.bg }]}>
       <View style={[styles.headerRow, { borderBottomColor: theme.border }]}>
-        <Text style={[styles.screenTitle, { color: theme.text }]}>Analytics</Text>
+        <Text style={[styles.screenTitle, { color: theme.text }]}>Activity</Text>
         <View style={styles.periodRow}>
           {PERIODS.map((p) => (
             <Pressable

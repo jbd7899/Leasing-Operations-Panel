@@ -12,6 +12,7 @@ import { api } from "@/lib/api";
 
 const WEB_SIDEBAR_BREAKPOINT = 768;
 
+// Primary 4-tab navigation (exports & founder are accessible but not in the tab bar)
 const BASE_NAV_ITEMS = [
   {
     name: "index",
@@ -22,21 +23,14 @@ const BASE_NAV_ITEMS = [
   },
   {
     name: "prospects",
-    label: "Prospects",
+    label: "Leads",
     icon: "users" as const,
     sfDefault: "person.2",
     sfSelected: "person.2.fill",
   },
   {
-    name: "exports",
-    label: "Exports",
-    icon: "upload" as const,
-    sfDefault: "arrow.up.doc",
-    sfSelected: "arrow.up.doc.fill",
-  },
-  {
     name: "analytics",
-    label: "Analytics",
+    label: "Activity",
     icon: "bar-chart-2" as const,
     sfDefault: "chart.bar",
     sfSelected: "chart.bar.fill",
@@ -50,15 +44,8 @@ const BASE_NAV_ITEMS = [
   },
 ];
 
-const FOUNDER_NAV_ITEM = {
-  name: "founder",
-  label: "Founder",
-  icon: "activity" as const,
-  sfDefault: "waveform.path",
-  sfSelected: "waveform.path",
-};
-
-const ALL_TAB_NAMES = [...BASE_NAV_ITEMS.map((i) => i.name), "founder"];
+// All tab screen names (needed so Expo Router registers them even when hidden)
+const ALL_TAB_NAMES = ["index", "prospects", "exports", "analytics", "settings", "founder"];
 
 function useIsOwner(): boolean {
   const [isOwner, setIsOwner] = useState(false);
@@ -75,16 +62,14 @@ function WebSidebarLayout() {
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
-  const isOwner = useIsOwner();
 
   const isWide = width >= WEB_SIDEBAR_BREAKPOINT;
-  const navItems = isOwner ? [...BASE_NAV_ITEMS, FOUNDER_NAV_ITEM] : BASE_NAV_ITEMS;
 
   if (!isWide) {
     return <ClassicTabLayout />;
   }
 
-  const activeTab = navItems.find((item) => {
+  const activeTab = BASE_NAV_ITEMS.find((item) => {
     if (item.name === "index") return pathname === "/" || pathname === "/index" || pathname === "/(tabs)" || pathname === "/(tabs)/index";
     return pathname.includes(item.name);
   });
@@ -99,7 +84,7 @@ function WebSidebarLayout() {
         </View>
 
         <View style={sidebarStyles.navList}>
-          {navItems.map((item) => {
+          {BASE_NAV_ITEMS.map((item) => {
             const isActive = activeKey === item.name;
             return (
               <Pressable
@@ -160,26 +145,16 @@ function NativeTabLayout() {
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="prospects">
         <Icon sf={{ default: "person.2", selected: "person.2.fill" }} />
-        <Label>Prospects</Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="exports">
-        <Icon sf={{ default: "arrow.up.doc", selected: "arrow.up.doc.fill" }} />
-        <Label>Exports</Label>
+        <Label>Leads</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="analytics">
         <Icon sf={{ default: "chart.bar", selected: "chart.bar.fill" }} />
-        <Label>Analytics</Label>
+        <Label>Activity</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="settings">
         <Icon sf={{ default: "gearshape", selected: "gearshape.fill" }} />
         <Label>Settings</Label>
       </NativeTabs.Trigger>
-      {isOwner && (
-        <NativeTabs.Trigger name="founder">
-          <Icon sf={{ default: "waveform.path", selected: "waveform.path" }} />
-          <Label>Founder</Label>
-        </NativeTabs.Trigger>
-      )}
     </NativeTabs>
   );
 }
@@ -233,7 +208,7 @@ function ClassicTabLayout() {
       <Tabs.Screen
         name="prospects"
         options={{
-          title: "Prospects",
+          title: "Leads",
           tabBarIcon: ({ color }) =>
             isIOS ? (
               <SymbolView name="person.2" tintColor={color} size={22} />
@@ -242,10 +217,12 @@ function ClassicTabLayout() {
             ),
         }}
       />
+      {/* Exports is hidden from the tab bar but accessible as a screen */}
       <Tabs.Screen
         name="exports"
         options={{
           title: "Exports",
+          href: null,
           tabBarIcon: ({ color }) =>
             isIOS ? (
               <SymbolView name="arrow.up.doc" tintColor={color} size={22} />
@@ -257,7 +234,7 @@ function ClassicTabLayout() {
       <Tabs.Screen
         name="analytics"
         options={{
-          title: "Analytics",
+          title: "Activity",
           tabBarIcon: ({ color }) =>
             isIOS ? (
               <SymbolView name="chart.bar" tintColor={color} size={22} />
@@ -278,11 +255,12 @@ function ClassicTabLayout() {
             ),
         }}
       />
+      {/* Founder is hidden from the tab bar — accessible via Settings for owners */}
       <Tabs.Screen
         name="founder"
         options={{
           title: "Founder",
-          href: isOwner ? undefined : null,
+          href: null,
           tabBarIcon: ({ color }) =>
             isIOS ? (
               <SymbolView name="waveform.path" tintColor={color} size={22} />

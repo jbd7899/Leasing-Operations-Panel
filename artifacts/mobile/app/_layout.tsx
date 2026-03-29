@@ -20,7 +20,7 @@ import {
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import { useSignIn } from "@clerk/clerk-expo";
+import { supabase } from "@/lib/auth";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { initApiClient, api } from "@/lib/api";
@@ -52,24 +52,23 @@ function LoadingScreen() {
 }
 
 function LoginScreen() {
-  const { signIn, setActive: setSignInActive, isLoaded: signInLoaded } = useSignIn();
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
   const [step, setStep] = useState<"email" | "code">("email");
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
-  const { theme, isDark } = useTheme();
+  const { theme } = useTheme();
 
   const handleSendCode = async () => {
-    if (!signInLoaded) return;
     setIsLoading(true);
     setErrorMsg("");
     try {
-      await signIn!.create({ identifier: email, strategy: "email_code" });
+      const { error } = await supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: true } });
+      if (error) throw error;
       setStep("code");
     } catch (err: unknown) {
-      const e = err as { errors?: { longMessage?: string }[] };
-      setErrorMsg(e.errors?.[0]?.longMessage ?? "Something went wrong. Check your email address.");
+      const e = err as Error;
+      setErrorMsg(e.message ?? "Something went wrong. Check your email address.");
     } finally {
       setIsLoading(false);
     }
@@ -79,15 +78,11 @@ function LoginScreen() {
     setIsLoading(true);
     setErrorMsg("");
     try {
-      const result = await signIn!.attemptFirstFactor({ strategy: "email_code", code: code.trim() });
-      if (result.status === "complete") {
-        await setSignInActive!({ session: result.createdSessionId });
-      } else {
-        setErrorMsg("Verification incomplete. Please try again.");
-      }
+      const { error } = await supabase.auth.verifyOtp({ email, token: code.trim(), type: "email" });
+      if (error) throw error;
     } catch (err: unknown) {
-      const e = err as { errors?: { longMessage?: string }[] };
-      setErrorMsg(e.errors?.[0]?.longMessage ?? "Invalid code. Please try again.");
+      const e = err as Error;
+      setErrorMsg(e.message ?? "Invalid code. Please try again.");
     } finally {
       setIsLoading(false);
     }
@@ -169,7 +164,7 @@ function LoginScreen() {
         {errorMsg ? <Text style={loginStyles.errorText}>{errorMsg}</Text> : null}
       </View>
 
-      <Text style={[loginStyles.footer, { color: theme.textMuted }]}>MyRentCard · Secured by Clerk</Text>
+      <Text style={[loginStyles.footer, { color: theme.textMuted }]}>MyRentCard · Secured by Supabase</Text>
     </View>
   );
 }
