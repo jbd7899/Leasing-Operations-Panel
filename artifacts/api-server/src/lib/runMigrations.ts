@@ -75,6 +75,19 @@ const migrations: { name: string; sql: string }[] = [
     name: "accounts_twilio_twiml_app_sid",
     sql: `ALTER TABLE "accounts" ADD COLUMN IF NOT EXISTS "twilio_twiml_app_sid" varchar(100)`,
   },
+
+  // Remove legacy Clerk-format user IDs (e.g. "user_3BUsv5sX...") left over from
+  // the Clerk → Supabase auth migration. These conflict with the email unique
+  // constraint when the same user logs in via Supabase with a UUID. Removing them
+  // allows the auth middleware to re-provision the user cleanly on next login.
+  {
+    name: "remove_clerk_format_account_users",
+    sql: `DELETE FROM "account_users" WHERE "user_id" LIKE 'user_%'`,
+  },
+  {
+    name: "remove_clerk_format_users",
+    sql: `DELETE FROM "users" WHERE "id" LIKE 'user_%'`,
+  },
 ];
 
 export async function runMigrations(): Promise<void> {
