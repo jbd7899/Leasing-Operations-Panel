@@ -3,6 +3,7 @@ import cron from "node-cron";
 import { logger } from "./lib/logger";
 import { computeAndSendDigests } from "./lib/dailyDigest";
 import { runMigrations } from "./lib/runMigrations";
+import { autoSeedIfEmpty } from "./lib/autoSeed";
 
 const rawPort = process.env["PORT"];
 
@@ -20,6 +21,7 @@ if (Number.isNaN(port) || port <= 0) {
 
 async function start() {
   await runMigrations();
+  await autoSeedIfEmpty();
 
   app.listen(port, (err) => {
     if (err) {

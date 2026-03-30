@@ -4,8 +4,10 @@ import {
   interactionsTable,
   propertiesTable,
   prospectsTable,
+  usersTable,
 } from "@workspace/db";
 import { eq, count } from "drizzle-orm";
+import { fileURLToPath } from "url";
 import { computeCompletenessScore } from "./lib/completenessScore";
 
 const DEMO_AGENT_EMAIL = "jordan.rivera@myrentcard.demo";
@@ -401,64 +403,32 @@ function interactionsFor(prospect: ProspectSeed): InteractionSeed[] {
   return base;
 }
 
-async function main() {
-  const ownerEmailEnv = process.env["SEED_OWNER_EMAIL"];
-
-  let targetOwner;
-  if (ownerEmailEnv) {
-    const matches = await db
-      .select()
-      .from(accountUsersTable)
-      .where(eq(accountUsersTable.email, ownerEmailEnv))
-      .limit(1);
-    targetOwner = matches[0];
-    if (!targetOwner) {
-      console.error(`❌ No account user found with email "${ownerEmailEnv}". Check the SEED_OWNER_EMAIL value.`);
-      process.exit(1);
-    }
-  } else {
-    const owners = await db
-      .select()
-      .from(accountUsersTable)
-      .where(eq(accountUsersTable.role, "owner"))
-      .limit(1);
-    targetOwner = owners[0];
-    if (!targetOwner) {
-      console.error(
-        "❌ No owner accounts found. Sign in to the app first to create your account, then run the seed script.",
-      );
-      process.exit(1);
-    }
-  }
-
-  const accountId = targetOwner.accountId;
-  console.log(`\n🌱 Seeding account: ${accountId} (owner: ${targetOwner.email ?? targetOwner.name})`);
-
+export async function runSeedForAccount(
+  accountId: string,
+  log: (msg: string) => void = () => {},
+): Promise<{ seeded: boolean; properties: number; prospects: number; interactions: number }> {
   const [{ total }] = await db
     .select({ total: count() })
     .from(prospectsTable)
     .where(eq(prospectsTable.accountId, accountId));
 
   if (Number(total) > 0) {
-    console.log(`✅ Account already has ${total} prospect(s) — skipping seed to avoid duplicates.`);
-    console.log("   To re-seed, delete existing prospects first or use a fresh account.");
-    process.exit(0);
+    log(`Account ${accountId} already has ${total} prospect(s) — skipping seed.`);
+    return { seeded: false, properties: 0, prospects: 0, interactions: 0 };
   }
 
-  console.log("   Creating properties...");
+  log(`Creating properties...`);
   const createdProperties = await db
     .insert(propertiesTable)
     .values(PROPERTIES.map((p) => ({ ...p, accountId })))
     .returning();
-
-  console.log(`   ✓ ${createdProperties.length} properties created`);
+  log(`✓ ${createdProperties.length} properties created`);
 
   let prospectsCreated = 0;
   let interactionsCreated = 0;
 
   for (const prospectSeed of PROSPECTS) {
     const property = createdProperties[prospectSeed.propertyIndex % createdProperties.length];
-
     const fullName = `${prospectSeed.firstName} ${prospectSeed.lastName}`;
 
     const [prospect] = await db
@@ -489,7 +459,6 @@ async function main() {
       .returning();
 
     prospectsCreated++;
-
     if (!prospect) continue;
 
     const interactions = interactionsFor(prospectSeed);
@@ -497,7 +466,6 @@ async function main() {
 
     for (const ix of interactions) {
       const occurredAt = new Date(now - ix.daysAgo * 24 * 60 * 60 * 1000);
-
       await db.insert(interactionsTable).values({
         accountId,
         prospectId: prospect.id,
@@ -516,13 +484,12 @@ async function main() {
         extractionConfidence: "0.9200",
         occurredAt,
       });
-
       interactionsCreated++;
     }
   }
 
-  console.log(`   ✓ ${prospectsCreated} prospects created`);
-  console.log(`   ✓ ${interactionsCreated} interactions created`);
+  log(`✓ ${prospectsCreated} prospects created`);
+  log(`✓ ${interactionsCreated} interactions created`);
 
   const existingDemoAgent = await db
     .select()
@@ -537,18 +504,66 @@ async function main() {
       email: DEMO_AGENT_EMAIL,
       role: "agent",
     });
-    console.log("   ✓ 1 demo team member created");
+    log(`✓ 1 demo team member created`);
   }
 
-  const pendingCount = PROSPECTS.filter((p) => p.exportStatus === "pending").length;
-  console.log(`\n✅ Seed complete!`);
-  console.log(`   Properties: ${createdProperties.length}`);
-  console.log(`   Prospects: ${prospectsCreated} (${pendingCount} in Export Queue)`);
-  console.log(`   Interactions: ${interactionsCreated}`);
-  console.log(`   Team members: 1 demo agent added\n`);
+  return { seeded: true, properties: createdProperties.length, prospects: prospectsCreated, interactions: interactionsCreated };
 }
 
-main().catch((err) => {
-  console.error("Seed failed:", err);
-  process.exit(1);
-});
+async function main() {
+  const accountIdEnv = process.env["SEED_ACCOUNT_ID"];
+  const ownerEmailEnv = process.env["SEED_OWNER_EMAIL"];
+
+  let accountId: string;
+
+  if (accountIdEnv) {
+    accountId = accountIdEnv;
+    console.log(`\n🌱 Seeding account: ${accountId} (from SEED_ACCOUNT_ID)`);
+  } else if (ownerEmailEnv) {
+    const matches = await db
+      .select({ accountId: accountUsersTable.accountId })
+      .from(usersTable)
+      .innerJoin(accountUsersTable, eq(accountUsersTable.userId, usersTable.id))
+      .where(eq(usersTable.email, ownerEmailEnv))
+      .limit(1);
+
+    if (!matches[0]) {
+      console.error(`❌ No account found for email "${ownerEmailEnv}". Sign in to the app first.`);
+      process.exit(1);
+    }
+    accountId = matches[0].accountId;
+    console.log(`\n🌱 Seeding account: ${accountId} (owner: ${ownerEmailEnv})`);
+  } else {
+    const [owner] = await db
+      .select()
+      .from(accountUsersTable)
+      .where(eq(accountUsersTable.role, "owner"))
+      .limit(1);
+
+    if (!owner) {
+      console.error("❌ No owner accounts found. Sign in to the app first to create your account.");
+      process.exit(1);
+    }
+    accountId = owner.accountId;
+    console.log(`\n🌱 Seeding account: ${accountId}`);
+  }
+
+  const result = await runSeedForAccount(accountId, console.log);
+
+  if (result.seeded) {
+    const pendingCount = PROSPECTS.filter((p) => p.exportStatus === "pending").length;
+    console.log(`\n✅ Seed complete!`);
+    console.log(`   Properties: ${result.properties}`);
+    console.log(`   Prospects: ${result.prospects} (${pendingCount} in Export Queue)`);
+    console.log(`   Interactions: ${result.interactions}`);
+    console.log(`   Team members: 1 demo agent added\n`);
+  }
+}
+
+const isMain = process.argv[1] === fileURLToPath(import.meta.url);
+if (isMain) {
+  main().catch((err) => {
+    console.error("Seed failed:", err);
+    process.exit(1);
+  });
+}
