@@ -1,10 +1,10 @@
 import { setBaseUrl, setAuthTokenGetter } from "@workspace/api-client-react";
 
-// Clerk token getter — set by ClerkAuthBridge once Clerk loads
-let _getClerkToken: (() => Promise<string | null>) | null = null;
+// Auth token getter — set by AuthProvider once auth loads
+let _getAuthToken: (() => Promise<string | null>) | null = null;
 
-export function setClerkTokenGetter(getter: () => Promise<string | null>) {
-  _getClerkToken = getter;
+export function setTokenGetter(getter: () => Promise<string | null>) {
+  _getAuthToken = getter;
   setAuthTokenGetter(getter); // for Orval-generated React Query hooks
 }
 
@@ -16,7 +16,7 @@ export function initApiClient() {
   } else if (domain) {
     setBaseUrl(`https://${domain}`);
   }
-  // Token getter is wired by ClerkAuthBridge after Clerk loads
+  // Token getter is wired by AuthProvider after auth loads
 }
 
 const BASE = () => {
@@ -27,7 +27,7 @@ const BASE = () => {
 };
 
 async function authHeaders(): Promise<HeadersInit> {
-  const token = _getClerkToken ? await _getClerkToken() : null;
+  const token = _getAuthToken ? await _getAuthToken() : null;
   return {
     "Content-Type": "application/json",
     ...(token ? { Authorization: `Bearer ${token}` } : {}),

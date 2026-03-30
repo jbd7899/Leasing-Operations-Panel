@@ -59,7 +59,6 @@
     "zod-validation-error": "^3.4.0"
   },
   "dependencies": {
-    "@clerk/clerk-expo": "^2",
     "@supabase/supabase-js": "^2.100.1",
     "@twilio/voice-react-native-sdk": "^1.7.0",
     "expo-auth-session": "^7.0.10",
