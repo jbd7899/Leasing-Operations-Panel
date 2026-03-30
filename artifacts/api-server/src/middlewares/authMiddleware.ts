@@ -2,7 +2,8 @@ import { type Request, type Response, type NextFunction } from "express";
 import { db, usersTable, accountUsersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import {
-  verifySupabaseToken,
+  verifyClerkToken,
+  clerkClient,
   getAuthToken,
   upsertUser,
   ensureAccountForUser,
@@ -39,27 +40,10 @@ export async function authMiddleware(
     return;
   }
 
-  // Dev bypass: skip Supabase token verification and use the seeded test user
-  if (process.env.DEV_BYPASS === "true" && token === "dev-bypass-token") {
-    req.user = {
-      id: "usr_test_001",
-      email: "jbd7899@demo.com",
-      firstName: "Jordan",
-      lastName: "Demo",
-      profileImageUrl: null,
-      accountId: "acc_test_001",
-      role: "owner",
-    };
-    next();
-    return;
-  }
-
-  let supabaseUserId: string;
-  let supabaseEmail: string | null;
+  let clerkUserId: string;
   try {
-    const payload = await verifySupabaseToken(token);
-    supabaseUserId = payload.sub;
-    supabaseEmail = payload.email;
+    const payload = await verifyClerkToken(token);
+    clerkUserId = payload.sub;
   } catch {
     next();
     return;
@@ -80,12 +64,12 @@ export async function authMiddleware(
       })
       .from(usersTable)
       .innerJoin(accountUsersTable, eq(accountUsersTable.userId, usersTable.id))
-      .where(eq(usersTable.id, supabaseUserId))
+      .where(eq(usersTable.id, clerkUserId))
       .limit(1);
     row = rows[0];
   } catch (err: unknown) {
     const e = err as Error & { cause?: Error };
-    req.log?.error({ supabaseUserId, msg: e.message, cause: e.cause?.message }, "DB lookup failed in authMiddleware");
+    req.log?.error({ clerkUserId, msg: e.message, cause: e.cause?.message }, "DB lookup failed in authMiddleware");
   }
 
   if (row) {
@@ -94,17 +78,25 @@ export async function authMiddleware(
     return;
   }
 
-  // First-time login: provision user and account
+  // First-time login: pull profile from Clerk and provision in our DB
   try {
+    const clerkUser = await clerkClient.users.getUser(clerkUserId);
+    const primaryEmail =
+      clerkUser.emailAddresses.find(
+        (e) => e.id === clerkUser.primaryEmailAddressId,
+      )?.emailAddress ?? null;
+
     const dbUser = await upsertUser({
-      id: supabaseUserId,
-      email: supabaseEmail,
-      firstName: null,
-      lastName: null,
-      profileImageUrl: null,
+      id: clerkUserId,
+      email: primaryEmail,
+      firstName: clerkUser.firstName ?? null,
+      lastName: clerkUser.lastName ?? null,
+      profileImageUrl: clerkUser.imageUrl ?? null,
     });
 
-    const { accountId, role } = await ensureAccountForUser(dbUser.id, null);
+    const displayName =
+      [dbUser.firstName, dbUser.lastName].filter(Boolean).join(" ") || null;
+    const { accountId, role } = await ensureAccountForUser(dbUser.id, displayName);
 
     req.user = {
       id: dbUser.id,
@@ -116,7 +108,7 @@ export async function authMiddleware(
       role,
     };
   } catch (err) {
-    req.log?.error({ err }, "Failed to provision user from Supabase");
+    req.log?.error({ err }, "Failed to provision user from Clerk");
   }
 
   next();
