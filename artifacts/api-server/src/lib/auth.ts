@@ -37,15 +37,47 @@ export async function upsertUser(data: {
   lastName: string | null;
   profileImageUrl?: string | null;
 }) {
-  const [user] = await db
-    .insert(usersTable)
-    .values(data)
-    .onConflictDoUpdate({
-      target: usersTable.id,
-      set: { ...data, updatedAt: new Date() },
-    })
-    .returning();
-  return user;
+  try {
+    const [user] = await db
+      .insert(usersTable)
+      .values(data)
+      .onConflictDoUpdate({
+        target: usersTable.id,
+        set: { ...data, updatedAt: new Date() },
+      })
+      .returning();
+    return user;
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    const isEmailConflict =
+      msg.includes("users_email_unique") ||
+      (msg.includes("unique constraint") && msg.includes("email"));
+    if (!isEmailConflict || !data.email) throw err;
+
+    // A row with this email exists under a different ID (e.g. legacy Clerk ID).
+    // Update its ID to the current Supabase UUID so the session links correctly.
+    const [existing] = await db
+      .select()
+      .from(usersTable)
+      .where(eq(usersTable.email, data.email))
+      .limit(1);
+
+    if (!existing) throw err;
+
+    // Re-key account_users first (FK → users.id)
+    await db
+      .update(accountUsersTable)
+      .set({ userId: data.id })
+      .where(eq(accountUsersTable.userId, existing.id));
+
+    const [updated] = await db
+      .update(usersTable)
+      .set({ id: data.id, firstName: data.firstName, lastName: data.lastName, profileImageUrl: data.profileImageUrl ?? null, updatedAt: new Date() })
+      .where(eq(usersTable.id, existing.id))
+      .returning();
+
+    return updated;
+  }
 }
 
 export async function ensureAccountForUser(
