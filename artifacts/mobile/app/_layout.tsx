@@ -20,7 +20,7 @@ import {
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import { supabase } from "@/lib/auth";
+import { supabase, primeCachedToken } from "@/lib/auth";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { initApiClient, api } from "@/lib/api";
@@ -80,6 +80,10 @@ function LoginScreen() {
     try {
       const { error } = await supabase.auth.verifyOtp({ email, token: code.trim(), type: "email" });
       if (error) throw error;
+      // Prime the module-level token cache immediately so the token is
+      // available before the tabs mount and React Query fires requests.
+      const { data } = await supabase.auth.getSession();
+      primeCachedToken(data.session?.access_token ?? null);
     } catch (err: unknown) {
       const e = err as Error;
       setErrorMsg(e.message ?? "Invalid code. Please try again.");
