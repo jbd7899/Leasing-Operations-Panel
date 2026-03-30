@@ -50,23 +50,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    // Wire Supabase session token into the API client
+    // Cache the live session so the token getter works even when
+    // localStorage is unavailable (e.g. inside iframes).
+    let cachedAccessToken: string | null = null;
+
     setAuthTokenGetter(async () => {
+      if (cachedAccessToken) return cachedAccessToken;
+      // Fallback: try storage-backed session
       const { data } = await supabase.auth.getSession();
       return data.session?.access_token ?? null;
     });
 
-    // Load existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
+    // onAuthStateChange fires for every auth event including INITIAL_SESSION,
+    // TOKEN_REFRESHED, SIGNED_IN, SIGNED_OUT, USER_UPDATED, etc.
+    // Only clear the user on an explicit SIGNED_OUT to avoid a race where
+    // INITIAL_SESSION (with null) fires right after a fresh login.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      cachedAccessToken = session?.access_token ?? null;
+
+      if (event === "SIGNED_OUT") {
+        setUser(null);
+      } else if (session?.user) {
         setUser(sessionToUser(session.user));
       }
-      setIsLoading(false);
-    });
-
-    // Listen for auth state changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ? sessionToUser(session.user) : null);
       setIsLoading(false);
     });
 
