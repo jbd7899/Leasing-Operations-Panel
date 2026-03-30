@@ -64,8 +64,15 @@ if (DEV_BYPASS) {
 
   // Keep the cache in sync for the entire lifetime of the module — this
   // subscription is never unsubscribed and is independent of any component.
-  supabase.auth.onAuthStateChange((_event, session) => {
-    _cachedToken = session?.access_token ?? null;
+  // Only clear the cache on an explicit SIGNED_OUT so that transient null
+  // sessions (e.g. INITIAL_SESSION on a cold start before storage resolves)
+  // cannot evict a valid token that was already cached.
+  supabase.auth.onAuthStateChange((event, session) => {
+    if (event === "SIGNED_OUT") {
+      _cachedToken = null;
+    } else if (session?.access_token) {
+      _cachedToken = session.access_token;
+    }
   });
 }
 
