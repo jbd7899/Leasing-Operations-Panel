@@ -39,35 +39,56 @@ const DEV_USER: User = {
   profileImageUrl: null,
 };
 
+// ---------------------------------------------------------------------------
+// Module-level token cache — lives for the lifetime of the JS module and
+// survives React component remounts, Strict Mode double-invocation, and any
+// other React lifecycle events.
+// ---------------------------------------------------------------------------
+let _cachedToken: string | null = null;
+
+if (DEV_BYPASS) {
+  setAuthTokenGetter(async () => "dev-bypass-token");
+} else {
+  // Register the getter once at module init time.  When called it returns the
+  // cached token immediately; falls back to getSession() on cold start (before
+  // the module-level onAuthStateChange subscription has fired).
+  setAuthTokenGetter(async () => {
+    if (_cachedToken) return _cachedToken;
+    try {
+      const { data } = await supabase.auth.getSession();
+      return data.session?.access_token ?? null;
+    } catch {
+      return null;
+    }
+  });
+
+  // Keep the cache in sync for the entire lifetime of the module — this
+  // subscription is never unsubscribed and is independent of any component.
+  supabase.auth.onAuthStateChange((_event, session) => {
+    _cachedToken = session?.access_token ?? null;
+  });
+}
+
+/**
+ * Explicitly populate the module-level token cache.  Call this immediately
+ * after a successful verifyOtp so the token is available before the app's
+ * tabs mount and React Query fires its first requests.
+ */
+export function primeCachedToken(token: string | null) {
+  _cachedToken = token;
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(DEV_BYPASS ? DEV_USER : null);
   const [isLoading, setIsLoading] = useState(!DEV_BYPASS);
 
   useEffect(() => {
-    if (DEV_BYPASS) {
-      // In dev bypass mode, skip Supabase auth entirely
-      setAuthTokenGetter(async () => "dev-bypass-token");
-      return;
-    }
+    if (DEV_BYPASS) return;
 
-    // Cache the live session so the token getter works even when
-    // localStorage is unavailable (e.g. inside iframes).
-    let cachedAccessToken: string | null = null;
-
-    setAuthTokenGetter(async () => {
-      if (cachedAccessToken) return cachedAccessToken;
-      // Fallback: try storage-backed session
-      const { data } = await supabase.auth.getSession();
-      return data.session?.access_token ?? null;
-    });
-
-    // onAuthStateChange fires for every auth event including INITIAL_SESSION,
-    // TOKEN_REFRESHED, SIGNED_IN, SIGNED_OUT, USER_UPDATED, etc.
-    // Only clear the user on an explicit SIGNED_OUT to avoid a race where
-    // INITIAL_SESSION (with null) fires right after a fresh login.
+    // This component-level subscription only drives React state (user,
+    // isLoading). Token caching is handled by the module-level subscription
+    // above so it cannot be disrupted by component remounts.
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      cachedAccessToken = session?.access_token ?? null;
-
       if (event === "SIGNED_OUT") {
         setUser(null);
       } else if (session?.user) {
