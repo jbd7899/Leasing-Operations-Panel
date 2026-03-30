@@ -2,8 +2,7 @@ import { type Request, type Response, type NextFunction } from "express";
 import { db, usersTable, accountUsersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import {
-  verifyClerkToken,
-  clerkClient,
+  verifySupabaseToken,
   getAuthToken,
   upsertUser,
   ensureAccountForUser,
@@ -40,10 +39,14 @@ export async function authMiddleware(
     return;
   }
 
-  let clerkUserId: string;
+  let supabaseUserId: string;
+  let supabaseEmail: string | undefined;
+  let supabaseMeta: Record<string, unknown> = {};
   try {
-    const payload = await verifyClerkToken(token);
-    clerkUserId = payload.sub;
+    const supabaseUser = await verifySupabaseToken(token);
+    supabaseUserId = supabaseUser.id;
+    supabaseEmail = supabaseUser.email;
+    supabaseMeta = supabaseUser.user_metadata ?? {};
   } catch {
     next();
     return;
@@ -64,12 +67,12 @@ export async function authMiddleware(
       })
       .from(usersTable)
       .innerJoin(accountUsersTable, eq(accountUsersTable.userId, usersTable.id))
-      .where(eq(usersTable.id, clerkUserId))
+      .where(eq(usersTable.id, supabaseUserId))
       .limit(1);
     row = rows[0];
   } catch (err: unknown) {
     const e = err as Error & { cause?: Error };
-    req.log?.error({ clerkUserId, msg: e.message, cause: e.cause?.message }, "DB lookup failed in authMiddleware");
+    req.log?.error({ supabaseUserId, msg: e.message, cause: e.cause?.message }, "DB lookup failed in authMiddleware");
   }
 
   if (row) {
@@ -78,20 +81,18 @@ export async function authMiddleware(
     return;
   }
 
-  // First-time login: pull profile from Clerk and provision in our DB
+  // First-time login: provision user from Supabase JWT metadata
   try {
-    const clerkUser = await clerkClient.users.getUser(clerkUserId);
-    const primaryEmail =
-      clerkUser.emailAddresses.find(
-        (e) => e.id === clerkUser.primaryEmailAddressId,
-      )?.emailAddress ?? null;
+    const fullName = (supabaseMeta.full_name as string) ?? null;
+    const firstName = (supabaseMeta.first_name as string) ?? fullName?.split(" ")[0] ?? null;
+    const lastName = (supabaseMeta.last_name as string) ?? (fullName?.split(" ").slice(1).join(" ") || null);
 
     const dbUser = await upsertUser({
-      id: clerkUserId,
-      email: primaryEmail,
-      firstName: clerkUser.firstName ?? null,
-      lastName: clerkUser.lastName ?? null,
-      profileImageUrl: clerkUser.imageUrl ?? null,
+      id: supabaseUserId,
+      email: supabaseEmail ?? null,
+      firstName,
+      lastName,
+      profileImageUrl: (supabaseMeta.avatar_url as string) ?? null,
     });
 
     const displayName =
@@ -108,7 +109,7 @@ export async function authMiddleware(
       role,
     };
   } catch (err) {
-    req.log?.error({ err }, "Failed to provision user from Clerk");
+    req.log?.error({ err }, "Failed to provision user from Supabase");
   }
 
   next();
