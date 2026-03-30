@@ -64,17 +64,31 @@ export async function upsertUser(data: {
 
     if (!existing) throw err;
 
-    // Re-key account_users first (FK → users.id)
-    await db
-      .update(accountUsersTable)
-      .set({ userId: data.id })
+    // Correct order to satisfy FKs:
+    // 1. Capture existing account memberships
+    const memberships = await db
+      .select()
+      .from(accountUsersTable)
       .where(eq(accountUsersTable.userId, existing.id));
 
+    // 2. Delete old account_users rows (FK → users.id must be removed first)
+    await db
+      .delete(accountUsersTable)
+      .where(eq(accountUsersTable.userId, existing.id));
+
+    // 3. Update the user's PK to the new Supabase UUID
     const [updated] = await db
       .update(usersTable)
       .set({ id: data.id, firstName: data.firstName, lastName: data.lastName, profileImageUrl: data.profileImageUrl ?? null, updatedAt: new Date() })
       .where(eq(usersTable.id, existing.id))
       .returning();
+
+    // 4. Re-insert account_users with new user_id
+    if (memberships.length > 0) {
+      await db.insert(accountUsersTable).values(
+        memberships.map((m) => ({ ...m, userId: data.id }))
+      );
+    }
 
     return updated;
   }
