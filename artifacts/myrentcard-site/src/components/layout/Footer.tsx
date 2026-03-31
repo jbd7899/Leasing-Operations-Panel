@@ -10,8 +10,8 @@ export function Footer() {
         </div>
         <p className="text-xs text-text-muted">© 2025 MyRentCard. Built for landlords who mean business.</p>
         <div className="flex gap-5 text-xs text-text-muted">
-          <a href="#" className="hover:text-text-secondary transition-colors">Privacy</a>
-          <a href="#" className="hover:text-text-secondary transition-colors">Terms</a>
+          <a href="/#/privacy" className="hover:text-text-secondary transition-colors">Privacy</a>
+          <a href="/#/terms" className="hover:text-text-secondary transition-colors">Terms</a>
           <a href="mailto:hello@myrentcard.com" className="hover:text-text-secondary transition-colors">Contact</a>
         </div>
       </div>
