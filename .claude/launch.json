@@ -1,0 +1,47 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "api-server",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@workspace/api-server", "run", "dev"],
+      "port": 3000
+    },
+    {
+      "name": "mockup-sandbox",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@workspace/mockup-sandbox", "run", "dev"],
+      "port": 5173
+    },
+    {
+      "name": "mobile-expo",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@workspace/mobile", "run", "dev"],
+      "port": 8081
+    },
+    {
+      "name": "mobile-expo-web",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@workspace/mobile", "run", "dev:web"],
+      "port": 19006
+    },
+    {
+      "name": "mobile-serve",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["artifacts/mobile/server/serve.js"],
+      "port": 3000
+    },
+    {
+      "name": "mobile-serve-web",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["artifacts/mobile/server/serve-web.js"],
+      "port": 3001
+    },
+    {
+      "name": "myrentcard-site",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@workspace/myrentcard-site", "run", "dev"],
+      "port": 5174
+    }
+  ]
+}
