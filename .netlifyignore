@@ -1,0 +1,13 @@
+node_modules
+**/node_modules
+artifacts/mobile
+artifacts/api-server
+artifacts/myrentcard-site/node_modules
+lib/db/node_modules
+lib/api-spec/node_modules
+lib/integrations-openai-ai-server/node_modules
+attached_assets
+deploy-*.zip
+.replit
+.git
+.claude

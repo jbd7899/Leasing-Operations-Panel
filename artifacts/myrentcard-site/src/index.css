@@ -1,0 +1,115 @@
+@import "tailwindcss";
+
+@theme inline {
+  --color-navy: #0A1628;
+  --color-navy-light: #132240;
+  --color-navy-lighter: #1a2d4a;
+  --color-teal: #0D6E6E;
+  --color-teal-light: #14A0A0;
+  --color-teal-glow: rgba(20, 160, 160, 0.15);
+  --color-blue: #1A56DB;
+  --color-blue-light: #3B82F6;
+  --color-surface: #0F1D32;
+  --color-surface-hover: #162744;
+  --color-text-primary: #F1F5F9;
+  --color-text-secondary: #94A3B8;
+  --color-text-muted: #64748B;
+  --color-border: rgba(255, 255, 255, 0.08);
+  --color-border-light: rgba(255, 255, 255, 0.12);
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+
+  --animate-accordion-down: accordion-down 0.2s ease-out;
+  --animate-accordion-up: accordion-up 0.2s ease-out;
+}
+
+@keyframes accordion-down {
+  from { height: 0; }
+  to { height: var(--radix-accordion-content-height); }
+}
+
+@keyframes accordion-up {
+  from { height: var(--radix-accordion-content-height); }
+  to { height: 0; }
+}
+
+html {
+  scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--color-navy);
+  color: var(--color-text-primary);
+  overflow-x: hidden;
+}
+
+::selection {
+  background-color: rgba(20, 160, 160, 0.3);
+  color: white;
+}
+
+/* Scroll progress bar */
+.scroll-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--color-teal), var(--color-blue));
+  z-index: 100;
+  transform-origin: left;
+}
+
+/* Phone mockup */
+.phone-frame {
+  background: linear-gradient(145deg, #2a2a2e, #1a1a1e);
+  border-radius: 44px;
+  padding: 12px;
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,0.1),
+    0 25px 50px -12px rgba(0,0,0,0.5),
+    inset 0 1px 0 rgba(255,255,255,0.05);
+}
+
+.phone-screen {
+  background: var(--color-navy);
+  border-radius: 34px;
+  overflow: hidden;
+  position: relative;
+}
+
+.phone-notch {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 120px;
+  height: 28px;
+  background: #000;
+  border-radius: 20px;
+  z-index: 10;
+}
+
+/* Gradient text */
+.gradient-text {
+  background: linear-gradient(135deg, var(--color-teal-light), var(--color-blue-light));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Glow effect on hover */
+.card-glow {
+  transition: all 0.3s ease;
+}
+.card-glow:hover {
+  box-shadow: 0 0 30px var(--color-teal-glow), 0 0 60px rgba(20, 160, 160, 0.05);
+  border-color: rgba(20, 160, 160, 0.3);
+}
+
+/* Dot pattern overlay */
+.dot-pattern {
+  background-image: radial-gradient(rgba(255,255,255,0.03) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
