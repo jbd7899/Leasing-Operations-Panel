@@ -1,0 +1,13 @@
+[build]
+  # Install from workspace root so all catalog deps resolve correctly
+  command = "pnpm install --frozen-lockfile && pnpm --filter @workspace/myrentcard-site build"
+  publish = "artifacts/myrentcard-site/dist"
+
+[build.environment]
+  NODE_VERSION = "24"
+  PNPM_VERSION = "10"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
